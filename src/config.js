@@ -27,5 +27,11 @@ export const config = {
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',
 
+  // Cron interno: el mismo servicio se auto-dispara según este horario.
+  // ENABLE_CRON=false para apagarlo. CRON_SCHEDULE en formato cron (5 campos).
+  enableCron: process.env.ENABLE_CRON !== 'false',
+  cronSchedule: process.env.CRON_SCHEDULE || '0 8 * * *', // 8:00 todos los días
+  cronTimezone: process.env.CRON_TZ || 'America/Mexico_City',
+
   port: Number(process.env.PORT || 3000),
 };

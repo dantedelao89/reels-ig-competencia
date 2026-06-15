@@ -12,9 +12,12 @@ de Airtable **Benchmarking Dante**.
 3. Se descartan los `ShortCode` que ya existen en la tabla **Reels** (dedupe de seguridad).
 4. Se insertan **solo los nuevos** y se actualiza `Última corrida`. Nunca se sobreescribe nada.
 
-Disparo de **dos** formas:
-- **Cron diario** (servicio Cron de Railway) → ejecuta `npm run scrape`.
+Disparo de **dos** formas, ambas en **un solo servicio** siempre-encendido:
+- **Cron interno** (`node-cron` dentro de la app) → se auto-dispara diario según `CRON_SCHEDULE`.
 - **Manual** → `POST /scrape` con el header `x-trigger-secret`.
+
+> Alternativa: si prefieres un servicio Cron separado de Railway, existe `npm run scrape`
+> (`src/cron.js`) que corre una vez y sale. En ese caso pon `ENABLE_CRON=false` en el web.
 
 ## Variables de entorno
 
@@ -42,9 +45,10 @@ npm start               # levanta el servidor web (webhook manual)
 
 1. Sube este repo a GitHub y conéctalo en Railway (*New Project → Deploy from GitHub*).
 2. Carga las variables de entorno.
-3. **Servicio web** (webhook manual): start command `npm start`.
-4. **Cron diario**: añade un *Cron Schedule* (ej. `0 13 * * *` = 8am CDMX) con start command
-   `npm run scrape`.
+3. **Un solo servicio**: start command `npm start`. Atiende el webhook manual y corre el
+   cron interno diario. No requiere un servicio aparte.
+4. Asegúrate de que **Serverless / scale-to-zero esté apagado** en ese servicio, para que el
+   cron interno siga corriendo aunque no haya tráfico.
 
 ### Disparo manual
 
