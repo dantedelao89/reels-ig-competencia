@@ -1,0 +1,19 @@
+{
+  "name": "reels-ig-competencia",
+  "version": "1.0.0",
+  "description": "Scrapea reels de competidores de Instagram vía Apify y los guarda (incremental, sin duplicados) en Airtable.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "scrape": "node src/cron.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "airtable": "^0.12.2",
+    "apify-client": "^2.12.0",
+    "express": "^4.21.2"
+  }
+}
