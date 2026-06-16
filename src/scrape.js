@@ -13,11 +13,11 @@ import { scrapeCreatorReels } from './apify.js';
 import { transcribeAudio } from './transcribe.js';
 
 // Mapea un item del actor a los campos de la tabla Reels.
-function mapReel(item, scrapedAtIso) {
+function mapReel(item, scrapedAtIso, project) {
   const music = item.musicInfo
     ? [item.musicInfo.song_name, item.musicInfo.artist_name].filter(Boolean).join(' — ')
     : '';
-  return {
+  const fields = {
     ShortCode: item.shortCode,
     Creador: item.ownerUsername || '',
     URL: item.url || '',
@@ -35,6 +35,8 @@ function mapReel(item, scrapedAtIso) {
     'Video URL': item.videoUrl || '',
     'Scrapeado en': scrapedAtIso,
   };
+  if (project) fields.Proyecto = project;
+  return fields;
 }
 
 export async function runScrape() {
@@ -58,7 +60,7 @@ export async function runScrape() {
       });
 
       const fresh = items.filter((it) => !existing.has(it.shortCode));
-      const rows = fresh.map((it) => mapReel(it, startedAt));
+      const rows = fresh.map((it) => mapReel(it, startedAt, creator.project));
 
       let inserted = 0;
       let transcribed = 0;

@@ -20,6 +20,7 @@ export async function getActiveCreators() {
           username,
           resultsLimit: Number(r.get('Reels por corrida')) || config.defaultResultsLimit,
           lastRun: r.get('Última corrida') || null,
+          project: r.get('Proyecto') || '',
         });
       }
       next();
