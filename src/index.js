@@ -4,8 +4,6 @@ import express from 'express';
 import cron from 'node-cron';
 import { config } from './config.js';
 import { runScrape } from './scrape.js';
-import { scrapeCreatorReels } from './apify.js';
-import { transcribeAudio } from './transcribe.js';
 
 const app = express();
 app.use(express.json());
@@ -26,30 +24,6 @@ async function runGuarded(origen) {
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
-
-// DIAGNÓSTICO TEMPORAL: scrapea 1 reel y prueba la transcripción, devolviendo el error crudo.
-app.get('/transcribe-test', async (req, res) => {
-  if (config.triggerSecret) {
-    const provided = req.get('x-trigger-secret') || req.query.secret;
-    if (provided !== config.triggerSecret) return res.status(401).json({ ok: false, error: 'No autorizado' });
-  }
-  const out = { hasKey: !!config.openrouterApiKey, model: config.transcribeModel, format: config.transcribeFormat };
-  try {
-    const items = await scrapeCreatorReels({
-      username: req.query.user || 'soyenriquerocha',
-      resultsLimit: 1,
-      onlyPostsNewerThan: '1 year',
-    });
-    const it = items[0];
-    out.shortCode = it?.shortCode;
-    out.hasAudioUrl = !!it?.audioUrl;
-    if (!it?.audioUrl) return res.json({ ok: false, error: 'reel sin audioUrl', ...out });
-    const text = await transcribeAudio(it.audioUrl);
-    res.json({ ok: true, textPreview: (text || '').slice(0, 300), ...out });
-  } catch (err) {
-    res.status(200).json({ ok: false, error: err.message, ...out });
-  }
-});
 
 // Disparo manual. Protegido con un secreto en el header o en query (?secret=).
 app.post('/scrape', async (req, res) => {
