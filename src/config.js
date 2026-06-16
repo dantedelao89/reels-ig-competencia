@@ -36,6 +36,15 @@ export const config = {
   maxTranscribeBytes: Number(process.env.MAX_TRANSCRIBE_BYTES || 24 * 1024 * 1024), // 24 MB
   transcribeTimeoutMs: Number(process.env.TRANSCRIBE_TIMEOUT_MS || 120000),
 
+  // Telegram (opcional): disparo manual desde el bot. Se activa solo si hay token.
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
+  telegramAllowedChatIds: (process.env.TELEGRAM_ALLOWED_CHAT_IDS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+  // Secreto que valida que el webhook venga de Telegram (reusa TRIGGER_SECRET por defecto).
+  telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || process.env.TRIGGER_SECRET || '',
+
   // Cron interno: el mismo servicio se auto-dispara según este horario.
   // ENABLE_CRON=false para apagarlo. CRON_SCHEDULE en formato cron (5 campos).
   enableCron: process.env.ENABLE_CRON !== 'false',

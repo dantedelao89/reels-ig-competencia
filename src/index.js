@@ -4,6 +4,7 @@ import express from 'express';
 import cron from 'node-cron';
 import { config } from './config.js';
 import { runScrape } from './scrape.js';
+import { tgSend, isAllowed } from './telegram.js';
 
 const app = express();
 app.use(express.json());
@@ -21,6 +22,17 @@ async function runGuarded(origen) {
   } finally {
     running = false;
   }
+}
+
+// Resume el resultado de una corrida en texto para Telegram.
+function formatResult(r) {
+  if (!r.ok) return `❌ Error: ${r.error}`;
+  const lines = (r.details || []).map((d) =>
+    d.error
+      ? `• ${d.username}: error (${d.error})`
+      : `• ${d.username}: ${d.inserted} nuevos${d.transcribed ? `, ${d.transcribed} transcritos` : ''}`
+  );
+  return `✅ *Corrida lista*\nCreadores: ${r.creators} · Nuevos: ${r.inserted}\n${lines.join('\n')}`;
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -42,8 +54,50 @@ app.post('/scrape', async (req, res) => {
   }
 });
 
+// Webhook de Telegram: recibe mensajes del bot y procesa comandos.
+app.post('/telegram/webhook', async (req, res) => {
+  if (config.telegramWebhookSecret) {
+    const token = req.get('x-telegram-bot-api-secret-token');
+    if (token !== config.telegramWebhookSecret) return res.sendStatus(401);
+  }
+  res.sendStatus(200); // responder rápido SIEMPRE para que Telegram no reintente
+
+  const msg = req.body?.message;
+  if (!msg?.text) return;
+  const chatId = msg.chat.id;
+  const cmd = msg.text.trim().split(/\s+/)[0].split('@')[0].toLowerCase();
+
+  if (!isAllowed(chatId)) {
+    await tgSend(
+      chatId,
+      `🔒 No autorizado.\nTu chat ID es: \`${chatId}\`\nPídele al admin que lo agregue a *TELEGRAM_ALLOWED_CHAT_IDS* en Railway.`
+    );
+    return;
+  }
+
+  if (cmd === '/start' || cmd === '/help') {
+    await tgSend(chatId, '🤖 *Reels IG Competencia*\n\n/scrape — disparar una corrida ahora\n/status — estado del servicio');
+  } else if (cmd === '/status') {
+    await tgSend(chatId, running ? '⏳ Hay una corrida en curso.' : '✅ Listo. Sin corridas en curso.');
+  } else if (cmd === '/scrape') {
+    if (running) {
+      await tgSend(chatId, '⏳ Ya hay una corrida en curso, espera a que termine.');
+      return;
+    }
+    await tgSend(chatId, '🔄 Iniciando scrape de la competencia… te aviso al terminar.');
+    runGuarded('telegram')
+      .then((r) => tgSend(chatId, formatResult(r)))
+      .catch((e) => tgSend(chatId, `❌ Error: ${e.message}`));
+  } else {
+    await tgSend(chatId, 'Comando no reconocido. Usa /scrape o /help.');
+  }
+});
+
 app.listen(config.port, () => {
   console.log(`Servicio escuchando en puerto ${config.port}`);
+  if (config.telegramBotToken) {
+    console.log(`Bot de Telegram activo (${config.telegramAllowedChatIds.length} chat IDs autorizados)`);
+  }
 
   if (config.enableCron) {
     if (!cron.validate(config.cronSchedule)) {
