@@ -7,8 +7,10 @@ import {
   getExistingShortCodes,
   insertReels,
   updateCreatorLastRun,
+  updateReelTranscription,
 } from './airtable.js';
 import { scrapeCreatorReels } from './apify.js';
+import { transcribeAudio } from './transcribe.js';
 
 // Mapea un item del actor a los campos de la tabla Reels.
 function mapReel(item, scrapedAtIso) {
@@ -59,15 +61,35 @@ export async function runScrape() {
       const rows = fresh.map((it) => mapReel(it, startedAt));
 
       let inserted = 0;
+      let transcribed = 0;
       if (rows.length > 0) {
-        inserted = await insertReels(rows);
+        const created = await insertReels(rows);
+        inserted = created.length;
         rows.forEach((r) => existing.add(r.ShortCode)); // evita duplicados entre creadores en la misma corrida
+
+        // Transcribe solo los reels recién insertados (los nuevos).
+        if (config.enableTranscription) {
+          const itemByShort = new Map(fresh.map((it) => [it.shortCode, it]));
+          for (const rec of created) {
+            const item = itemByShort.get(rec.shortCode);
+            if (!item?.audioUrl) continue;
+            try {
+              const text = await transcribeAudio(item.audioUrl);
+              if (text) {
+                await updateReelTranscription(rec.id, text);
+                transcribed++;
+              }
+            } catch (e) {
+              console.error(`[${creator.username}] transcripción ${rec.shortCode} falló: ${e.message}`);
+            }
+          }
+        }
       }
 
       await updateCreatorLastRun(creator.recordId, startedAt);
       totalInserted += inserted;
-      details.push({ username: creator.username, scraped: items.length, inserted });
-      console.log(`[${creator.username}] scrapeados=${items.length} nuevos=${inserted}`);
+      details.push({ username: creator.username, scraped: items.length, inserted, transcribed });
+      console.log(`[${creator.username}] scrapeados=${items.length} nuevos=${inserted} transcritos=${transcribed}`);
     } catch (err) {
       console.error(`[${creator.username}] ERROR:`, err.message);
       details.push({ username: creator.username, error: err.message });

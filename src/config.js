@@ -27,6 +27,15 @@ export const config = {
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',
 
+  // Transcripción vía OpenRouter (opcional). Se activa solo si hay API key.
+  openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
+  enableTranscription:
+    process.env.ENABLE_TRANSCRIPTION !== 'false' && !!process.env.OPENROUTER_API_KEY,
+  transcribeModel: process.env.TRANSCRIBE_MODEL || 'openai/gpt-4o-mini-transcribe',
+  transcribeFormat: process.env.TRANSCRIBE_FORMAT || 'm4a', // audioUrl de IG = AAC en mp4
+  maxTranscribeBytes: Number(process.env.MAX_TRANSCRIBE_BYTES || 24 * 1024 * 1024), // 24 MB
+  transcribeTimeoutMs: Number(process.env.TRANSCRIBE_TIMEOUT_MS || 120000),
+
   // Cron interno: el mismo servicio se auto-dispara según este horario.
   // ENABLE_CRON=false para apagarlo. CRON_SCHEDULE en formato cron (5 campos).
   enableCron: process.env.ENABLE_CRON !== 'false',

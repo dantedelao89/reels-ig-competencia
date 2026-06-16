@@ -43,14 +43,19 @@ export async function getExistingShortCodes() {
 }
 
 // Inserta reels nuevos. Airtable permite máximo 10 registros por llamada.
+// Devuelve los registros creados como [{ id, shortCode }].
 export async function insertReels(rows) {
-  let inserted = 0;
+  const created = [];
   for (let i = 0; i < rows.length; i += 10) {
     const batch = rows.slice(i, i + 10).map((fields) => ({ fields }));
-    await base(config.reelsTable).create(batch, { typecast: true });
-    inserted += batch.length;
+    const recs = await base(config.reelsTable).create(batch, { typecast: true });
+    for (const r of recs) created.push({ id: r.id, shortCode: r.get('ShortCode') });
   }
-  return inserted;
+  return created;
+}
+
+export async function updateReelTranscription(recordId, text) {
+  await base(config.reelsTable).update(recordId, { Transcripción: text });
 }
 
 export async function updateCreatorLastRun(recordId, isoDate) {

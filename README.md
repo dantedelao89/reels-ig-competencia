@@ -11,6 +11,9 @@ de Airtable **Benchmarking Dante**.
    `Última corrida` (`onlyPostsNewerThan`). Si nunca se corrió, usa `FIRST_RUN_LOOKBACK`.
 3. Se descartan los `ShortCode` que ya existen en la tabla **Reels** (dedupe de seguridad).
 4. Se insertan **solo los nuevos** y se actualiza `Última corrida`. Nunca se sobreescribe nada.
+5. (Opcional) Si hay `OPENROUTER_API_KEY`, cada reel nuevo se **transcribe**: se descarga su
+   `audioUrl` (pista AAC/`m4a`) y se manda a OpenRouter (`gpt-4o-mini-transcribe`); el texto se
+   guarda en la columna **Transcripción**. Si la transcripción falla, el reel igual queda guardado.
 
 Disparo de **dos** formas, ambas en **un solo servicio** siempre-encendido:
 - **Cron interno** (`node-cron` dentro de la app) → se auto-dispara diario según `CRON_SCHEDULE`.
@@ -31,6 +34,8 @@ Ver `.env.example`. En Railway se configuran en *Variables*.
 | `TRIGGER_SECRET` | Secreto para proteger el webhook manual |
 | `DEFAULT_RESULTS_LIMIT` | Reels por creador si la columna está vacía (default 30) |
 | `FIRST_RUN_LOOKBACK` | Ventana inicial para creadores nuevos (default `3 months`) |
+| `OPENROUTER_API_KEY` | (Opcional) Activa la transcripción de reels |
+| `TRANSCRIBE_MODEL` | Modelo de transcripción (default `openai/gpt-4o-mini-transcribe`) |
 
 ## Desarrollo local
 
