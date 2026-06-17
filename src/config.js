@@ -47,7 +47,7 @@ export const config = {
   // Si una búsqueda/canal nunca se ha corrido, qué tan atrás traer
   youtubeFirstRunLookback: process.env.YT_FIRST_RUN_LOOKBACK || '7 days',
   // Batched: maxResults global por fuente, shorts global, y ventana para fuentes ya corridas
-  youtubeBatchMaxResults: Number(process.env.YT_BATCH_MAX_RESULTS || 5),
+  youtubeBatchMaxResults: Number(process.env.YT_BATCH_MAX_RESULTS || 3),
   youtubeBatchMaxShorts: Number(process.env.YT_BATCH_MAX_SHORTS || 0),
   youtubeRecentLookback: process.env.YT_RECENT_LOOKBACK || '2 days',
   // Bajar subtítulos nativos de YouTube y guardarlos
