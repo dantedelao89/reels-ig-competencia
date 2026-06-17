@@ -13,6 +13,15 @@ import {
 } from './airtable.js';
 import { scrapeSearchVideos, scrapeChannelVideos } from './youtubeApify.js';
 
+// El actor devuelve `subtitles` a veces como objeto y a veces como array de pistas.
+// Extrae el texto plano de forma robusta ante ambas formas.
+function extractSubtitles(subs) {
+  if (!subs) return '';
+  const tracks = Array.isArray(subs) ? subs : [subs];
+  const withText = tracks.find((t) => t && t.plaintext) || tracks[0];
+  return (withText && withText.plaintext) || '';
+}
+
 // Mapea un item del actor a los campos de la tabla Videos YT.
 // `origin` = la palabra clave o la URL de canal que trajo el video.
 function mapVideo(item, scrapedAtIso, project, origin) {
@@ -33,7 +42,7 @@ function mapVideo(item, scrapedAtIso, project, origin) {
     Thumbnail: item.thumbnailUrl || '',
     Origen: origin || item.input || '',
     Formato: (item.url || '').includes('/shorts/') ? 'Short' : 'Video',
-    Subtítulos: item.subtitles?.plaintext || '',
+    Subtítulos: extractSubtitles(item.subtitles),
     'Scrapeado en': scrapedAtIso,
   };
   if (project) fields.Proyecto = project;
