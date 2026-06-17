@@ -5,6 +5,7 @@ import cron from 'node-cron';
 import { config } from './config.js';
 import { runScrape } from './scrape.js';
 import { runScrapeYoutube } from './scrapeYoutube.js';
+import { backfillSubtitles } from './backfill.js';
 import { tgSend, isAllowed } from './telegram.js';
 
 const app = express();
@@ -68,6 +69,23 @@ app.post('/scrape', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Backfill manual de subtítulos para videos ya guardados sin subtítulos.
+app.post('/backfill-subtitles', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  try {
+    const result = await backfillSubtitles();
+    res.json(result);
+  } catch (err) {
+    console.error('Error en /backfill-subtitles:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

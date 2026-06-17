@@ -144,3 +144,23 @@ export async function getActiveChannels() {
 export async function updateChannelLastRun(recordId, isoDate) {
   await base(config.channelsTable).update(recordId, { 'Última corrida': isoDate });
 }
+
+// Videos sin subtítulos (para backfill). Devuelve [{ recordId, videoId, url }].
+export async function getVideosWithoutSubtitles() {
+  const out = [];
+  await base(config.videosTable)
+    .select({ filterByFormula: '{Subtítulos} = ""', fields: ['Video ID', 'URL'] })
+    .eachPage((records, next) => {
+      for (const r of records) {
+        const videoId = r.get('Video ID');
+        const url = r.get('URL');
+        if (videoId && url) out.push({ recordId: r.id, videoId: videoId.toString(), url: url.toString() });
+      }
+      next();
+    });
+  return out;
+}
+
+export async function updateVideoSubtitles(recordId, text) {
+  await base(config.videosTable).update(recordId, { Subtítulos: text });
+}
