@@ -15,11 +15,18 @@ import { scrapeSearchVideos, scrapeChannelVideos } from './youtubeApify.js';
 
 // El actor devuelve `subtitles` a veces como objeto y a veces como array de pistas.
 // Extrae el texto plano de forma robusta ante ambas formas.
+// Airtable limita cada celda de texto a 100,000 caracteres; recortamos con margen.
+const MAX_SUBTITLE_CHARS = 95000;
+
 export function extractSubtitles(subs) {
   if (!subs) return '';
   const tracks = Array.isArray(subs) ? subs : [subs];
   const withText = tracks.find((t) => t && t.plaintext) || tracks[0];
-  return (withText && withText.plaintext) || '';
+  let text = (withText && withText.plaintext) || '';
+  if (text.length > MAX_SUBTITLE_CHARS) {
+    text = text.slice(0, MAX_SUBTITLE_CHARS) + '… [recortado]';
+  }
+  return text;
 }
 
 // Mapea un item del actor a los campos de la tabla Videos YT.

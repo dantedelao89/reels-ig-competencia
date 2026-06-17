@@ -17,9 +17,12 @@ export async function backfillSubtitles() {
     const textById = new Map(items.map((it) => [it.id, extractSubtitles(it.subtitles)]));
     for (const v of batch) {
       const text = textById.get(v.videoId);
-      if (text) {
+      if (!text) continue;
+      try {
         await updateVideoSubtitles(v.recordId, text);
         updated++;
+      } catch (e) {
+        console.error(`[backfill] no se pudo actualizar ${v.videoId}: ${e.message}`);
       }
     }
     console.log(`[backfill] lote ${i / 50 + 1}: ${batch.length} videos, ${updated} actualizados acumulado`);
