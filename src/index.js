@@ -39,15 +39,13 @@ function formatResult(r) {
   const parts = [];
   if (r.instagram) {
     const lines = (r.instagram.details || []).map((d) =>
-      d.error
-        ? `• ${d.username}: error`
-        : `• ${d.username}: ${d.inserted} nuevos${d.transcribed ? `, ${d.transcribed} transcritos` : ''}`
+      d.error ? `• ${d.grupo}: error` : `• ${d.grupo}: ${d.inserted} nuevos`
     );
     parts.push(`📸 *Instagram* — ${r.instagram.inserted} nuevos\n${lines.join('\n')}`);
   }
   if (r.youtube) {
     const lines = (r.youtube.details || []).map((d) =>
-      d.error ? `• ${d.origen}: error` : `• ${d.origen}: ${d.inserted} nuevos`
+      d.error ? `• ${d.grupo}: error` : `• ${d.grupo}: ${d.inserted} nuevos`
     );
     parts.push(`▶️ *YouTube* — ${r.youtube.inserted} nuevos\n${lines.join('\n')}`);
   }

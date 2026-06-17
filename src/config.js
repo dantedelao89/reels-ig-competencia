@@ -31,6 +31,12 @@ export const config = {
   // Si un creador nunca se ha corrido, qué tan atrás traer (ej. "3 months")
   firstRunLookback: process.env.FIRST_RUN_LOOKBACK || '3 months',
 
+  // --- Modo batched (todas las fuentes en 1-2 corridas por plataforma) ---
+  // maxResults global por fuente (un solo valor para toda la corrida batched)
+  igBatchMaxResults: Number(process.env.IG_BATCH_MAX_RESULTS || 5),
+  // Ventana de fecha para fuentes YA corridas antes (cubre 1-2 días perdidos del cron)
+  igRecentLookback: process.env.IG_RECENT_LOOKBACK || '2 days',
+
   // ---- YouTube (búsqueda por palabra clave y por canal) ----
   youtubeActorId: process.env.YT_ACTOR_ID || 'streamers/youtube-scraper',
   searchesTable: process.env.YT_SEARCHES_TABLE || 'Búsquedas YT',
@@ -38,8 +44,12 @@ export const config = {
   videosTable: process.env.YT_VIDEOS_TABLE || 'Videos YT',
   // Videos por búsqueda si la columna está vacía
   youtubeDefaultMaxResults: Number(process.env.YT_DEFAULT_MAX_RESULTS || 5),
-  // Si una búsqueda nunca se ha corrido, qué tan atrás traer
+  // Si una búsqueda/canal nunca se ha corrido, qué tan atrás traer
   youtubeFirstRunLookback: process.env.YT_FIRST_RUN_LOOKBACK || '7 days',
+  // Batched: maxResults global por fuente, shorts global, y ventana para fuentes ya corridas
+  youtubeBatchMaxResults: Number(process.env.YT_BATCH_MAX_RESULTS || 5),
+  youtubeBatchMaxShorts: Number(process.env.YT_BATCH_MAX_SHORTS || 0),
+  youtubeRecentLookback: process.env.YT_RECENT_LOOKBACK || '2 days',
   // Bajar subtítulos nativos de YouTube y guardarlos
   youtubeDownloadSubtitles: process.env.YT_DOWNLOAD_SUBTITLES !== 'false',
   // Si está false, no corre la parte de YouTube
