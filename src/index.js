@@ -46,7 +46,7 @@ function formatResult(r) {
   }
   if (r.youtube) {
     const lines = (r.youtube.details || []).map((d) =>
-      d.error ? `• ${d.query}: error` : `• ${d.query}: ${d.inserted} nuevos`
+      d.error ? `• ${d.origen}: error` : `• ${d.origen}: ${d.inserted} nuevos`
     );
     parts.push(`▶️ *YouTube* — ${r.youtube.inserted} nuevos\n${lines.join('\n')}`);
   }

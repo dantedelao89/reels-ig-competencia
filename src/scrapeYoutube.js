@@ -1,18 +1,21 @@
-// Orquestación de YouTube: por cada búsqueda activa dispara el actor (solo videos nuevos),
-// filtra duplicados contra Airtable e inserta únicamente los nuevos. Los subtítulos nativos
-// vienen en el mismo item, así que no hace falta un paso aparte de transcripción.
+// Orquestación de YouTube: por cada búsqueda (palabra clave) y cada canal activo dispara el actor
+// (solo videos nuevos), filtra duplicados contra Airtable e inserta únicamente los nuevos. Los
+// subtítulos nativos vienen en el mismo item, así que no hace falta transcripción aparte.
 
 import { config } from './config.js';
 import {
   getActiveSearches,
+  getActiveChannels,
   getExistingVideoIds,
   insertVideos,
   updateSearchLastRun,
+  updateChannelLastRun,
 } from './airtable.js';
-import { scrapeSearchVideos } from './youtubeApify.js';
+import { scrapeSearchVideos, scrapeChannelVideos } from './youtubeApify.js';
 
 // Mapea un item del actor a los campos de la tabla Videos YT.
-function mapVideo(item, scrapedAtIso, project) {
+// `origin` = la palabra clave o la URL de canal que trajo el video.
+function mapVideo(item, scrapedAtIso, project, origin) {
   const fields = {
     'Video ID': item.id,
     Título: item.title || '',
@@ -28,7 +31,7 @@ function mapVideo(item, scrapedAtIso, project) {
     Descripción: item.text || '',
     Hashtags: (item.hashtags || []).map((h) => `#${h}`).join(' '),
     Thumbnail: item.thumbnailUrl || '',
-    Búsqueda: item.input || '',
+    Origen: origin || item.input || '',
     Subtítulos: item.subtitles?.plaintext || '',
     'Scrapeado en': scrapedAtIso,
   };
@@ -36,44 +39,59 @@ function mapVideo(item, scrapedAtIso, project) {
   return fields;
 }
 
+// Inserta los videos nuevos (no vistos) y los marca en el Set de existentes. Devuelve cuántos.
+async function insertFreshVideos(items, existing, scrapedAtIso, project, origin) {
+  const fresh = items.filter((it) => !existing.has(it.id));
+  const rows = fresh.map((it) => mapVideo(it, scrapedAtIso, project, origin));
+  if (rows.length === 0) return 0;
+  const inserted = await insertVideos(rows);
+  rows.forEach((r) => existing.add(r['Video ID'])); // evita duplicados entre fuentes
+  return inserted;
+}
+
 export async function runScrapeYoutube() {
   const startedAt = new Date().toISOString();
   const searches = await getActiveSearches();
-  if (searches.length === 0) {
-    return { ok: true, message: 'No hay búsquedas activas.', searches: 0, inserted: 0, details: [] };
+  const channels = await getActiveChannels();
+  if (searches.length === 0 && channels.length === 0) {
+    return { ok: true, message: 'No hay búsquedas ni canales activos.', inserted: 0, details: [] };
   }
 
   const existing = await getExistingVideoIds();
   const details = [];
   let totalInserted = 0;
 
-  for (const search of searches) {
-    const onlyNewerThan = search.lastRun || config.youtubeFirstRunLookback;
+  // --- Búsquedas por palabra clave ---
+  for (const s of searches) {
+    const onlyNewerThan = s.lastRun || config.youtubeFirstRunLookback;
     try {
-      const items = await scrapeSearchVideos({
-        query: search.query,
-        maxResults: search.maxResults,
-        onlyNewerThan,
-      });
-
-      const fresh = items.filter((it) => !existing.has(it.id));
-      const rows = fresh.map((it) => mapVideo(it, startedAt, search.project));
-
-      let inserted = 0;
-      if (rows.length > 0) {
-        inserted = await insertVideos(rows);
-        rows.forEach((r) => existing.add(r['Video ID'])); // evita duplicados entre búsquedas
-      }
-
-      await updateSearchLastRun(search.recordId, startedAt);
+      const items = await scrapeSearchVideos({ query: s.query, maxResults: s.maxResults, onlyNewerThan });
+      const inserted = await insertFreshVideos(items, existing, startedAt, s.project, s.query);
+      await updateSearchLastRun(s.recordId, startedAt);
       totalInserted += inserted;
-      details.push({ query: search.query, scraped: items.length, inserted });
-      console.log(`[YT: ${search.query}] scrapeados=${items.length} nuevos=${inserted}`);
+      details.push({ tipo: 'búsqueda', origen: s.query, scraped: items.length, inserted });
+      console.log(`[YT búsqueda: ${s.query}] scrapeados=${items.length} nuevos=${inserted}`);
     } catch (err) {
-      console.error(`[YT: ${search.query}] ERROR:`, err.message);
-      details.push({ query: search.query, error: err.message });
+      console.error(`[YT búsqueda: ${s.query}] ERROR:`, err.message);
+      details.push({ tipo: 'búsqueda', origen: s.query, error: err.message });
     }
   }
 
-  return { ok: true, searches: searches.length, inserted: totalInserted, details };
+  // --- Canales ---
+  for (const c of channels) {
+    const onlyNewerThan = c.lastRun || config.youtubeFirstRunLookback;
+    try {
+      const items = await scrapeChannelVideos({ channelUrl: c.channelUrl, maxResults: c.maxResults, onlyNewerThan });
+      const inserted = await insertFreshVideos(items, existing, startedAt, c.project, c.channelUrl);
+      await updateChannelLastRun(c.recordId, startedAt);
+      totalInserted += inserted;
+      details.push({ tipo: 'canal', origen: c.channelUrl, scraped: items.length, inserted });
+      console.log(`[YT canal: ${c.channelUrl}] scrapeados=${items.length} nuevos=${inserted}`);
+    } catch (err) {
+      console.error(`[YT canal: ${c.channelUrl}] ERROR:`, err.message);
+      details.push({ tipo: 'canal', origen: c.channelUrl, error: err.message });
+    }
+  }
+
+  return { ok: true, searches: searches.length, channels: channels.length, inserted: totalInserted, details };
 }

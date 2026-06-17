@@ -116,3 +116,29 @@ export async function insertVideos(rows) {
 export async function updateSearchLastRun(recordId, isoDate) {
   await base(config.searchesTable).update(recordId, { 'Última corrida': isoDate });
 }
+
+// Lee los canales de YouTube marcados como Activo.
+export async function getActiveChannels() {
+  const channels = [];
+  await base(config.channelsTable)
+    .select({ filterByFormula: '{Activo} = TRUE()' })
+    .eachPage((records, next) => {
+      for (const r of records) {
+        const channelUrl = (r.get('Canal') || '').toString().trim();
+        if (!channelUrl) continue;
+        channels.push({
+          recordId: r.id,
+          channelUrl,
+          maxResults: Number(r.get('Videos por corrida')) || config.youtubeDefaultMaxResults,
+          lastRun: r.get('Última corrida') || null,
+          project: r.get('Proyecto') || '',
+        });
+      }
+      next();
+    });
+  return channels;
+}
+
+export async function updateChannelLastRun(recordId, isoDate) {
+  await base(config.channelsTable).update(recordId, { 'Última corrida': isoDate });
+}

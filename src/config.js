@@ -24,9 +24,10 @@ export const config = {
   // Si un creador nunca se ha corrido, qué tan atrás traer (ej. "3 months")
   firstRunLookback: process.env.FIRST_RUN_LOOKBACK || '3 months',
 
-  // ---- YouTube (búsqueda por palabra clave) ----
+  // ---- YouTube (búsqueda por palabra clave y por canal) ----
   youtubeActorId: process.env.YT_ACTOR_ID || 'streamers/youtube-scraper',
   searchesTable: process.env.YT_SEARCHES_TABLE || 'Búsquedas YT',
+  channelsTable: process.env.YT_CHANNELS_TABLE || 'Canales YT',
   videosTable: process.env.YT_VIDEOS_TABLE || 'Videos YT',
   // Videos por búsqueda si la columna está vacía
   youtubeDefaultMaxResults: Number(process.env.YT_DEFAULT_MAX_RESULTS || 5),
