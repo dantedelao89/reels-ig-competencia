@@ -78,6 +78,7 @@ export async function getActiveSearches() {
           recordId: r.id,
           query,
           maxResults: Number(r.get('Videos por búsqueda')) || config.youtubeDefaultMaxResults,
+          maxShorts: Number(r.get('Shorts por búsqueda')) || 0,
           lastRun: r.get('Última corrida') || null,
           project: r.get('Proyecto') || '',
         });
@@ -130,6 +131,7 @@ export async function getActiveChannels() {
           recordId: r.id,
           channelUrl,
           maxResults: Number(r.get('Videos por corrida')) || config.youtubeDefaultMaxResults,
+          maxShorts: Number(r.get('Shorts por corrida')) || 0,
           lastRun: r.get('Última corrida') || null,
           project: r.get('Proyecto') || '',
         });

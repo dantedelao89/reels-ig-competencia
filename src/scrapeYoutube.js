@@ -32,6 +32,7 @@ function mapVideo(item, scrapedAtIso, project, origin) {
     Hashtags: (item.hashtags || []).map((h) => `#${h}`).join(' '),
     Thumbnail: item.thumbnailUrl || '',
     Origen: origin || item.input || '',
+    Formato: (item.url || '').includes('/shorts/') ? 'Short' : 'Video',
     Subtítulos: item.subtitles?.plaintext || '',
     'Scrapeado en': scrapedAtIso,
   };
@@ -65,7 +66,7 @@ export async function runScrapeYoutube() {
   for (const s of searches) {
     const onlyNewerThan = s.lastRun || config.youtubeFirstRunLookback;
     try {
-      const items = await scrapeSearchVideos({ query: s.query, maxResults: s.maxResults, onlyNewerThan });
+      const items = await scrapeSearchVideos({ query: s.query, maxResults: s.maxResults, maxShorts: s.maxShorts, onlyNewerThan });
       const inserted = await insertFreshVideos(items, existing, startedAt, s.project, s.query);
       await updateSearchLastRun(s.recordId, startedAt);
       totalInserted += inserted;
@@ -81,7 +82,7 @@ export async function runScrapeYoutube() {
   for (const c of channels) {
     const onlyNewerThan = c.lastRun || config.youtubeFirstRunLookback;
     try {
-      const items = await scrapeChannelVideos({ channelUrl: c.channelUrl, maxResults: c.maxResults, onlyNewerThan });
+      const items = await scrapeChannelVideos({ channelUrl: c.channelUrl, maxResults: c.maxResults, maxShorts: c.maxShorts, onlyNewerThan });
       const inserted = await insertFreshVideos(items, existing, startedAt, c.project, c.channelUrl);
       await updateChannelLastRun(c.recordId, startedAt);
       totalInserted += inserted;

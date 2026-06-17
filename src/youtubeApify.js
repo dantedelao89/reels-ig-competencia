@@ -7,11 +7,11 @@ const client = new ApifyClient({ token: config.apifyToken });
 
 // Corre el actor para una sola búsqueda y espera a que termine.
 // onlyNewerThan: fecha ISO o relativo ("7 days"); limita a videos publicados desde entonces.
-export async function scrapeSearchVideos({ query, maxResults, onlyNewerThan }) {
+export async function scrapeSearchVideos({ query, maxResults, maxShorts, onlyNewerThan }) {
   const input = {
     searchQueries: [query],
     maxResults,
-    maxResultsShorts: 0,
+    maxResultsShorts: maxShorts || 0,
     maxResultStreams: 0,
     sortingOrder: 'date',
     downloadSubtitles: config.youtubeDownloadSubtitles,
@@ -28,11 +28,11 @@ export async function scrapeSearchVideos({ query, maxResults, onlyNewerThan }) {
 }
 
 // Corre el actor para un canal (URL) y devuelve sus videos más nuevos.
-export async function scrapeChannelVideos({ channelUrl, maxResults, onlyNewerThan }) {
+export async function scrapeChannelVideos({ channelUrl, maxResults, maxShorts, onlyNewerThan }) {
   const input = {
     startUrls: [{ url: channelUrl }],
     maxResults, // para canales actúa como límite de videos regulares
-    maxResultsShorts: 0,
+    maxResultsShorts: maxShorts || 0,
     maxResultStreams: 0,
     sortVideosBy: 'NEWEST',
     downloadSubtitles: config.youtubeDownloadSubtitles,
