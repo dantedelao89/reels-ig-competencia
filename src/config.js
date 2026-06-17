@@ -15,6 +15,13 @@ export const config = {
   creatorsTable: process.env.CREATORS_TABLE || 'Creadores',
   reelsTable: process.env.REELS_TABLE || 'Reels',
 
+  // Ejecución de actores Apify (compartido). Las corridas son secuenciales (1 a la vez), así que
+  // nunca se excede el cupo de memoria de la cuenta (32 GB). Estos parámetros blindan el caso de
+  // que el cupo esté lleno por otros actores externos: se reintenta con espera.
+  apifyRunMemoryMb: Number(process.env.APIFY_RUN_MEMORY_MB || 0), // 0 = usar el default del actor
+  apifyMaxRetries: Number(process.env.APIFY_MAX_RETRIES || 4),
+  apifyRetryBaseMs: Number(process.env.APIFY_RETRY_BASE_MS || 30000), // 30s, 60s, 90s…
+
   // Actor de Apify (Instagram)
   actorId: process.env.APIFY_ACTOR_ID || 'apify/instagram-reel-scraper',
 
