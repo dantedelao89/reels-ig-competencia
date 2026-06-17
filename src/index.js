@@ -4,10 +4,18 @@ import express from 'express';
 import cron from 'node-cron';
 import { config } from './config.js';
 import { runScrape } from './scrape.js';
+import { runScrapeYoutube } from './scrapeYoutube.js';
 import { tgSend, isAllowed } from './telegram.js';
 
 const app = express();
 app.use(express.json());
+
+// Corre Instagram y (si está activo) YouTube en una sola pasada.
+async function runAll() {
+  const instagram = await runScrape();
+  const youtube = config.enableYoutube ? await runScrapeYoutube() : null;
+  return { ok: true, instagram, youtube };
+}
 
 // Evita que el cron y un disparo manual corran a la vez (o dos crons solapados).
 let running = false;
@@ -18,21 +26,31 @@ async function runGuarded(origen) {
   }
   running = true;
   try {
-    return await runScrape();
+    return await runAll();
   } finally {
     running = false;
   }
 }
 
-// Resume el resultado de una corrida en texto para Telegram.
+// Resume el resultado de una corrida (IG + YT) en texto para Telegram.
 function formatResult(r) {
   if (!r.ok) return `❌ Error: ${r.error}`;
-  const lines = (r.details || []).map((d) =>
-    d.error
-      ? `• ${d.username}: error (${d.error})`
-      : `• ${d.username}: ${d.inserted} nuevos${d.transcribed ? `, ${d.transcribed} transcritos` : ''}`
-  );
-  return `✅ *Corrida lista*\nCreadores: ${r.creators} · Nuevos: ${r.inserted}\n${lines.join('\n')}`;
+  const parts = [];
+  if (r.instagram) {
+    const lines = (r.instagram.details || []).map((d) =>
+      d.error
+        ? `• ${d.username}: error`
+        : `• ${d.username}: ${d.inserted} nuevos${d.transcribed ? `, ${d.transcribed} transcritos` : ''}`
+    );
+    parts.push(`📸 *Instagram* — ${r.instagram.inserted} nuevos\n${lines.join('\n')}`);
+  }
+  if (r.youtube) {
+    const lines = (r.youtube.details || []).map((d) =>
+      d.error ? `• ${d.query}: error` : `• ${d.query}: ${d.inserted} nuevos`
+    );
+    parts.push(`▶️ *YouTube* — ${r.youtube.inserted} nuevos\n${lines.join('\n')}`);
+  }
+  return `✅ *Corrida lista*\n\n${parts.join('\n\n')}`;
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));

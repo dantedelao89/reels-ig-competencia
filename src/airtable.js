@@ -62,3 +62,57 @@ export async function updateReelTranscription(recordId, text) {
 export async function updateCreatorLastRun(recordId, isoDate) {
   await base(config.creatorsTable).update(recordId, { 'Última corrida': isoDate });
 }
+
+// ---- YouTube (búsqueda por palabra clave) ----
+
+// Lee las búsquedas marcadas como Activo.
+export async function getActiveSearches() {
+  const searches = [];
+  await base(config.searchesTable)
+    .select({ filterByFormula: '{Activo} = TRUE()' })
+    .eachPage((records, next) => {
+      for (const r of records) {
+        const query = (r.get('Búsqueda') || '').toString().trim();
+        if (!query) continue;
+        searches.push({
+          recordId: r.id,
+          query,
+          maxResults: Number(r.get('Videos por búsqueda')) || config.youtubeDefaultMaxResults,
+          lastRun: r.get('Última corrida') || null,
+          project: r.get('Proyecto') || '',
+        });
+      }
+      next();
+    });
+  return searches;
+}
+
+// Devuelve un Set con todos los Video ID ya guardados (para dedupe global).
+export async function getExistingVideoIds() {
+  const set = new Set();
+  await base(config.videosTable)
+    .select({ fields: ['Video ID'] })
+    .eachPage((records, next) => {
+      for (const r of records) {
+        const id = r.get('Video ID');
+        if (id) set.add(id.toString());
+      }
+      next();
+    });
+  return set;
+}
+
+// Inserta videos nuevos en lotes de 10.
+export async function insertVideos(rows) {
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += 10) {
+    const batch = rows.slice(i, i + 10).map((fields) => ({ fields }));
+    await base(config.videosTable).create(batch, { typecast: true });
+    inserted += batch.length;
+  }
+  return inserted;
+}
+
+export async function updateSearchLastRun(recordId, isoDate) {
+  await base(config.searchesTable).update(recordId, { 'Última corrida': isoDate });
+}

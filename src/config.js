@@ -15,7 +15,7 @@ export const config = {
   creatorsTable: process.env.CREATORS_TABLE || 'Creadores',
   reelsTable: process.env.REELS_TABLE || 'Reels',
 
-  // Actor de Apify
+  // Actor de Apify (Instagram)
   actorId: process.env.APIFY_ACTOR_ID || 'apify/instagram-reel-scraper',
 
   // Reels máximos por creador si la columna "Reels por corrida" está vacía
@@ -23,6 +23,19 @@ export const config = {
 
   // Si un creador nunca se ha corrido, qué tan atrás traer (ej. "3 months")
   firstRunLookback: process.env.FIRST_RUN_LOOKBACK || '3 months',
+
+  // ---- YouTube (búsqueda por palabra clave) ----
+  youtubeActorId: process.env.YT_ACTOR_ID || 'streamers/youtube-scraper',
+  searchesTable: process.env.YT_SEARCHES_TABLE || 'Búsquedas YT',
+  videosTable: process.env.YT_VIDEOS_TABLE || 'Videos YT',
+  // Videos por búsqueda si la columna está vacía
+  youtubeDefaultMaxResults: Number(process.env.YT_DEFAULT_MAX_RESULTS || 5),
+  // Si una búsqueda nunca se ha corrido, qué tan atrás traer
+  youtubeFirstRunLookback: process.env.YT_FIRST_RUN_LOOKBACK || '7 days',
+  // Bajar subtítulos nativos de YouTube y guardarlos
+  youtubeDownloadSubtitles: process.env.YT_DOWNLOAD_SUBTITLES !== 'false',
+  // Si está false, no corre la parte de YouTube
+  enableYoutube: process.env.ENABLE_YOUTUBE !== 'false',
 
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',

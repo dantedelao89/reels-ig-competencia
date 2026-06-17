@@ -15,6 +15,16 @@ de Airtable **Benchmarking Dante**.
    `audioUrl` (pista AAC/`m4a`) y se manda a OpenRouter (`gpt-4o-mini-transcribe`); el texto se
    guarda en la columna **Transcripción**. Si la transcripción falla, el reel igual queda guardado.
 
+## YouTube (búsqueda por palabra clave)
+
+Además de Instagram, el sistema monitorea **YouTube por palabras clave** (no por canal): lee la
+tabla **`Búsquedas YT`** (queries activas), dispara el actor `streamers/youtube-scraper` trayendo
+**solo videos nuevos** por búsqueda (`oldestPostDate` según `Última corrida`), dedup por `Video ID`,
+guarda en la tabla **`Videos YT`** (con subtítulos nativos de YouTube) y hereda `Proyecto`. Corre en
+la misma pasada que Instagram (mismo cron y disparo manual). Se apaga con `ENABLE_YOUTUBE=false`.
+
+## Disparo
+
 Disparo de **dos** formas, ambas en **un solo servicio** siempre-encendido:
 - **Cron interno** (`node-cron` dentro de la app) → se auto-dispara diario según `CRON_SCHEDULE`.
 - **Manual** → `POST /scrape` con el header `x-trigger-secret`.
