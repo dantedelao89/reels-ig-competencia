@@ -9,6 +9,15 @@ import { config } from './config.js';
 
 const client = new ApifyClient({ token: config.apifyToken });
 
+// Acumulador de gasto real (USD) reportado por Apify por cada corrida del actor.
+let spendUsd = 0;
+export function resetApifySpend() {
+  spendUsd = 0;
+}
+export function getApifySpend() {
+  return Math.round(spendUsd * 10000) / 10000;
+}
+
 function isMemoryError(err) {
   const msg = ((err && err.message) || '').toLowerCase();
   return (
@@ -30,6 +39,7 @@ export async function runActorItems(actorId, input) {
   for (let attempt = 1; attempt <= config.apifyMaxRetries; attempt++) {
     try {
       const run = await client.actor(actorId).call(input, callOpts);
+      spendUsd += run.usageTotalUsd || 0;
       const { items } = await client.dataset(run.defaultDatasetId).listItems();
       return items;
     } catch (err) {

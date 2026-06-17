@@ -6,16 +6,25 @@ import { config } from './config.js';
 import { runScrape } from './scrape.js';
 import { runScrapeYoutube } from './scrapeYoutube.js';
 import { backfillSubtitles } from './backfill.js';
+import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
 
 const app = express();
 app.use(express.json());
 
-// Corre Instagram y (si está activo) YouTube en una sola pasada.
+// Guarda el resultado de la última corrida para poder consultarlo aunque el HTTP del webhook
+// se corte por timeout del edge (corridas largas).
+let lastRun = null;
+
+// Corre Instagram y (si está activo) YouTube en una sola pasada, midiendo el gasto de Apify.
 async function runAll() {
+  resetApifySpend();
+  const startedAt = new Date().toISOString();
   const instagram = await runScrape();
   const youtube = config.enableYoutube ? await runScrapeYoutube() : null;
-  return { ok: true, instagram, youtube };
+  const result = { ok: true, startedAt, apifyUsd: getApifySpend(), instagram, youtube };
+  lastRun = result;
+  return result;
 }
 
 // Evita que el cron y un disparo manual corran a la vez (o dos crons solapados).
@@ -53,6 +62,15 @@ function formatResult(r) {
 }
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Resultado de la última corrida (incluye gasto de Apify). Útil cuando el webhook se corta por timeout.
+app.get('/last-run', (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) return res.status(401).json({ ok: false, error: 'No autorizado' });
+  }
+  res.json(lastRun || { ok: false, error: 'Aún no hay corridas registradas' });
+});
 
 // Disparo manual. Protegido con un secreto en el header o en query (?secret=).
 app.post('/scrape', async (req, res) => {
