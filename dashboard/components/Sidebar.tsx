@@ -1,0 +1,47 @@
+'use client';
+
+import { ESTADOS } from '@/lib/types';
+
+interface Props {
+  stats: { total: number; porEstado: Record<string, number> } | null;
+  estado: string;
+  onEstado: (e: string) => void;
+}
+
+export default function Sidebar({ stats, estado, onEstado }: Props) {
+  const rows: { key: string; label: string; count: number | undefined }[] = [
+    { key: '', label: 'Todo', count: stats?.total },
+    ...ESTADOS.map((e) => ({ key: e.key, label: e.label, count: stats?.porEstado?.[e.key] })),
+  ];
+
+  return (
+    <aside className="w-56 shrink-0 border-r border-line bg-white min-h-screen px-3 py-5 hidden md:block">
+      <div className="px-2 mb-5">
+        <div className="text-sm font-medium">Inteligencia</div>
+        <div className="text-xs text-muted">competitiva</div>
+      </div>
+
+      <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Pipeline</div>
+      <nav className="flex flex-col gap-0.5 mb-6">
+        {rows.map((r) => {
+          const active = estado === r.key;
+          return (
+            <button
+              key={r.key || 'all'}
+              onClick={() => onEstado(r.key)}
+              className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                active ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-gray-50 text-gray-700'
+              }`}
+            >
+              <span>{r.label}</span>
+              <span className="text-xs text-muted tabular-nums">{r.count ?? '·'}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Vistas guardadas</div>
+      <div className="px-2 text-xs text-muted">Próximamente</div>
+    </aside>
+  );
+}
