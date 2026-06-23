@@ -200,6 +200,9 @@ export default function DashboardClient() {
           <div className="flex flex-wrap items-center gap-2 px-3 py-2 mb-3 rounded-lg bg-accent-soft">
             <span className="text-sm font-medium text-accent">{selected.size} seleccionados</span>
             <span className="flex-1" />
+            <button onClick={() => setEstadoFor(selectedItems(), 'por_curar')} className="h-8 px-3 text-xs rounded-md border border-amber-300 bg-amber-50 text-amber-800">
+              Por curar
+            </button>
             <button onClick={() => setEstadoFor(selectedItems(), 'curado')} className="h-8 px-3 text-xs rounded-md border border-line bg-white">
               Marcar curado
             </button>

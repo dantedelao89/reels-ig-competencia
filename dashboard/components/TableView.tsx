@@ -44,12 +44,12 @@ export default function TableView({ items, selected, onToggle, onOpen }: Props) 
                     )}
                   </div>
                 </td>
-                <td className="p-2 max-w-0">
-                  <button onClick={() => onOpen(it)} className="block truncate text-left hover:text-accent">
+                <td className="p-2 align-top">
+                  <button onClick={() => onOpen(it)} className="block text-left hover:text-accent whitespace-pre-wrap break-words">
                     {it.titulo || '(sin texto)'}
                   </button>
                 </td>
-                <td className="p-2 text-muted truncate">{it.creador ? `@${it.creador}` : '—'}</td>
+                <td className="p-2 text-muted align-top whitespace-nowrap">{it.creador ? `@${it.creador}` : '—'}</td>
                 <td className="p-2 text-muted">{it.platform === 'ig' ? 'IG' : 'YT'}</td>
                 <td className="p-2 text-right tabular-nums">{fmtNum(it.views)}</td>
                 <td className="p-2 text-muted whitespace-nowrap">{fmtDateShort(it.fechaPublicacion)}</td>

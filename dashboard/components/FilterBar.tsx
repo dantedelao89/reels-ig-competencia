@@ -47,6 +47,9 @@ export default function FilterBar(p: Props) {
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted inline-flex items-center gap-1 mr-1">
+          <span aria-hidden="true">⛃</span> Filtrar por:
+        </span>
         <FacetDropdown
           label="Creador"
           options={p.facets?.creadores || []}

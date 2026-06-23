@@ -1,8 +1,9 @@
 export type Platform = 'ig' | 'yt';
 
-export type Estado = 'por_curar' | 'curado' | 'produccion' | 'publicado' | 'descartado';
+export type Estado = 'nuevo' | 'por_curar' | 'curado' | 'produccion' | 'publicado' | 'descartado';
 
 export const ESTADOS: { key: Estado; label: string }[] = [
+  { key: 'nuevo', label: 'Nuevo' },
   { key: 'por_curar', label: 'Por curar' },
   { key: 'curado', label: 'Curado' },
   { key: 'produccion', label: 'Producción' },

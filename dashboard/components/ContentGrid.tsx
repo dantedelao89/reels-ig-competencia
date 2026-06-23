@@ -1,7 +1,7 @@
 'use client';
 
 import type { ContentItem } from '@/lib/types';
-import { fmtNum, fmtDateRel } from '@/lib/format';
+import { fmtNum, fmtDateShort } from '@/lib/format';
 import { ESTADO_STYLE } from '@/lib/estados';
 
 interface Props {
@@ -68,21 +68,26 @@ export default function ContentGrid({ items, selected, onToggle, onOpen }: Props
             </button>
 
             <div className="p-2.5">
-              <div className="mb-1.5">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded ${est.cls}`}>{est.label}</span>
-              </div>
-              <div className="text-xs text-muted mb-1 truncate">
-                {it.creador ? `@${it.creador}` : '—'} · {fmtDateRel(it.fechaPublicacion)}
+              <div className="flex items-center justify-between mb-1.5">
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${est.cls}`}>
+                  {est.label}
+                </span>
+                <span className="text-[11px] text-muted">{it.creador ? `@${it.creador}` : '—'}</span>
               </div>
               <button
                 onClick={() => onOpen(it)}
-                className="text-[13px] leading-snug text-left line-clamp-2 mb-2 hover:text-accent"
+                className="block text-[13px] leading-snug text-left mb-2 hover:text-accent whitespace-pre-wrap break-words w-full"
               >
                 {it.titulo || '(sin texto)'}
               </button>
-              <div className="flex gap-3 text-[11px] text-muted tabular-nums">
-                <span>▶ {fmtNum(it.views)}</span>
-                {it.likes != null && <span>♥ {fmtNum(it.likes)}</span>}
+              <div className="flex items-center justify-between text-[11px] text-muted">
+                <span className="inline-flex items-center gap-1">
+                  <span aria-hidden="true">📅</span> {fmtDateShort(it.fechaPublicacion)}
+                </span>
+                <span className="inline-flex gap-2.5 tabular-nums">
+                  <span>▶ {fmtNum(it.views)}</span>
+                  {it.likes != null && <span>♥ {fmtNum(it.likes)}</span>}
+                </span>
               </div>
             </div>
           </div>
