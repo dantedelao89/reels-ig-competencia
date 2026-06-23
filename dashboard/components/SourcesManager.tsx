@@ -1,12 +1,70 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { SOURCE_DEFS, SOURCE_ORDER, SourceType, SourceRecord } from '@/lib/sources';
+import { SOURCE_DEFS, SOURCE_ORDER, SourceType, SourceRecord, normalizeKey } from '@/lib/sources';
 import { fmtDateShort } from '@/lib/format';
+
+// Desplegable de proyecto: lista los existentes + opción de escribir uno nuevo.
+function ProjectSelect({
+  value,
+  onChange,
+  projects,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  projects: string[];
+}) {
+  const [mode, setMode] = useState<'list' | 'new'>(value && !projects.includes(value) ? 'new' : 'list');
+  if (mode === 'new') {
+    return (
+      <div className="flex gap-1">
+        <input
+          value={value}
+          autoFocus
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Nuevo proyecto"
+          className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setMode('list');
+            onChange('');
+          }}
+          className="h-9 px-2 text-xs border border-line rounded-md bg-white"
+          title="Elegir existente"
+        >
+          ↩
+        </button>
+      </div>
+    );
+  }
+  return (
+    <select
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === '__new__') {
+          setMode('new');
+          onChange('');
+        } else onChange(e.target.value);
+      }}
+      className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
+    >
+      <option value="">— Sin proyecto —</option>
+      {projects.map((p) => (
+        <option key={p} value={p}>
+          {p}
+        </option>
+      ))}
+      <option value="__new__">+ Nuevo proyecto…</option>
+    </select>
+  );
+}
 
 export default function SourcesManager() {
   const [type, setType] = useState<SourceType>('ig');
   const [records, setRecords] = useState<SourceRecord[]>([]);
+  const [projects, setProjects] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
@@ -37,19 +95,38 @@ export default function SourcesManager() {
     load(type);
   }, [type, load]);
 
+  useEffect(() => {
+    fetch('/api/sources/projects')
+      .then((r) => r.json())
+      .then((d) => !d.error && setProjects(d.projects))
+      .catch(() => {});
+  }, []);
+
+  function rememberProject(p: string) {
+    if (p && !projects.includes(p)) setProjects((ps) => [...ps, p].sort((a, b) => a.localeCompare(b)));
+  }
+
   async function add() {
-    if (!newKey.trim()) return;
+    const key = newKey.trim();
+    if (!key) return;
+    // Candado anti-duplicados en el cliente (feedback inmediato).
+    const norm = normalizeKey(type, key);
+    if (records.some((r) => normalizeKey(type, r.key) === norm)) {
+      setErr(`Ya existe "${key}" en ${def.label}.`);
+      return;
+    }
     setAdding(true);
     setErr('');
     try {
       const res = await fetch('/api/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, key: newKey, proyecto: newProyecto, num: newNum }),
+        body: JSON.stringify({ type, key, proyecto: newProyecto, num: newNum }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al añadir');
       setRecords((r) => [data.record, ...r]);
+      rememberProject(newProyecto);
       setNewKey('');
       setNewProyecto('');
       setNewNum('');
@@ -64,10 +141,16 @@ export default function SourcesManager() {
     setRecords((r) =>
       r.map((x) =>
         x.id === id
-          ? { ...x, ...('activo' in fields ? { activo: fields.activo! } : {}), ...('proyecto' in fields ? { proyecto: fields.proyecto! } : {}), ...('num' in fields ? { num: fields.num === '' ? null : Number(fields.num) } : {}) }
+          ? {
+              ...x,
+              ...('activo' in fields ? { activo: fields.activo! } : {}),
+              ...('proyecto' in fields ? { proyecto: fields.proyecto! } : {}),
+              ...('num' in fields ? { num: fields.num === '' ? null : Number(fields.num) } : {}),
+            }
           : x
       )
     );
+    if ('proyecto' in fields) rememberProject(fields.proyecto!);
     await fetch('/api/sources', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -79,6 +162,10 @@ export default function SourcesManager() {
     if (!confirm('¿Eliminar esta fuente de Airtable?')) return;
     setRecords((r) => r.filter((x) => x.id !== id));
     await fetch(`/api/sources?type=${type}&id=${id}`, { method: 'DELETE' }).catch(() => {});
+  }
+
+  function projOptions(current: string | null): string[] {
+    return current && !projects.includes(current) ? [current, ...projects] : projects;
   }
 
   return (
@@ -116,14 +203,9 @@ export default function SourcesManager() {
             className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
           />
         </div>
-        <div className="w-40">
+        <div className="w-44">
           <label className="text-xs text-muted block mb-1">Proyecto</label>
-          <input
-            value={newProyecto}
-            onChange={(e) => setNewProyecto(e.target.value)}
-            placeholder="opcional"
-            className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
-          />
+          <ProjectSelect value={newProyecto} onChange={setNewProyecto} projects={projects} />
         </div>
         <div className="w-28">
           <label className="text-xs text-muted block mb-1">{type === 'ig' ? 'Reels' : 'Videos'}/corrida</label>
@@ -157,7 +239,7 @@ export default function SourcesManager() {
               <tr className="bg-gray-50 text-muted text-xs">
                 <th className="text-left p-2 w-20">Activo</th>
                 <th className="text-left p-2">{def.keyLabel}</th>
-                <th className="text-left p-2 w-40">Proyecto</th>
+                <th className="text-left p-2 w-44">Proyecto</th>
                 <th className="text-left p-2 w-24">{type === 'ig' ? 'Reels' : 'Videos'}</th>
                 <th className="text-left p-2 w-28">Última corrida</th>
                 <th className="p-2 w-10"></th>
@@ -178,17 +260,26 @@ export default function SourcesManager() {
                   </td>
                   <td className="p-2 font-medium break-all">{r.key}</td>
                   <td className="p-2">
-                    <input
-                      defaultValue={r.proyecto || ''}
-                      onBlur={(e) => e.target.value !== (r.proyecto || '') && patch(r.id, { proyecto: e.target.value })}
-                      placeholder="—"
-                      className="w-full h-7 px-1.5 text-xs border border-transparent hover:border-line focus:border-accent rounded outline-none bg-transparent"
-                    />
+                    <select
+                      value={r.proyecto || ''}
+                      onChange={(e) => patch(r.id, { proyecto: e.target.value })}
+                      className="w-full h-8 px-1.5 text-xs border border-transparent hover:border-line focus:border-accent rounded outline-none bg-transparent"
+                    >
+                      <option value="">—</option>
+                      {projOptions(r.proyecto).map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="p-2">
                     <input
                       defaultValue={r.num ?? ''}
-                      onBlur={(e) => String(e.target.value) !== String(r.num ?? '') && patch(r.id, { num: e.target.value.replace(/[^0-9]/g, '') })}
+                      onBlur={(e) =>
+                        String(e.target.value) !== String(r.num ?? '') &&
+                        patch(r.id, { num: e.target.value.replace(/[^0-9]/g, '') })
+                      }
                       placeholder="auto"
                       className="w-16 h-7 px-1.5 text-xs border border-transparent hover:border-line focus:border-accent rounded outline-none bg-transparent"
                     />

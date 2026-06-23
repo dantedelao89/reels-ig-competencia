@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SOURCE_DEFS, SourceType } from '@/lib/sources';
+import { SOURCE_DEFS, SourceType, normalizeKey } from '@/lib/sources';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,10 +80,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'type y key requeridos' }, { status: 400 });
   }
   const d = SOURCE_DEFS[type];
-  const fields: Record<string, any> = { [d.keyField]: body.key.trim(), Activo: body.activo !== false };
-  if (body.proyecto) fields['Proyecto'] = body.proyecto;
-  if (body.num != null && body.num !== '') fields[d.numField] = Number(body.num);
   try {
+    // Candado anti-duplicados: comparamos la key normalizada contra lo que ya existe en Airtable.
+    const norm = normalizeKey(type, body.key);
+    const existing: any[] = [];
+    let offset: string | undefined;
+    do {
+      const u = new URL(urlFor(type));
+      u.searchParams.set('pageSize', '100');
+      u.searchParams.set('fields[]', d.keyField);
+      if (offset) u.searchParams.set('offset', offset);
+      const page = await airtable('GET', u.toString());
+      existing.push(...(page.records || []));
+      offset = page.offset;
+    } while (offset);
+    const dup = existing.find((r) => normalizeKey(type, (r.fields?.[d.keyField] ?? '').toString()) === norm);
+    if (dup) {
+      return NextResponse.json(
+        { error: `Ya existe: "${(dup.fields?.[d.keyField] ?? '').toString()}"`, duplicate: true },
+        { status: 409 }
+      );
+    }
+
+    const fields: Record<string, any> = { [d.keyField]: body.key.trim(), Activo: body.activo !== false };
+    if (body.proyecto) fields['Proyecto'] = body.proyecto;
+    if (body.num != null && body.num !== '') fields[d.numField] = Number(body.num);
     const data = await airtable('POST', urlFor(type), { fields, typecast: true });
     return NextResponse.json({ ok: true, record: toRecord(type, data) });
   } catch (e: any) {

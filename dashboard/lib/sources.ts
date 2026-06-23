@@ -53,3 +53,19 @@ export interface SourceRecord {
   num: number | null;
   ultimaCorrida: string | null;
 }
+
+// Normaliza la "key" para comparar duplicados (mismo creador/canal escrito distinto).
+export function normalizeKey(type: SourceType, key: string): string {
+  let k = (key || '').trim();
+  if (type === 'ig') {
+    k = k.replace(/^@/, '').toLowerCase();
+  } else if (type === 'yt_channel') {
+    k = k
+      .toLowerCase()
+      .replace(/^https?:\/\/(www\.)?/, '')
+      .replace(/\/+$/, '');
+  } else {
+    k = k.toLowerCase();
+  }
+  return k;
+}
