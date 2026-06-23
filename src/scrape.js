@@ -12,6 +12,7 @@ import {
 } from './airtable.js';
 import { scrapeCreators } from './apify.js';
 import { transcribeAudio } from './transcribe.js';
+import { syncReels, supabaseEnabled } from './supabase.js';
 
 function mapReel(item, scrapedAtIso, project) {
   const music = item.musicInfo
@@ -52,6 +53,7 @@ async function ingestReels(items, existing, startedAt, projectByUser) {
   rows.forEach((r) => existing.add(r.ShortCode));
 
   let transcribed = 0;
+  const transcriptionByShort = new Map();
   if (config.enableTranscription) {
     const itemByShort = new Map(fresh.map((it) => [it.shortCode, it]));
     for (const rec of created) {
@@ -61,6 +63,7 @@ async function ingestReels(items, existing, startedAt, projectByUser) {
         const text = await transcribeAudio(item.audioUrl);
         if (text) {
           await updateReelTranscription(rec.id, text);
+          transcriptionByShort.set(rec.shortCode, text);
           transcribed++;
         }
       } catch (e) {
@@ -68,6 +71,21 @@ async function ingestReels(items, existing, startedAt, projectByUser) {
       }
     }
   }
+
+  // Espejo a Supabase (dashboard). Solo los reels nuevos → nunca pisa la capa de curación.
+  if (supabaseEnabled()) {
+    try {
+      const { synced, rehosted } = await syncReels(fresh, {
+        scrapedAtIso: startedAt,
+        projectByUser,
+        transcriptionByShort,
+      });
+      console.log(`[IG supabase] sincronizados=${synced} thumbnails_rehospedadas=${rehosted}`);
+    } catch (e) {
+      console.error(`[IG supabase] sync falló: ${e.message}`);
+    }
+  }
+
   return { inserted: created.length, transcribed };
 }
 

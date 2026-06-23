@@ -76,6 +76,23 @@ export const config = {
   // Secreto que valida que el webhook venga de Telegram (reusa TRIGGER_SECRET por defecto).
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || process.env.TRIGGER_SECRET || '',
 
+  // --- Espejo en Supabase (opcional): alimenta el dashboard de curación. ---
+  // Se activa solo si hay URL + service key. Nunca rompe el flujo de Airtable (errores se loguean).
+  supabaseUrl: process.env.SUPABASE_URL || '',
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
+  igReelsTable: process.env.SUPABASE_IG_TABLE || 'ig_reels',
+  ytVideosTable: process.env.SUPABASE_YT_TABLE || 'yt_videos',
+
+  // --- Cloudflare R2 (opcional): rehospeda thumbnails para que no expiren (las de IG caducan). ---
+  // Se activa solo si están las 4 credenciales. Sin esto, thumbnail_url queda null y el dashboard
+  // cae a thumbnail_original (la URL efímera de IG).
+  r2AccountId: process.env.R2_ACCOUNT_ID || '',
+  r2AccessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+  r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+  r2Bucket: process.env.R2_BUCKET || 'competencia-media',
+  // URL pública del bucket (dominio r2.dev o dominio propio). Necesaria para servir las imágenes.
+  r2PublicBaseUrl: process.env.R2_PUBLIC_BASE_URL || '',
+
   // Cron interno: el mismo servicio se auto-dispara según este horario.
   // ENABLE_CRON=false para apagarlo. CRON_SCHEDULE en formato cron (5 campos).
   enableCron: process.env.ENABLE_CRON !== 'false',

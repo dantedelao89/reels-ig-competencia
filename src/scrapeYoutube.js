@@ -12,6 +12,7 @@ import {
   updateChannelLastRun,
 } from './airtable.js';
 import { scrapeSearches, scrapeChannels } from './youtubeApify.js';
+import { syncVideos, supabaseEnabled } from './supabase.js';
 
 // El actor devuelve `subtitles` a veces como objeto y a veces como array de pistas.
 const MAX_SUBTITLE_CHARS = 95000; // Airtable limita la celda a 100k
@@ -66,6 +67,21 @@ async function ingestVideos(items, existing, startedAt, resolve) {
   });
   const inserted = await insertVideos(rows);
   rows.forEach((r) => existing.add(r['Video ID']));
+
+  // Espejo a Supabase (dashboard). Solo los videos nuevos → nunca pisa la capa de curación.
+  if (supabaseEnabled()) {
+    try {
+      const { synced, rehosted } = await syncVideos(fresh, {
+        scrapedAtIso: startedAt,
+        resolve,
+        subtitlesOf: (it) => extractSubtitles(it.subtitles),
+      });
+      console.log(`[YT supabase] sincronizados=${synced} thumbnails_rehospedadas=${rehosted}`);
+    } catch (e) {
+      console.error(`[YT supabase] sync falló: ${e.message}`);
+    }
+  }
+
   return inserted;
 }
 
