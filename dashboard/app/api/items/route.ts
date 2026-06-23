@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest) {
   if (!body?.items?.length) {
     return NextResponse.json({ error: 'items requerido' }, { status: 400 });
   }
-  const { estado, mi_guion, mi_notas, mi_link } = body;
+  const { estado, mi_guion, mi_notas, mi_link, mi_video_url } = body;
   if (estado && !VALID.includes(estado)) {
     return NextResponse.json({ error: 'estado inválido' }, { status: 400 });
   }
@@ -26,6 +26,7 @@ export async function PATCH(req: NextRequest) {
   if (mi_guion !== undefined) patch.mi_guion = mi_guion;
   if (mi_notas !== undefined) patch.mi_notas = mi_notas;
   if (mi_link !== undefined) patch.mi_link = mi_link;
+  if (mi_video_url !== undefined) patch.mi_video_url = mi_video_url;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'nada que actualizar' }, { status: 400 });

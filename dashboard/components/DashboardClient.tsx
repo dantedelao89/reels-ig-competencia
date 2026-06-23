@@ -131,6 +131,20 @@ export default function DashboardClient() {
     setPage(1);
   }
 
+  async function saveProduction(
+    target: ContentItem,
+    fields: { mi_guion: string; mi_notas: string; mi_link: string }
+  ) {
+    await fetch('/api/items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [{ id: target.id, platform: target.platform }], ...fields }),
+    });
+    const patch = { miGuion: fields.mi_guion, miNotas: fields.mi_notas, miLink: fields.mi_link };
+    setItems((prev) => prev.map((it) => (it.id === target.id ? { ...it, ...patch } : it)));
+    setDetail((d) => (d && d.id === target.id ? { ...d, ...patch } : d));
+  }
+
   function downloadThumbs(target: ContentItem[]) {
     target.forEach((it, i) => {
       if (!it.thumbnail) return;
@@ -236,6 +250,8 @@ export default function DashboardClient() {
           item={detail}
           onClose={() => setDetail(null)}
           onEstado={(it, e) => setEstadoFor([it], e)}
+          onSaveProduction={saveProduction}
+          onUploaded={() => fetchPage(1, true)}
         />
       )}
     </div>

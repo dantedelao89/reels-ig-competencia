@@ -33,6 +33,10 @@ function igToItem(r: any): ContentItem {
     estado: r.estado,
     transcripcion: r.transcripcion,
     scrapeadoEn: r.scrapeado_en,
+    miGuion: r.mi_guion,
+    miNotas: r.mi_notas,
+    miLink: r.mi_link,
+    miVideoUrl: r.mi_video_url,
   };
 }
 
@@ -54,6 +58,10 @@ function ytToItem(r: any): ContentItem {
     estado: r.estado,
     transcripcion: r.subtitulos,
     scrapeadoEn: r.scrapeado_en,
+    miGuion: r.mi_guion,
+    miNotas: r.mi_notas,
+    miLink: r.mi_link,
+    miVideoUrl: r.mi_video_url,
   };
 }
 

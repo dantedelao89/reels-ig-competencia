@@ -28,6 +28,11 @@ export interface ContentItem {
   estado: Estado;
   transcripcion: string | null;
   scrapeadoEn: string | null;
+  // capa de producción
+  miGuion: string | null;
+  miNotas: string | null;
+  miLink: string | null;
+  miVideoUrl: string | null;
 }
 
 export interface ContentResponse {
