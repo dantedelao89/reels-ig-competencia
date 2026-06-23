@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ContentItem, Estado } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
 import { fmtNum, fmtDateShort } from '@/lib/format';
@@ -24,8 +24,26 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [uploadErr, setUploadErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const [transcripcion, setTranscripcion] = useState(item.transcripcion || '');
+  const [loadingTr, setLoadingTr] = useState(!item.transcripcion);
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeErr, setTranscribeErr] = useState('');
+
+  // La lista viene ligera (sin transcripción). La cargamos aquí al abrir el detalle.
+  useEffect(() => {
+    let alive = true;
+    setLoadingTr(true);
+    fetch(`/api/item?platform=${item.platform}&id=${item.id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || d.error) return;
+        if (d.transcripcion) setTranscripcion(d.transcripcion);
+      })
+      .catch(() => {})
+      .finally(() => alive && setLoadingTr(false));
+    return () => {
+      alive = false;
+    };
+  }, [item.id, item.platform]);
 
   async function transcribe() {
     setTranscribing(true);
@@ -146,7 +164,11 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
               <p className="text-xs text-muted mb-1">Esto tarda ~1–2 min. No cierres la ventana.</p>
             )}
             <div className="text-xs text-gray-700 whitespace-pre-wrap max-h-44 overflow-y-auto">
-              {transcripcion || <span className="text-muted">Sin transcripción.</span>}
+              {loadingTr && !transcripcion ? (
+                <span className="text-muted">Cargando…</span>
+              ) : (
+                transcripcion || <span className="text-muted">Sin transcripción.</span>
+              )}
             </div>
           </div>
 

@@ -83,8 +83,16 @@ export async function GET(req: NextRequest) {
 
   const supabase = getSupabase();
 
-  async function fetchTable(table: string, creadorCol: string): Promise<any[]> {
-    let query = supabase.from(table).select('*').limit(CAP);
+  // Solo columnas LIGERAS para la lista. Se excluyen a propósito los campos pesados
+  // (transcripcion/subtitulos ~95k chars y search_tsv) → la transcripción se carga aparte
+  // al abrir el detalle (/api/item). Esto baja el payload de ~700KB a decenas de KB.
+  const IG_COLS =
+    'id,shortcode,creador,url,video_url,caption,fecha_publicacion,likes,comentarios,views,duracion_seg,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+  const YT_COLS =
+    'id,video_id,titulo,canal,canal_url,url,fecha_publicacion,views,duracion,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+
+  async function fetchTable(table: string, creadorCol: string, cols: string): Promise<any[]> {
+    let query = supabase.from(table).select(cols).limit(CAP);
     if (estado) query = query.eq('estado', estado);
     if (creadores.length) query = query.in(creadorCol, creadores);
     if (proyectos.length) query = query.in('proyecto', proyectos);
@@ -98,8 +106,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const items: ContentItem[] = [];
-    if (platform !== 'yt') (await fetchTable(IG_TABLE, 'creador')).forEach((r) => items.push(igToItem(r)));
-    if (platform !== 'ig') (await fetchTable(YT_TABLE, 'canal')).forEach((r) => items.push(ytToItem(r)));
+    // Las dos tablas se consultan en paralelo (antes era secuencial).
+    const [igRows, ytRows] = await Promise.all([
+      platform !== 'yt' ? fetchTable(IG_TABLE, 'creador', IG_COLS) : Promise.resolve([]),
+      platform !== 'ig' ? fetchTable(YT_TABLE, 'canal', YT_COLS) : Promise.resolve([]),
+    ]);
+    igRows.forEach((r) => items.push(igToItem(r)));
+    ytRows.forEach((r) => items.push(ytToItem(r)));
 
     const val = (it: ContentItem): number | string => {
       if (sort === 'views') return it.views ?? -1;
