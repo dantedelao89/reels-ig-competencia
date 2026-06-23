@@ -34,7 +34,18 @@ async function rehostTable(supabase, table, idCol, prefix) {
     await Promise.all(
       chunk.map(async (row) => {
         const id = row[idCol];
-        const url = await rehostImage(row.thumbnail_original, `${prefix}/${id}.jpg`);
+        const key = `${prefix}/${id}.jpg`;
+        const publicUrl = `${config.r2PublicBaseUrl.replace(/\/$/, '')}/${key}`;
+        // 1) Si el objeto YA existe en R2 (p. ej. lo borró el backfill de la BD), solo re-apunta.
+        let url = null;
+        try {
+          const head = await fetch(publicUrl, { method: 'HEAD' });
+          if (head.ok) url = publicUrl;
+        } catch {
+          /* sigue al rehost */
+        }
+        // 2) Si no existe, baja la original y súbela.
+        if (!url) url = await rehostImage(row.thumbnail_original, key);
         if (!url) {
           fail++;
           return;
