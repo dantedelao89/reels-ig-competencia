@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "scrape": "node src/cron.js",
-    "backfill-supabase": "node src/backfillSupabase.js"
+    "backfill-supabase": "node src/backfillSupabase.js",
+    "rehost-thumbnails": "node src/rehostThumbnails.js"
   },
   "engines": {
     "node": ">=20"
