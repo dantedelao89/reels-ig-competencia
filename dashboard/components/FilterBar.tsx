@@ -2,6 +2,7 @@
 
 import FacetDropdown from './FacetDropdown';
 import DateFilter, { DateState } from './DateFilter';
+import PlatformToggle from './PlatformToggle';
 
 interface Facet {
   value: string;
@@ -9,6 +10,8 @@ interface Facet {
 }
 
 interface Props {
+  platform: string;
+  onPlatform: (v: string) => void;
   facets: { creadores: Facet[]; proyectos: Facet[] } | null;
   creadores: string[];
   proyectos: string[];
@@ -47,9 +50,8 @@ export default function FilterBar(p: Props) {
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-muted inline-flex items-center gap-1 mr-1">
-          <span aria-hidden="true">⛃</span> Filtrar por:
-        </span>
+        <PlatformToggle platform={p.platform} onPlatform={p.onPlatform} />
+        <span className="w-px h-6 bg-line mx-1 hidden sm:block" />
         <FacetDropdown
           label="Creador"
           options={p.facets?.creadores || []}

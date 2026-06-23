@@ -166,8 +166,6 @@ export default function DashboardClient() {
         <Topbar
           q={q}
           onQ={setQ}
-          platform={platform}
-          onPlatform={setPlatform}
           sort={sort}
           dir={dir}
           onSort={(f, d) => {
@@ -182,6 +180,8 @@ export default function DashboardClient() {
         />
 
         <FilterBar
+          platform={platform}
+          onPlatform={setPlatform}
           facets={facets}
           creadores={creadores}
           proyectos={proyectos}

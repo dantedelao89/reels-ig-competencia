@@ -3,8 +3,6 @@
 interface Props {
   q: string;
   onQ: (v: string) => void;
-  platform: string;
-  onPlatform: (v: string) => void;
   sort: string;
   dir: string;
   onSort: (field: string, dir: string) => void;
@@ -23,17 +21,6 @@ const SORTS: { field: string; label: string }[] = [
 ];
 
 export default function Topbar(p: Props) {
-  const seg = (key: string, label: string) => (
-    <button
-      onClick={() => p.onPlatform(key)}
-      className={`px-3 h-8 text-sm rounded-md ${
-        p.platform === key ? 'bg-white shadow-sm font-medium' : 'text-muted'
-      }`}
-    >
-      {label}
-    </button>
-  );
-
   return (
     <div className="flex flex-col gap-3 mb-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -45,12 +32,6 @@ export default function Topbar(p: Props) {
             placeholder="Buscar en captions y transcripciones…"
             className="w-full h-10 pl-8 pr-3 rounded-lg border border-line bg-white outline-none focus:border-accent text-sm"
           />
-        </div>
-
-        <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-          {seg('all', 'Todo')}
-          {seg('ig', 'Instagram')}
-          {seg('yt', 'YouTube')}
         </div>
 
         <div className="flex border border-line rounded-lg overflow-hidden bg-white">
