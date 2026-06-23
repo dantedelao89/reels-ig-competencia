@@ -61,8 +61,9 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const platform = (sp.get('platform') || 'all') as Platform | 'all';
   const estado = sp.get('estado') || '';
-  const creador = sp.get('creador') || '';
-  const proyecto = sp.get('proyecto') || '';
+  // creador/proyecto aceptan varios valores separados por coma (chips multi-select).
+  const creadores = (sp.get('creador') || '').split(',').map((s) => s.trim()).filter(Boolean);
+  const proyectos = (sp.get('proyecto') || '').split(',').map((s) => s.trim()).filter(Boolean);
   const q = sp.get('q')?.trim() || '';
   const sort = sp.get('sort') || 'fecha_publicacion';
   const dir = sp.get('dir') === 'asc' ? 'asc' : 'desc';
@@ -77,8 +78,8 @@ export async function GET(req: NextRequest) {
   async function fetchTable(table: string, creadorCol: string): Promise<any[]> {
     let query = supabase.from(table).select('*').limit(CAP);
     if (estado) query = query.eq('estado', estado);
-    if (creador) query = query.eq(creadorCol, creador);
-    if (proyecto) query = query.eq('proyecto', proyecto);
+    if (creadores.length) query = query.in(creadorCol, creadores);
+    if (proyectos.length) query = query.in('proyecto', proyectos);
     if (q) query = query.textSearch('search_tsv', q, { config: 'spanish', type: 'websearch' });
     if (desde) query = query.gte(dateField, desde);
     if (hasta) query = query.lte(dateField, hasta);

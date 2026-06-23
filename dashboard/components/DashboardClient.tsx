@@ -4,9 +4,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ContentItem, Estado } from '@/lib/types';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import FilterBar from './FilterBar';
+import type { DateState } from './DateFilter';
 import ContentGrid from './ContentGrid';
 import TableView from './TableView';
 import DetailModal from './DetailModal';
+
+interface Facets {
+  creadores: { value: string; count: number }[];
+  proyectos: { value: string; count: number }[];
+}
 
 interface Stats {
   total: number;
@@ -27,6 +34,11 @@ export default function DashboardClient() {
   const [dir, setDir] = useState('desc');
   const [view, setView] = useState<'grid' | 'table'>('grid');
 
+  const [facets, setFacets] = useState<Facets | null>(null);
+  const [creadores, setCreadores] = useState<string[]>([]);
+  const [proyectos, setProyectos] = useState<string[]>([]);
+  const [date, setDate] = useState<DateState>({ dateField: 'fecha_publicacion', desde: '', hasta: '' });
+
   const [items, setItems] = useState<ContentItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -44,6 +56,10 @@ export default function DashboardClient() {
 
   useEffect(() => {
     refreshStats();
+    fetch('/api/facets')
+      .then((r) => r.json())
+      .then((d) => !d.error && setFacets(d))
+      .catch(() => {});
   }, [refreshStats]);
 
   // Debounce de la búsqueda.
@@ -64,6 +80,13 @@ export default function DashboardClient() {
         page: String(pageNum),
         pageSize: String(PAGE_SIZE),
       });
+      if (creadores.length) params.set('creador', creadores.join(','));
+      if (proyectos.length) params.set('proyecto', proyectos.join(','));
+      if (date.desde || date.hasta) {
+        params.set('dateField', date.dateField);
+        if (date.desde) params.set('desde', date.desde);
+        if (date.hasta) params.set('hasta', date.hasta);
+      }
       const res = await fetch(`/api/content?${params}`);
       const data = await res.json();
       setLoading(false);
@@ -71,7 +94,7 @@ export default function DashboardClient() {
       setTotal(data.total);
       setItems((prev) => (replace ? data.items : [...prev, ...data.items]));
     },
-    [platform, estado, debouncedQ, sort, dir]
+    [platform, estado, debouncedQ, sort, dir, creadores, proyectos, date]
   );
 
   // Al cambiar filtros → reset a página 1.
@@ -142,6 +165,21 @@ export default function DashboardClient() {
           total={total}
           igCount={stats?.ig}
           ytCount={stats?.yt}
+        />
+
+        <FilterBar
+          facets={facets}
+          creadores={creadores}
+          proyectos={proyectos}
+          date={date}
+          onCreadores={setCreadores}
+          onProyectos={setProyectos}
+          onDate={setDate}
+          onClearAll={() => {
+            setCreadores([]);
+            setProyectos([]);
+            setDate({ dateField: 'fecha_publicacion', desde: '', hasta: '' });
+          }}
         />
 
         {selected.size > 0 && (
