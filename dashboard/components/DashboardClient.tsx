@@ -9,6 +9,7 @@ import type { DateState } from './DateFilter';
 import ContentGrid from './ContentGrid';
 import TableView from './TableView';
 import DetailModal from './DetailModal';
+import SourcesManager from './SourcesManager';
 
 interface Facets {
   creadores: { value: string; count: number }[];
@@ -46,6 +47,7 @@ export default function DashboardClient() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<ContentItem | null>(null);
+  const [section, setSection] = useState<'contenido' | 'fuentes'>('contenido');
 
   const refreshStats = useCallback(() => {
     fetch('/api/stats')
@@ -160,9 +162,17 @@ export default function DashboardClient() {
 
   return (
     <div className="flex">
-      <Sidebar stats={stats} estado={estado} onEstado={setEstado} />
+      <Sidebar
+        stats={stats}
+        estado={estado}
+        onEstado={setEstado}
+        section={section}
+        onSection={setSection}
+      />
 
       <main className="flex-1 min-w-0 px-4 md:px-6 py-5">
+        {section === 'fuentes' && <SourcesManager />}
+        <div style={{ display: section === 'fuentes' ? 'none' : undefined }}>
         <Topbar
           q={q}
           onQ={setQ}
@@ -245,6 +255,7 @@ export default function DashboardClient() {
               {loading ? 'Cargando…' : 'Cargar más'}
             </button>
           )}
+        </div>
         </div>
       </main>
 

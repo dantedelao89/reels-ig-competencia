@@ -6,9 +6,11 @@ interface Props {
   stats: { total: number; porEstado: Record<string, number> } | null;
   estado: string;
   onEstado: (e: string) => void;
+  section: 'contenido' | 'fuentes';
+  onSection: (s: 'contenido' | 'fuentes') => void;
 }
 
-export default function Sidebar({ stats, estado, onEstado }: Props) {
+export default function Sidebar({ stats, estado, onEstado, section, onSection }: Props) {
   const rows: { key: string; label: string; count: number | undefined }[] = [
     { key: '', label: 'Todo', count: stats?.total },
     ...ESTADOS.map((e) => ({ key: e.key, label: e.label, count: stats?.porEstado?.[e.key] })),
@@ -24,11 +26,14 @@ export default function Sidebar({ stats, estado, onEstado }: Props) {
       <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Pipeline</div>
       <nav className="flex flex-col gap-0.5 mb-6">
         {rows.map((r) => {
-          const active = estado === r.key;
+          const active = section === 'contenido' && estado === r.key;
           return (
             <button
               key={r.key || 'all'}
-              onClick={() => onEstado(r.key)}
+              onClick={() => {
+                onSection('contenido');
+                onEstado(r.key);
+              }}
               className={`flex items-center justify-between px-2.5 py-2 rounded-lg text-sm transition-colors ${
                 active ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-gray-50 text-gray-700'
               }`}
@@ -40,8 +45,17 @@ export default function Sidebar({ stats, estado, onEstado }: Props) {
         })}
       </nav>
 
-      <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Vistas guardadas</div>
-      <div className="px-2 text-xs text-muted">Próximamente</div>
+      <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Gestión</div>
+      <nav className="flex flex-col gap-0.5">
+        <button
+          onClick={() => onSection('fuentes')}
+          className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+            section === 'fuentes' ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-gray-50 text-gray-700'
+          }`}
+        >
+          <span aria-hidden="true">⊕</span> Fuentes
+        </button>
+      </nav>
     </aside>
   );
 }
