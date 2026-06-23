@@ -76,7 +76,8 @@ export default function ContentGrid({ items, selected, onToggle, onOpen }: Props
               </div>
               <button
                 onClick={() => onOpen(it)}
-                className="block text-[13px] leading-snug text-left mb-2 hover:text-accent line-clamp-2 break-words w-full"
+                className="text-[13px] leading-snug text-left mb-2 hover:text-accent break-words w-full"
+                style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
               >
                 {it.titulo || '(sin texto)'}
               </button>
