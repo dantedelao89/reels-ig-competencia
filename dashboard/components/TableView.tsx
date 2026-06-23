@@ -45,7 +45,7 @@ export default function TableView({ items, selected, onToggle, onOpen }: Props) 
                   </div>
                 </td>
                 <td className="p-2 align-top">
-                  <button onClick={() => onOpen(it)} className="block text-left hover:text-accent whitespace-pre-wrap break-words">
+                  <button onClick={() => onOpen(it)} className="block text-left hover:text-accent line-clamp-2 break-words">
                     {it.titulo || '(sin texto)'}
                   </button>
                 </td>

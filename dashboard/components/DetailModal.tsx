@@ -196,7 +196,10 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
             {/* DERECHA: transcripción grande */}
             <div className="p-5 flex flex-col min-h-[58vh]">
               {item.titulo && (
-                <p className="text-sm text-gray-800 mb-4 whitespace-pre-wrap line-clamp-4">{item.titulo}</p>
+                <div className="mb-4">
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Descripción</div>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap max-h-40 overflow-y-auto">{item.titulo}</p>
+                </div>
               )}
 
               <div className="flex items-center justify-between mb-2">
