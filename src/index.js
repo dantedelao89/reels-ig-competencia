@@ -8,6 +8,9 @@ import { runScrapeYoutube } from './scrapeYoutube.js';
 import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
+import { getYoutubeAudioUrl } from './youtubeAudio.js';
+import { transcribeAudio } from './transcribe.js';
+import { updateRowById, supabaseEnabled } from './supabase.js';
 
 const app = express();
 app.use(express.json());
@@ -102,6 +105,36 @@ app.post('/backfill-subtitles', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Error en /backfill-subtitles:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Transcripción manual bajo demanda (la dispara DISECTA). Baja el audio del video con un actor
+// de Apify y lo transcribe con el mismo modelo de los reels. Solo YouTube (IG ya se transcribe).
+app.post('/transcribe', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const { platform, id, url } = req.body || {};
+  if (platform !== 'yt' || !id || !url) {
+    return res.status(400).json({ ok: false, error: 'Faltan platform=yt, id y url válidos' });
+  }
+  if (!config.enableTranscription) {
+    return res.status(400).json({ ok: false, error: 'Transcripción deshabilitada (falta OPENROUTER_API_KEY)' });
+  }
+  try {
+    const audioUrl = await getYoutubeAudioUrl(url);
+    if (!audioUrl) throw new Error('No se obtuvo audio del video');
+    const text = await transcribeAudio(audioUrl);
+    if (!text) throw new Error('La transcripción quedó vacía');
+    if (supabaseEnabled()) await updateRowById('yt_videos', id, { subtitulos: text });
+    console.log(`[transcribe] yt ${id} → ${text.length} chars`);
+    res.json({ ok: true, text });
+  } catch (err) {
+    console.error(`[transcribe] error ${id}:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

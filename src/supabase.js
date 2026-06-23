@@ -37,6 +37,15 @@ async function upsert(table, rows, onConflict) {
   return n;
 }
 
+// Actualiza campos de un row por id (lo usa la transcripción manual bajo demanda).
+export async function updateRowById(table, id, fields) {
+  if (!enabled) return 0;
+  const c = await getClient();
+  const { error } = await c.from(table).update(fields).eq('id', id);
+  if (error) throw new Error(error.message);
+  return 1;
+}
+
 // Upsert directo de filas ya mapeadas (snake_case). Lo usa el backfill desde Airtable.
 export async function upsertReelRows(rows) {
   return upsert(config.igReelsTable, rows, 'shortcode');

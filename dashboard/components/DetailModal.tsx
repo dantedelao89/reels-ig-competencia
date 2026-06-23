@@ -23,6 +23,29 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
+  const [transcripcion, setTranscripcion] = useState(item.transcripcion || '');
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcribeErr, setTranscribeErr] = useState('');
+
+  async function transcribe() {
+    setTranscribing(true);
+    setTranscribeErr('');
+    try {
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, platform: 'yt', url: item.url }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Falló la transcripción');
+      setTranscripcion(data.text);
+      onUploaded();
+    } catch (err: any) {
+      setTranscribeErr(err.message);
+    } finally {
+      setTranscribing(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
@@ -103,11 +126,27 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
               <div>📅 {fmtDateShort(item.fechaPublicacion)}</div>
               {item.proyecto && <div>📁 {item.proyecto}</div>}
             </div>
-            <div className="text-[11px] uppercase tracking-wide text-muted mt-4 mb-1">
-              {item.platform === 'ig' ? 'Transcripción' : 'Subtítulos'}
+            <div className="flex items-center justify-between mt-4 mb-1">
+              <span className="text-[11px] uppercase tracking-wide text-muted">
+                {item.platform === 'ig' ? 'Transcripción' : 'Subtítulos'}
+              </span>
+              {item.platform === 'yt' && (
+                <button
+                  onClick={transcribe}
+                  disabled={transcribing}
+                  className="text-[11px] px-2 h-6 rounded-md border border-line bg-white hover:bg-gray-100 disabled:opacity-60"
+                  title="Baja el audio y lo transcribe con IA (gpt-4o-mini-transcribe)"
+                >
+                  {transcribing ? 'Transcribiendo…' : '✨ Transcribir con IA'}
+                </button>
+              )}
             </div>
+            {transcribeErr && <p className="text-xs text-red-600 mb-1">{transcribeErr}</p>}
+            {transcribing && (
+              <p className="text-xs text-muted mb-1">Esto tarda ~1–2 min. No cierres la ventana.</p>
+            )}
             <div className="text-xs text-gray-700 whitespace-pre-wrap max-h-44 overflow-y-auto">
-              {item.transcripcion || <span className="text-muted">Sin transcripción.</span>}
+              {transcripcion || <span className="text-muted">Sin transcripción.</span>}
             </div>
           </div>
 
