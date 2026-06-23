@@ -46,6 +46,80 @@ export async function updateRowById(table, id, fields) {
   return 1;
 }
 
+// ----------------------------- Ads (Meta) -----------------------------
+
+function adMedia(item) {
+  const s = item.snapshot || {};
+  let thumb = null;
+  let video = null;
+  if (Array.isArray(s.videos) && s.videos.length) {
+    video = s.videos[0].videoHdUrl || s.videos[0].videoSdUrl || null;
+    thumb = s.videos[0].videoPreviewImageUrl || null;
+  }
+  if (!thumb && Array.isArray(s.images) && s.images.length) {
+    thumb = s.images[0].originalImageUrl || s.images[0].resizedImageUrl || null;
+  }
+  if (Array.isArray(s.cards) && s.cards.length) {
+    const c = s.cards[0];
+    if (!thumb) thumb = c.originalImageUrl || c.resizedImageUrl || c.videoPreviewImageUrl || null;
+    if (!video) video = c.videoHdUrl || c.videoSdUrl || null;
+  }
+  return { thumb, video };
+}
+
+function adDaysRunning(item) {
+  const start = item.startDate ? item.startDate * 1000 : null;
+  const end = item.isActive ? Date.now() : item.endDate ? item.endDate * 1000 : null;
+  if (!start || !end) return null;
+  return Math.max(0, Math.round((end - start) / 86400000));
+}
+
+function adRow(item, scrapedAtIso, project, thumbnailUrl) {
+  const s = item.snapshot || {};
+  const { thumb, video } = adMedia(item);
+  return {
+    ad_id: item.adArchiveID,
+    anunciante: item.pageName || null,
+    pagina_url: s.pageProfileUri || item.inputUrl || null,
+    copy: s.body?.text || null,
+    titulo: s.title || null,
+    cta: s.ctaText || null,
+    link_destino: s.linkUrl || null,
+    formato: s.displayFormat || null,
+    plataformas: (item.publisherPlatform || []).join(', ') || null,
+    activo: !!item.isActive,
+    fecha_inicio: item.startDateFormatted || (item.startDate ? new Date(item.startDate * 1000).toISOString() : null),
+    fecha_fin: item.endDateFormatted || (item.endDate ? new Date(item.endDate * 1000).toISOString() : null),
+    dias_corriendo: adDaysRunning(item),
+    thumbnail_original: thumb,
+    thumbnail_url: thumbnailUrl,
+    video_url: video,
+    proyecto: project || null,
+    scrapeado_en: scrapedAtIso,
+  };
+}
+
+// Sincroniza anuncios nuevos a Supabase. ctx: { scrapedAtIso, projectByUrl }.
+export async function syncAds(items, ctx = {}) {
+  if (!enabled || !items?.length) return { synced: 0, rehosted: 0 };
+  const { scrapedAtIso, projectByUrl } = ctx;
+  let rehosted = 0;
+  const rows = [];
+  for (const item of items) {
+    if (!item.adArchiveID) continue;
+    const project = projectByUrl?.get((item.inputUrl || '').trim());
+    const { thumb } = adMedia(item);
+    let thumbnailUrl = null;
+    if (r2Enabled() && thumb) {
+      thumbnailUrl = await rehostImage(thumb, `thumbnails/ads/${item.adArchiveID}.jpg`);
+      if (thumbnailUrl) rehosted++;
+    }
+    rows.push(adRow(item, scrapedAtIso, project, thumbnailUrl));
+  }
+  const synced = await upsert(config.adsMetaAdsTable, rows, 'ad_id');
+  return { synced, rehosted };
+}
+
 // Upsert directo de filas ya mapeadas (snake_case). Lo usa el backfill desde Airtable.
 export async function upsertReelRows(rows) {
   return upsert(config.igReelsTable, rows, 'shortcode');

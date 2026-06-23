@@ -164,3 +164,58 @@ export async function getVideosWithoutSubtitles() {
 export async function updateVideoSubtitles(recordId, text) {
   await base(config.videosTable).update(recordId, { Subtítulos: text });
 }
+
+// ---- Ads (Meta Ad Library) ----
+
+// Lee los anunciantes (páginas de Facebook) marcados como Activo.
+export async function getActiveAdvertisers() {
+  const advertisers = [];
+  await base(config.advertisersTable)
+    .select({ filterByFormula: '{Activo} = TRUE()' })
+    .eachPage((records, next) => {
+      for (const r of records) {
+        const url = (r.get('URL') || '').toString().trim();
+        if (!url) continue;
+        advertisers.push({
+          recordId: r.id,
+          url,
+          marca: r.get('Marca') || '',
+          resultsLimit: Number(r.get('Anuncios por corrida')) || config.adsBatchMaxResults,
+          lastRun: r.get('Última corrida') || null,
+          project: r.get('Proyecto') || '',
+        });
+      }
+      next();
+    });
+  return advertisers;
+}
+
+// Set con todos los Ad ID ya guardados (dedupe global).
+export async function getExistingAdIds() {
+  const set = new Set();
+  await base(config.adsTable)
+    .select({ fields: ['Ad ID'] })
+    .eachPage((records, next) => {
+      for (const r of records) {
+        const id = r.get('Ad ID');
+        if (id) set.add(id.toString());
+      }
+      next();
+    });
+  return set;
+}
+
+// Inserta anuncios nuevos en lotes de 10. Devuelve cuántos insertó.
+export async function insertAds(rows) {
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += 10) {
+    const batch = rows.slice(i, i + 10).map((fields) => ({ fields }));
+    await base(config.adsTable).create(batch, { typecast: true });
+    inserted += batch.length;
+  }
+  return inserted;
+}
+
+export async function updateAdvertiserLastRun(recordId, isoDate) {
+  await base(config.advertisersTable).update(recordId, { 'Última corrida': isoDate });
+}

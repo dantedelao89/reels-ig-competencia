@@ -5,6 +5,7 @@ import cron from 'node-cron';
 import { config } from './config.js';
 import { runScrape } from './scrape.js';
 import { runScrapeYoutube } from './scrapeYoutube.js';
+import { runScrapeAds } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
@@ -42,6 +43,21 @@ async function runGuarded(origen) {
     return await runAll();
   } finally {
     running = false;
+  }
+}
+
+// Guard independiente para el pipeline de ads (puede correr en paralelo al orgánico).
+let runningAds = false;
+async function runAdsGuarded(origen) {
+  if (runningAds) {
+    console.log(`[${origen}] ads omitido: ya hay una corrida de ads en curso`);
+    return { ok: false, error: 'Ya hay una corrida de ads en curso' };
+  }
+  runningAds = true;
+  try {
+    return await runScrapeAds();
+  } finally {
+    runningAds = false;
   }
 }
 
@@ -88,6 +104,23 @@ app.post('/scrape', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Disparo manual del pipeline de ads. Protegido con el secreto.
+app.post('/scrape-ads', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  try {
+    const result = await runAdsGuarded('manual');
+    res.json(result);
+  } catch (err) {
+    console.error('Error en /scrape-ads:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -182,6 +215,28 @@ app.listen(config.port, () => {
   console.log(`Servicio escuchando en puerto ${config.port}`);
   if (config.telegramBotToken) {
     console.log(`Bot de Telegram activo (${config.telegramAllowedChatIds.length} chat IDs autorizados)`);
+  }
+
+  // Cron del pipeline de ads (8am CDMX), independiente del orgánico.
+  if (config.enableAds && config.enableCron) {
+    if (cron.validate(config.adsCronSchedule)) {
+      cron.schedule(
+        config.adsCronSchedule,
+        async () => {
+          console.log(`[cron-ads] disparando corrida de ads (${config.adsCronSchedule} ${config.cronTimezone})`);
+          try {
+            const result = await runAdsGuarded('cron');
+            console.log('[cron-ads] resultado:', JSON.stringify(result));
+          } catch (err) {
+            console.error('[cron-ads] error:', err.message);
+          }
+        },
+        { timezone: config.cronTimezone }
+      );
+      console.log(`Cron de ads activo: "${config.adsCronSchedule}" (${config.cronTimezone})`);
+    } else {
+      console.error(`ADS_CRON_SCHEDULE inválido: "${config.adsCronSchedule}" — cron de ads desactivado`);
+    }
   }
 
   if (config.enableCron) {

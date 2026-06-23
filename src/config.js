@@ -93,6 +93,15 @@ export const config = {
   // URL pública del bucket (dominio r2.dev o dominio propio). Necesaria para servir las imágenes.
   r2PublicBaseUrl: process.env.R2_PUBLIC_BASE_URL || '',
 
+  // --- Pipeline Ads (Meta Ad Library vía apify/facebook-ads-scraper) ---
+  enableAds: process.env.ENABLE_ADS !== 'false',
+  advertisersTable: process.env.ADVERTISERS_TABLE || 'Anunciantes',
+  adsTable: process.env.ADS_TABLE || 'Anuncios',
+  adsBatchMaxResults: Number(process.env.ADS_BATCH_MAX_RESULTS || 30),
+  adsMetaAdsTable: process.env.SUPABASE_ADS_TABLE || 'meta_ads',
+  // Cron de ads: diario a las 8am CDMX (separado del orgánico de las 9am).
+  adsCronSchedule: process.env.ADS_CRON_SCHEDULE || '0 8 * * *',
+
   // Cron interno: el mismo servicio se auto-dispara según este horario.
   // ENABLE_CRON=false para apagarlo. CRON_SCHEDULE en formato cron (5 campos).
   enableCron: process.env.ENABLE_CRON !== 'false',
