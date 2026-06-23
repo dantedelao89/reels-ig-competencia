@@ -17,8 +17,8 @@ export default function Sidebar({ stats, estado, onEstado }: Props) {
   return (
     <aside className="w-56 shrink-0 border-r border-line bg-white min-h-screen px-3 py-5 hidden md:block">
       <div className="px-2 mb-5">
-        <div className="text-sm font-medium">Inteligencia</div>
-        <div className="text-xs text-muted">competitiva</div>
+        <div className="text-lg font-semibold tracking-tight">DISECTA</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-muted">Espionaje</div>
       </div>
 
       <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Pipeline</div>

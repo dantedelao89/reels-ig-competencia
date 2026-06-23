@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Inteligencia competitiva',
-  description: 'Dashboard de curación de reels y videos',
+  title: 'DISECTA — Espionaje',
+  description: 'DISECTA · Espionaje de reels y videos de la competencia',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

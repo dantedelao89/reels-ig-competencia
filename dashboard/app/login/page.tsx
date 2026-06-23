@@ -30,7 +30,8 @@ export default function LoginPage() {
         onSubmit={submit}
         className="w-full max-w-sm bg-white border border-line rounded-2xl p-6 shadow-sm"
       >
-        <h1 className="text-lg font-medium mb-1">Inteligencia competitiva</h1>
+        <h1 className="text-2xl font-semibold tracking-tight mb-0.5">DISECTA</h1>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-muted mb-3">Espionaje</p>
         <p className="text-sm text-muted mb-5">Dashboard privado. Ingresa tu password.</p>
         <input
           type="password"
