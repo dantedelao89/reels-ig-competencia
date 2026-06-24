@@ -48,14 +48,14 @@ async function runGuarded(origen) {
 
 // Guard independiente para el pipeline de ads (puede correr en paralelo al orgánico).
 let runningAds = false;
-async function runAdsGuarded(origen) {
+async function runAdsGuarded(origen, opts = {}) {
   if (runningAds) {
     console.log(`[${origen}] ads omitido: ya hay una corrida de ads en curso`);
     return { ok: false, error: 'Ya hay una corrida de ads en curso' };
   }
   runningAds = true;
   try {
-    return await runScrapeAds();
+    return await runScrapeAds(opts);
   } finally {
     runningAds = false;
   }
@@ -117,7 +117,8 @@ app.post('/scrape-ads', async (req, res) => {
     }
   }
   try {
-    const result = await runAdsGuarded('manual');
+    const url = req.body?.url;
+    const result = await runAdsGuarded('manual', url ? { onlyUrl: url } : {});
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape-ads:', err);

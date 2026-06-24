@@ -219,3 +219,27 @@ export async function insertAds(rows) {
 export async function updateAdvertiserLastRun(recordId, isoDate) {
   await base(config.advertisersTable).update(recordId, { 'Última corrida': isoDate });
 }
+
+// Busca un anunciante por su URL (para el disparo manual de una sola página).
+export async function getAdvertiserByUrl(url) {
+  let found = null;
+  const target = (url || '').trim();
+  await base(config.advertisersTable)
+    .select()
+    .eachPage((records, next) => {
+      for (const r of records) {
+        if ((r.get('URL') || '').toString().trim() === target) {
+          found = {
+            recordId: r.id,
+            url: target,
+            marca: r.get('Marca') || '',
+            resultsLimit: Number(r.get('Anuncios por corrida')) || config.adsBatchMaxResults,
+            lastRun: r.get('Última corrida') || null,
+            project: r.get('Proyecto') || '',
+          };
+        }
+      }
+      next();
+    });
+  return found;
+}

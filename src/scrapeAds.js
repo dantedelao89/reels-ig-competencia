@@ -5,6 +5,7 @@
 import { config } from './config.js';
 import {
   getActiveAdvertisers,
+  getAdvertiserByUrl,
   getExistingAdIds,
   insertAds,
   updateAdvertiserLastRun,
@@ -62,9 +63,19 @@ function mapAd(item, scrapedAtIso, project) {
   return fields;
 }
 
-export async function runScrapeAds() {
+// opts.onlyUrl: si se pasa, scrapea solo ese anunciante (disparo manual desde DISECTA).
+export async function runScrapeAds(opts = {}) {
   const startedAt = new Date().toISOString();
-  const advertisers = await getActiveAdvertisers();
+  let advertisers;
+  if (opts.onlyUrl) {
+    const one = await getAdvertiserByUrl(opts.onlyUrl);
+    if (!one) {
+      return { ok: false, error: `No se encontró el anunciante: ${opts.onlyUrl}`, advertisers: 0, inserted: 0, details: [] };
+    }
+    advertisers = [one];
+  } else {
+    advertisers = await getActiveAdvertisers();
+  }
   if (advertisers.length === 0) {
     return { ok: true, message: 'No hay anunciantes activos.', advertisers: 0, inserted: 0, details: [] };
   }

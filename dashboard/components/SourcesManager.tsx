@@ -76,6 +76,28 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
   const [newProyecto, setNewProyecto] = useState('');
   const [newNum, setNewNum] = useState('');
   const [adding, setAdding] = useState(false);
+  const [scrapingId, setScrapingId] = useState('');
+  const [scrapeMsg, setScrapeMsg] = useState('');
+
+  async function scrapeOne(row: SourceRecord) {
+    setScrapingId(row.id);
+    setScrapeMsg('');
+    setErr('');
+    try {
+      const res = await fetch('/api/scrape-ad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: row.key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al scrapear');
+      setScrapeMsg(`✓ ${row.key.replace(/^https?:\/\/(www\.)?/, '')}: ${data.inserted} anuncios nuevos`);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setScrapingId('');
+    }
+  }
 
   const def = SOURCE_DEFS[type];
 
@@ -230,6 +252,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       </div>
 
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
+      {scrapeMsg && <p className="text-sm text-green-700 mb-3">{scrapeMsg}</p>}
 
       {/* Lista */}
       {loading ? (
@@ -291,7 +314,17 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                   <td className="p-2 text-muted whitespace-nowrap">
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>
-                  <td className="p-2 text-center">
+                  <td className="p-2 text-center whitespace-nowrap">
+                    {type === 'fb_advertiser' && (
+                      <button
+                        onClick={() => scrapeOne(r)}
+                        disabled={scrapingId === r.id}
+                        className="text-xs px-2 h-7 rounded-md border border-line bg-white hover:bg-gray-100 disabled:opacity-60 mr-1"
+                        title="Scrapear los anuncios de esta página ahora"
+                      >
+                        {scrapingId === r.id ? 'Scrapeando…' : '⚡ Scrapear'}
+                      </button>
+                    )}
                     <button onClick={() => remove(r.id)} className="text-muted hover:text-red-600" title="Eliminar">
                       ✕
                     </button>
