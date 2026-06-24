@@ -274,10 +274,33 @@ function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => vo
         <div className="grid md:grid-cols-[300px_1fr]">
           <div className="p-4 border-r border-line bg-gray-50">
             {item.videoUrl ? (
-              <video src={item.videoUrl} poster={item.thumbnail || undefined} controls className="w-full rounded-lg bg-black mb-3 max-h-80" />
+              <video src={item.videoUrl} poster={item.thumbnail || undefined} controls className="w-full rounded-lg bg-black mb-2 max-h-[60vh]" />
             ) : (
-              <div className="relative w-full pt-[100%] bg-gray-200 rounded-lg overflow-hidden mb-3">
-                {item.thumbnail && (/* eslint-disable-next-line @next/next/no-img-element */ <img src={item.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />)}
+              <div className="w-full rounded-lg overflow-hidden mb-2 bg-gray-100 flex items-center justify-center">
+                {item.thumbnail ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={item.thumbnail} alt="" className="w-full h-auto max-h-[60vh] object-contain" />
+                ) : (
+                  <div className="py-16 text-xs text-muted">sin creatividad</div>
+                )}
+              </div>
+            )}
+            {(item.thumbnail || item.videoUrl) && (
+              <div className="grid grid-cols-2 gap-1.5 mb-3">
+                <a
+                  href={`/api/download?url=${encodeURIComponent(item.videoUrl || item.thumbnail || '')}&name=ad_${item.adId}.${item.videoUrl ? 'mp4' : 'jpg'}`}
+                  className="text-center text-xs h-8 leading-8 rounded-md border border-line bg-white hover:bg-gray-100"
+                >
+                  Descargar {item.videoUrl ? 'video' : 'imagen'}
+                </a>
+                <a
+                  href={item.videoUrl || item.thumbnail || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-center text-xs h-8 leading-8 rounded-md border border-line bg-white hover:bg-gray-100"
+                >
+                  Ver completa ↗
+                </a>
               </div>
             )}
             <div className="text-xs text-muted space-y-1">
