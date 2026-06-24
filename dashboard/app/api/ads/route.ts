@@ -4,7 +4,7 @@ import { getSupabase } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 
 const COLS =
-  'id,ad_id,anunciante,copy,titulo,cta,link_destino,formato,plataformas,activo,fecha_inicio,fecha_fin,dias_corriendo,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+  'id,ad_id,anunciante,copy,titulo,cta,link_destino,formato,plataformas,activo,fecha_inicio,fecha_fin,dias_corriendo,thumbnail_original,thumbnail_url,video_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
       fechaFin: r.fecha_fin,
       diasCorriendo: r.dias_corriendo,
       thumbnail: r.thumbnail_url || r.thumbnail_original,
+      videoUrl: r.video_url,
       proyecto: r.proyecto,
       estado: r.estado,
       scrapeadoEn: r.scrapeado_en,

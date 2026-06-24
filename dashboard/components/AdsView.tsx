@@ -21,6 +21,7 @@ export interface AdItem {
   fechaFin: string | null;
   diasCorriendo: number | null;
   thumbnail: string | null;
+  videoUrl: string | null;
   proyecto: string | null;
   estado: Estado;
   scrapeadoEn: string | null;
@@ -187,6 +188,9 @@ export default function AdsView() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={it.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                     )}
+                    {it.videoUrl && (
+                      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 text-white flex items-center justify-center text-sm">▶</span>
+                    )}
                     <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">{it.activo ? '● Activo' : 'Inactivo'}</span>
                     {it.diasCorriendo != null && (
                       <span className="absolute bottom-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">{it.diasCorriendo}d</span>
@@ -269,9 +273,13 @@ function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => vo
         </div>
         <div className="grid md:grid-cols-[300px_1fr]">
           <div className="p-4 border-r border-line bg-gray-50">
-            <div className="relative w-full pt-[100%] bg-gray-200 rounded-lg overflow-hidden mb-3">
-              {item.thumbnail && (/* eslint-disable-next-line @next/next/no-img-element */ <img src={item.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />)}
-            </div>
+            {item.videoUrl ? (
+              <video src={item.videoUrl} poster={item.thumbnail || undefined} controls className="w-full rounded-lg bg-black mb-3 max-h-80" />
+            ) : (
+              <div className="relative w-full pt-[100%] bg-gray-200 rounded-lg overflow-hidden mb-3">
+                {item.thumbnail && (/* eslint-disable-next-line @next/next/no-img-element */ <img src={item.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />)}
+              </div>
+            )}
             <div className="text-xs text-muted space-y-1">
               <div>Formato: {item.formato || '—'}</div>
               <div>Plataformas: {item.plataformas || '—'}</div>

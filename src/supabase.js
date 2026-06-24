@@ -4,7 +4,7 @@
 // nunca pisa la capa de curación (Postgres solo actualiza las columnas presentes en el payload).
 
 import { config } from './config.js';
-import { r2Enabled, rehostImage } from './r2.js';
+import { r2Enabled, rehostImage, rehostVideo } from './r2.js';
 
 const enabled = !!(config.supabaseUrl && config.supabaseServiceKey);
 
@@ -74,9 +74,9 @@ function adDaysRunning(item) {
   return Math.max(0, Math.round((end - start) / 86400000));
 }
 
-function adRow(item, scrapedAtIso, project, thumbnailUrl) {
+function adRow(item, scrapedAtIso, project, thumbnailUrl, videoUrlOverride) {
   const s = item.snapshot || {};
-  const { thumb, video } = adMedia(item);
+  const { video } = adMedia(item);
   return {
     ad_id: item.adArchiveID,
     anunciante: item.pageName || null,
@@ -91,9 +91,9 @@ function adRow(item, scrapedAtIso, project, thumbnailUrl) {
     fecha_inicio: item.startDateFormatted || (item.startDate ? new Date(item.startDate * 1000).toISOString() : null),
     fecha_fin: item.endDateFormatted || (item.endDate ? new Date(item.endDate * 1000).toISOString() : null),
     dias_corriendo: adDaysRunning(item),
-    thumbnail_original: thumb,
+    thumbnail_original: adMedia(item).thumb,
     thumbnail_url: thumbnailUrl,
-    video_url: video,
+    video_url: videoUrlOverride || video,
     proyecto: project || null,
     scrapeado_en: scrapedAtIso,
   };
@@ -108,13 +108,17 @@ export async function syncAds(items, ctx = {}) {
   for (const item of items) {
     if (!item.adArchiveID) continue;
     const project = projectByUrl?.get((item.inputUrl || '').trim());
-    const { thumb } = adMedia(item);
+    const { thumb, video } = adMedia(item);
     let thumbnailUrl = null;
+    let videoUrl = null;
     if (r2Enabled() && thumb) {
       thumbnailUrl = await rehostImage(thumb, `thumbnails/ads/${item.adArchiveID}.jpg`);
       if (thumbnailUrl) rehosted++;
     }
-    rows.push(adRow(item, scrapedAtIso, project, thumbnailUrl));
+    if (r2Enabled() && video) {
+      videoUrl = await rehostVideo(video, `videos/ads/${item.adArchiveID}.mp4`);
+    }
+    rows.push(adRow(item, scrapedAtIso, project, thumbnailUrl, videoUrl));
   }
   const synced = await upsert(config.adsMetaAdsTable, rows, 'ad_id');
   return { synced, rehosted };
