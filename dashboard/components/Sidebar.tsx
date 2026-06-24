@@ -8,9 +8,11 @@ interface Props {
   onEstado: (e: string) => void;
   section: 'contenido' | 'fuentes';
   onSection: (s: 'contenido' | 'fuentes') => void;
+  mode: 'organico' | 'ads';
+  onMode: (m: 'organico' | 'ads') => void;
 }
 
-export default function Sidebar({ stats, estado, onEstado, section, onSection }: Props) {
+export default function Sidebar({ stats, estado, onEstado, section, onSection, mode, onMode }: Props) {
   const rows: { key: string; label: string; count: number | undefined }[] = [
     { key: '', label: 'Todo', count: stats?.total },
     ...ESTADOS.map((e) => ({ key: e.key, label: e.label, count: stats?.porEstado?.[e.key] })),
@@ -23,6 +25,13 @@ export default function Sidebar({ stats, estado, onEstado, section, onSection }:
         <div className="text-[11px] uppercase tracking-[0.18em] text-muted">Espionaje</div>
       </div>
 
+      <div className="flex bg-gray-100 rounded-lg p-0.5 mb-5 text-sm">
+        <button onClick={() => onMode('organico')} className={`flex-1 py-1.5 rounded-md ${mode === 'organico' ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>Orgánico</button>
+        <button onClick={() => onMode('ads')} className={`flex-1 py-1.5 rounded-md ${mode === 'ads' ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>Ads</button>
+      </div>
+
+      {mode === 'organico' && (
+        <>
       <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Pipeline</div>
       <nav className="flex flex-col gap-0.5 mb-6">
         {rows.map((r) => {
@@ -44,6 +53,8 @@ export default function Sidebar({ stats, estado, onEstado, section, onSection }:
           );
         })}
       </nav>
+        </>
+      )}
 
       <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Gestión</div>
       <nav className="flex flex-col gap-0.5">

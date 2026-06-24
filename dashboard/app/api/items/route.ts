@@ -33,19 +33,18 @@ export async function PATCH(req: NextRequest) {
   }
 
   const supabase = getSupabase();
-  const igIds = body.items.filter((i: any) => i.platform === 'ig').map((i: any) => i.id);
-  const ytIds = body.items.filter((i: any) => i.platform === 'yt').map((i: any) => i.id);
+  const TABLES: Record<string, string> = { ig: IG_TABLE, yt: YT_TABLE, ad: 'meta_ads' };
 
   try {
-    if (igIds.length) {
-      const { error } = await supabase.from(IG_TABLE).update(patch).in('id', igIds);
+    let updated = 0;
+    for (const platform of Object.keys(TABLES)) {
+      const ids = body.items.filter((i: any) => i.platform === platform).map((i: any) => i.id);
+      if (!ids.length) continue;
+      const { error } = await supabase.from(TABLES[platform]).update(patch).in('id', ids);
       if (error) throw new Error(error.message);
+      updated += ids.length;
     }
-    if (ytIds.length) {
-      const { error } = await supabase.from(YT_TABLE).update(patch).in('id', ytIds);
-      if (error) throw new Error(error.message);
-    }
-    return NextResponse.json({ ok: true, updated: igIds.length + ytIds.length });
+    return NextResponse.json({ ok: true, updated });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

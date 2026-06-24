@@ -10,6 +10,7 @@ import ContentGrid from './ContentGrid';
 import TableView from './TableView';
 import DetailModal from './DetailModal';
 import SourcesManager from './SourcesManager';
+import AdsView from './AdsView';
 
 interface Facets {
   creadores: { value: string; count: number }[];
@@ -48,6 +49,7 @@ export default function DashboardClient() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<ContentItem | null>(null);
   const [section, setSection] = useState<'contenido' | 'fuentes'>('contenido');
+  const [mode, setMode] = useState<'organico' | 'ads'>('organico');
 
   const refreshStats = useCallback(() => {
     fetch('/api/stats')
@@ -168,11 +170,14 @@ export default function DashboardClient() {
         onEstado={setEstado}
         section={section}
         onSection={setSection}
+        mode={mode}
+        onMode={setMode}
       />
 
       <main className="flex-1 min-w-0 px-4 md:px-6 py-5">
-        {section === 'fuentes' && <SourcesManager />}
-        <div style={{ display: section === 'fuentes' ? 'none' : undefined }}>
+        {section === 'fuentes' && <SourcesManager mode={mode} />}
+        {section !== 'fuentes' && mode === 'ads' && <AdsView />}
+        <div style={{ display: section === 'fuentes' || mode === 'ads' ? 'none' : undefined }}>
         <Topbar
           q={q}
           onQ={setQ}

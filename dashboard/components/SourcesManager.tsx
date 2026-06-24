@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { SOURCE_DEFS, SOURCE_ORDER, SourceType, SourceRecord, normalizeKey } from '@/lib/sources';
+import { SOURCE_DEFS, SOURCE_ORDER, ADS_SOURCE_ORDER, SourceType, SourceRecord, normalizeKey } from '@/lib/sources';
 import { fmtDateShort } from '@/lib/format';
 
 // Desplegable de proyecto: lista los existentes + opción de escribir uno nuevo.
@@ -61,8 +61,12 @@ function ProjectSelect({
   );
 }
 
-export default function SourcesManager() {
-  const [type, setType] = useState<SourceType>('ig');
+export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico' | 'ads' }) {
+  const order = mode === 'ads' ? ADS_SOURCE_ORDER : SOURCE_ORDER;
+  const [type, setType] = useState<SourceType>(order[0]);
+  useEffect(() => {
+    setType(order[0]);
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const [records, setRecords] = useState<SourceRecord[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,7 +182,7 @@ export default function SourcesManager() {
       </div>
 
       <div className="flex gap-1 border-b border-line mt-4 mb-4">
-        {SOURCE_ORDER.map((t) => (
+        {order.map((t) => (
           <button
             key={t}
             onClick={() => setType(t)}

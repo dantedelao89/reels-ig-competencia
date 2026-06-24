@@ -1,7 +1,7 @@
 // Definición de las 3 fuentes que se gestionan desde DISECTA. Airtable es la fuente única:
 // estos mapeos coinciden con los campos que lee el scraper (airtable.js).
 
-export type SourceType = 'ig' | 'yt_channel' | 'yt_search';
+export type SourceType = 'ig' | 'yt_channel' | 'yt_search' | 'fb_advertiser';
 
 export interface SourceDef {
   label: string;
@@ -41,9 +41,20 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
     keyLabel: 'Palabra clave',
     keyPlaceholder: 'ej. claude code',
   },
+  fb_advertiser: {
+    label: 'Anunciantes',
+    tableEnv: 'ADVERTISERS_TABLE',
+    tableDefault: 'Anunciantes',
+    keyField: 'URL',
+    numField: 'Anuncios por corrida',
+    keyLabel: 'URL de página de Facebook',
+    keyPlaceholder: 'https://www.facebook.com/MARCA',
+  },
 };
 
 export const SOURCE_ORDER: SourceType[] = ['ig', 'yt_channel', 'yt_search'];
+export const ADS_SOURCE_ORDER: SourceType[] = ['fb_advertiser'];
+export const ALL_SOURCE_ORDER: SourceType[] = [...SOURCE_ORDER, ...ADS_SOURCE_ORDER];
 
 export interface SourceRecord {
   id: string;
@@ -59,7 +70,7 @@ export function normalizeKey(type: SourceType, key: string): string {
   let k = (key || '').trim();
   if (type === 'ig') {
     k = k.replace(/^@/, '').toLowerCase();
-  } else if (type === 'yt_channel') {
+  } else if (type === 'yt_channel' || type === 'fb_advertiser') {
     k = k
       .toLowerCase()
       .replace(/^https?:\/\/(www\.)?/, '')

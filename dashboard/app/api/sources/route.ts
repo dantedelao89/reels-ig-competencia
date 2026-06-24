@@ -35,7 +35,7 @@ async function airtable(method: string, url: string, body?: any) {
 }
 
 function isValidType(t: any): t is SourceType {
-  return t === 'ig' || t === 'yt_channel' || t === 'yt_search';
+  return t === 'ig' || t === 'yt_channel' || t === 'yt_search' || t === 'fb_advertiser';
 }
 
 function toRecord(type: SourceType, rec: any) {

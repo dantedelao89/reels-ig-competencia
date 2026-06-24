@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { SOURCE_DEFS, SOURCE_ORDER } from '@/lib/sources';
+import { SOURCE_DEFS, ALL_SOURCE_ORDER } from '@/lib/sources';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export async function GET() {
   }
   const set = new Set<string>();
   try {
-    for (const type of SOURCE_ORDER) {
+    for (const type of ALL_SOURCE_ORDER) {
       const d = SOURCE_DEFS[type];
       const table = process.env[d.tableEnv] || d.tableDefault;
       let offset: string | undefined;
