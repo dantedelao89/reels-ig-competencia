@@ -81,36 +81,42 @@ export async function runScrapeAds(opts = {}) {
   }
 
   const existing = await getExistingAdIds();
-  const projectByUrl = new Map(advertisers.map((a) => [a.url.trim(), a.project]));
-  // Límite por URL: el mayor configurado entre los anunciantes (el actor aplica resultsLimit por URL).
-  const resultsLimit = Math.max(...advertisers.map((a) => a.resultsLimit || config.adsBatchMaxResults));
+  // Manual (una página) = jala TODO el histórico (sin ventana). Cron = solo recientes (barato).
+  const onlyNewerThan = opts.onlyUrl ? undefined : config.adsRecentLookback;
 
   let inserted = 0;
   const details = [];
-  try {
-    const items = await scrapeFacebookAds({ urls: advertisers.map((a) => a.url), resultsLimit });
-    const fresh = items.filter((it) => it.adArchiveID && !existing.has(it.adArchiveID.toString()));
-    fresh.forEach((it) => existing.add(it.adArchiveID.toString()));
-
-    const rows = fresh.map((it) => mapAd(it, startedAt, projectByUrl.get((it.inputUrl || '').trim())));
-    if (rows.length) inserted = await insertAds(rows);
-
-    if (supabaseEnabled()) {
-      try {
-        const { synced, rehosted } = await syncAds(fresh, { scrapedAtIso: startedAt, projectByUrl });
-        console.log(`[ADS supabase] sincronizados=${synced} creatividades_rehospedadas=${rehosted}`);
-      } catch (e) {
-        console.error(`[ADS supabase] sync falló: ${e.message}`);
-      }
-    }
-    details.push({ anunciantes: advertisers.length, scraped: items.length, inserted });
-    console.log(`[ADS] anunciantes=${advertisers.length} scrapeados=${items.length} nuevos=${inserted}`);
-  } catch (err) {
-    console.error('[ADS] ERROR:', err.message);
-    details.push({ anunciantes: advertisers.length, error: err.message });
-  }
-
+  // Una corrida del actor POR anunciante: respeta su propio límite (vacío = todos).
   for (const a of advertisers) {
+    try {
+      const items = await scrapeFacebookAds({
+        urls: [a.url],
+        resultsLimit: a.resultsLimit, // null = sin límite
+        onlyAdsNewerThan: onlyNewerThan,
+      });
+      const fresh = items.filter((it) => it.adArchiveID && !existing.has(it.adArchiveID.toString()));
+      fresh.forEach((it) => existing.add(it.adArchiveID.toString()));
+
+      const rows = fresh.map((it) => mapAd(it, startedAt, a.project));
+      let ins = 0;
+      if (rows.length) ins = await insertAds(rows);
+      inserted += ins;
+
+      if (supabaseEnabled() && fresh.length) {
+        try {
+          const projectByUrl = new Map([[a.url.trim(), a.project]]);
+          const { synced, rehosted } = await syncAds(fresh, { scrapedAtIso: startedAt, projectByUrl });
+          console.log(`[ADS supabase ${a.marca || a.url}] sincronizados=${synced} rehospedadas=${rehosted}`);
+        } catch (e) {
+          console.error(`[ADS supabase ${a.marca || a.url}] sync falló: ${e.message}`);
+        }
+      }
+      details.push({ anunciante: a.marca || a.url, scraped: items.length, inserted: ins });
+      console.log(`[ADS] ${a.marca || a.url} scrapeados=${items.length} nuevos=${ins}`);
+    } catch (err) {
+      console.error(`[ADS ${a.marca || a.url}] ERROR:`, err.message);
+      details.push({ anunciante: a.marca || a.url, error: err.message });
+    }
     try {
       await updateAdvertiserLastRun(a.recordId, startedAt);
     } catch (e) {

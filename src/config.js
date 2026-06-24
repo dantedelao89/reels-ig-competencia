@@ -98,6 +98,9 @@ export const config = {
   advertisersTable: process.env.ADVERTISERS_TABLE || 'Anunciantes',
   adsTable: process.env.ADS_TABLE || 'Anuncios',
   adsBatchMaxResults: Number(process.env.ADS_BATCH_MAX_RESULTS || 30),
+  // Ventana del cron diario de ads: solo anuncios recientes (el histórico completo se trae con
+  // el botón manual "Scrapear ahora", que NO aplica ventana). Mantiene barato el costo diario.
+  adsRecentLookback: process.env.ADS_RECENT_LOOKBACK || '10 days',
   adsMetaAdsTable: process.env.SUPABASE_ADS_TABLE || 'meta_ads',
   // Cron de ads: diario a las 8am CDMX (separado del orgánico de las 9am).
   adsCronSchedule: process.env.ADS_CRON_SCHEDULE || '0 8 * * *',

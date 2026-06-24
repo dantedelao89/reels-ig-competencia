@@ -180,7 +180,7 @@ export async function getActiveAdvertisers() {
           recordId: r.id,
           url,
           marca: r.get('Marca') || '',
-          resultsLimit: Number(r.get('Anuncios por corrida')) || config.adsBatchMaxResults,
+          resultsLimit: r.get('Anuncios por corrida') ? Number(r.get('Anuncios por corrida')) : null,
           lastRun: r.get('Última corrida') || null,
           project: r.get('Proyecto') || '',
         });
@@ -233,7 +233,7 @@ export async function getAdvertiserByUrl(url) {
             recordId: r.id,
             url: target,
             marca: r.get('Marca') || '',
-            resultsLimit: Number(r.get('Anuncios por corrida')) || config.adsBatchMaxResults,
+            resultsLimit: r.get('Anuncios por corrida') ? Number(r.get('Anuncios por corrida')) : null,
             lastRun: r.get('Última corrida') || null,
             project: r.get('Proyecto') || '',
           };

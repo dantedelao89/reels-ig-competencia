@@ -6,12 +6,13 @@ import { runActorItems } from './apifyRun.js';
 
 const ADS_ACTOR = 'apify/facebook-ads-scraper';
 
-// urls: array de URLs de páginas de Facebook. resultsLimit: máximo de anuncios por URL.
-export async function scrapeFacebookAds({ urls, resultsLimit }) {
-  const input = {
-    startUrls: urls.map((u) => ({ url: u })),
-    resultsLimit: resultsLimit || config.adsBatchMaxResults,
-  };
+// urls: array de URLs de páginas de Facebook.
+// resultsLimit: máximo de anuncios por URL (null/0 = sin límite, trae todos).
+// onlyAdsNewerThan: ventana de fecha (ej. "10 days") para traer solo anuncios recientes (cron).
+export async function scrapeFacebookAds({ urls, resultsLimit, onlyAdsNewerThan }) {
+  const input = { startUrls: urls.map((u) => ({ url: u })) };
+  if (resultsLimit) input.resultsLimit = resultsLimit; // sin esto = todos los posibles
+  if (onlyAdsNewerThan) input.onlyAdsNewerThan = onlyAdsNewerThan;
   const items = await runActorItems(ADS_ACTOR, input);
   // Cada item es un anuncio con adArchiveID. Filtramos los que traen error/sin id.
   return (items || []).filter((it) => it && it.adArchiveID && !it.error);
