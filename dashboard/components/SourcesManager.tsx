@@ -78,6 +78,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
   const [adding, setAdding] = useState(false);
   const [scrapingId, setScrapingId] = useState('');
   const [scrapeMsg, setScrapeMsg] = useState('');
+  const [filter, setFilter] = useState('');
 
   async function scrapeOne(row: SourceRecord) {
     setScrapingId(row.id);
@@ -121,7 +122,13 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
 
   useEffect(() => {
     load(type);
+    setFilter('');
   }, [type, load]);
+
+  const f = filter.trim().toLowerCase();
+  const shown = f
+    ? records.filter((r) => r.key.toLowerCase().includes(f) || (r.proyecto || '').toLowerCase().includes(f))
+    : records;
 
   useEffect(() => {
     fetch('/api/sources/projects')
@@ -256,11 +263,31 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
       {scrapeMsg && <p className="text-sm text-green-700 mb-3">{scrapeMsg}</p>}
 
+      {/* Buscador */}
+      {records.length > 0 && (
+        <div className="flex items-center gap-2 mb-3">
+          <div className="relative flex-1 max-w-sm">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">⌕</span>
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder={`Buscar en ${def.label.toLowerCase()}…`}
+              className="w-full h-9 pl-8 pr-3 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
+            />
+          </div>
+          <span className="text-xs text-muted">
+            {f ? `${shown.length} de ${records.length}` : `${records.length}`}
+          </span>
+        </div>
+      )}
+
       {/* Lista */}
       {loading ? (
         <div className="text-sm text-muted py-10 text-center">Cargando…</div>
       ) : records.length === 0 ? (
         <div className="text-sm text-muted py-10 text-center">Sin fuentes. Añade la primera arriba.</div>
+      ) : shown.length === 0 ? (
+        <div className="text-sm text-muted py-10 text-center">Nada coincide con “{filter}”.</div>
       ) : (
         <div className="border border-line rounded-lg overflow-hidden">
           <table className="w-full text-sm">
@@ -275,7 +302,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
               </tr>
             </thead>
             <tbody>
-              {records.map((r) => (
+              {shown.map((r) => (
                 <tr key={r.id} className="border-t border-line hover:bg-gray-50">
                   <td className="p-2">
                     <button
