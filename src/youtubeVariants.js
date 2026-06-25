@@ -51,7 +51,7 @@ export async function refreshVideoVariants(videoId) {
   // Re-scrape del feed del canal (proxy fresco), sin subtítulos.
   const items = await runActorItems(config.youtubeActorId, {
     startUrls: [{ url: row.canal_url }],
-    maxResults: 25,
+    maxResults: 10,
     maxResultsShorts: 0,
     maxResultStreams: 0,
     sortVideosBy: 'NEWEST',
