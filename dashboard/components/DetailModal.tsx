@@ -32,15 +32,26 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeErr, setTranscribeErr] = useState('');
 
+  // Variantes A/B (solo YouTube): portadas/títulos distintos que YouTube sirve para el mismo video.
+  const [variantes, setVariantes] = useState<any[]>([]);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [searchingVar, setSearchingVar] = useState(false);
+  const [varMsg, setVarMsg] = useState('');
+
   useEffect(() => {
     let alive = true;
     setLoadingTr(true);
+    setVariantes([]);
+    setVideoId(null);
+    setVarMsg('');
     fetch(`/api/item?platform=${item.platform}&id=${item.id}`)
       .then((r) => r.json())
       .then((d) => {
         if (!alive || d.error) return;
         if (d.transcripcion) setTranscripcion(d.transcripcion);
         if (d.hashtags) setHashtags(d.hashtags);
+        if (Array.isArray(d.variantes)) setVariantes(d.variantes);
+        if (d.videoId) setVideoId(d.videoId);
       })
       .catch(() => {})
       .finally(() => alive && setLoadingTr(false));
@@ -99,6 +110,27 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       setTranscribeErr(err.message);
     } finally {
       setTranscribing(false);
+    }
+  }
+
+  async function buscarVariantes() {
+    if (!videoId) return;
+    setSearchingVar(true);
+    setVarMsg('');
+    try {
+      const res = await fetch('/api/scrape-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'Error');
+      if (Array.isArray(data.variantes)) setVariantes(data.variantes);
+      setVarMsg(data.message || (data.added ? '¡Nueva variante!' : 'No encontré nuevas'));
+    } catch (err: any) {
+      setVarMsg('Error: ' + err.message);
+    } finally {
+      setSearchingVar(false);
     }
   }
 
@@ -189,6 +221,43 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 <div className="mt-3">
                   <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Hashtags</div>
                   <div className="text-xs text-accent break-words">{hashtags}</div>
+                </div>
+              )}
+
+              {item.platform === 'yt' && (
+                <div className="mt-4">
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+                    Variantes A/B ({variantes.length}/3)
+                  </div>
+                  {variantes.length > 0 && (
+                    <div className="space-y-2 mb-2">
+                      {variantes.map((v, i) => (
+                        <div key={i} className="rounded-md border border-line bg-white overflow-hidden">
+                          {v.thumbnail && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={v.thumbnail} alt="" className="w-full aspect-video object-cover" />
+                          )}
+                          <div className="px-2 py-1.5 text-[11px] leading-snug text-gray-700">{v.titulo || '—'}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    onClick={buscarVariantes}
+                    disabled={searchingVar || variantes.length >= 3 || !videoId}
+                    className="w-full h-9 text-xs rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {searchingVar
+                      ? 'Buscando…'
+                      : variantes.length >= 3
+                      ? 'Máximo de 3 alcanzado'
+                      : '🔄 Buscar nuevas portadas/títulos'}
+                  </button>
+                  {varMsg && <p className="text-[11px] text-muted mt-1.5">{varMsg}</p>}
+                  <p className="text-[10px] text-muted mt-1 leading-snug">
+                    Re-busca en el feed del canal con sesión nueva (como incógnito). Dale varias veces: a
+                    veces cae una variante, a veces no.
+                  </p>
                 </div>
               )}
             </div>

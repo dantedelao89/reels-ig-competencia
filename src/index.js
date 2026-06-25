@@ -5,6 +5,7 @@ import cron from 'node-cron';
 import { config } from './config.js';
 import { runScrape } from './scrape.js';
 import { runScrapeYoutube, runScrapeYoutubeChannel } from './scrapeYoutube.js';
+import { refreshVideoVariants } from './youtubeVariants.js';
 import { runScrapeAds } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
@@ -141,6 +142,26 @@ app.post('/scrape-channel', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape-channel:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Busca variantes A/B (portada/título) de UN video: re-scrapea el feed del canal con proxy fresco
+// y, si YouTube sirve una variante nueva, la guarda (máx 3). Disparado por botón en DISECTA.
+app.post('/scrape-video', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const videoId = req.body?.videoId;
+  if (!videoId) return res.status(400).json({ ok: false, error: 'videoId requerido' });
+  try {
+    const result = await refreshVideoVariants(videoId);
+    res.json(result);
+  } catch (err) {
+    console.error('Error en /scrape-video:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

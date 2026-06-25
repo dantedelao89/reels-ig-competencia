@@ -14,10 +14,12 @@ export async function GET(req: NextRequest) {
   }
   const table = platform === 'ig' ? IG_TABLE : YT_TABLE;
   const textCol = platform === 'ig' ? 'transcripcion' : 'subtitulos';
+  // Solo YouTube tiene variantes A/B y video_id (para el botón "buscar variantes").
+  const extraCols = platform === 'yt' ? ', variantes, video_id' : '';
   try {
     const { data, error } = await getSupabase()
       .from(table)
-      .select(`${textCol}, hashtags, mi_guion, mi_notas, mi_link, mi_video_url`)
+      .select(`${textCol}, hashtags, mi_guion, mi_notas, mi_link, mi_video_url${extraCols}`)
       .eq('id', id)
       .single();
     if (error) throw new Error(error.message);
@@ -28,6 +30,8 @@ export async function GET(req: NextRequest) {
       miNotas: (data as any).mi_notas ?? null,
       miLink: (data as any).mi_link ?? null,
       miVideoUrl: (data as any).mi_video_url ?? null,
+      variantes: (data as any).variantes ?? [],
+      videoId: (data as any).video_id ?? null,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
