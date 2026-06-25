@@ -6,6 +6,7 @@ import { config } from './config.js';
 import {
   getActiveSearches,
   getActiveChannels,
+  getChannelByUrl,
   getExistingVideoIds,
   insertVideos,
   updateSearchLastRun,
@@ -164,4 +165,38 @@ export async function runScrapeYoutube() {
   }
 
   return { ok: true, searches: searches.length, channels: channels.length, inserted: totalInserted, details };
+}
+
+// Re-scrape manual de UN solo canal (disparado desde DISECTA cuando el cron no lo alcanzó).
+// Usa una ventana amplia (30 días) y más resultados para "ponerse al día" con lo que faltó.
+export async function runScrapeYoutubeChannel(channelUrl) {
+  const startedAt = new Date().toISOString();
+  const channel = await getChannelByUrl(channelUrl);
+  if (!channel) {
+    return { ok: false, error: `No se encontró el canal: ${channelUrl}`, inserted: 0 };
+  }
+  const existing = await getExistingVideoIds();
+  let inserted = 0;
+  try {
+    const items = await scrapeChannels({
+      urls: [channel.channelUrl],
+      maxResults: Math.max(channel.maxResults || config.youtubeDefaultMaxResults, 15),
+      maxShorts: channel.maxShorts || 0,
+      onlyNewerThan: '30 days',
+    });
+    inserted = await ingestVideos(items, existing, startedAt, () => ({
+      project: channel.project,
+      origin: channel.channelUrl,
+    }));
+    console.log(`[YT manual] ${channel.channelUrl} scrapeados=${items.length} nuevos=${inserted}`);
+  } catch (err) {
+    console.error(`[YT manual ${channel.channelUrl}] ERROR:`, err.message);
+    return { ok: false, error: err.message, inserted: 0 };
+  }
+  try {
+    await updateChannelLastRun(channel.recordId, startedAt);
+  } catch (e) {
+    console.error(`[YT manual lastRun] ${e.message}`);
+  }
+  return { ok: true, channel: channel.channelUrl, inserted };
 }

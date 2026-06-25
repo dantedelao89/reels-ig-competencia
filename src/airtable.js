@@ -145,6 +145,30 @@ export async function updateChannelLastRun(recordId, isoDate) {
   await base(config.channelsTable).update(recordId, { 'Última corrida': isoDate });
 }
 
+// Busca un canal de YouTube por su URL (para el re-scrape manual de un solo canal).
+export async function getChannelByUrl(url) {
+  let found = null;
+  const target = (url || '').trim();
+  await base(config.channelsTable)
+    .select()
+    .eachPage((records, next) => {
+      for (const r of records) {
+        if ((r.get('Canal') || '').toString().trim() === target) {
+          found = {
+            recordId: r.id,
+            channelUrl: target,
+            maxResults: Number(r.get('Videos por corrida')) || config.youtubeDefaultMaxResults,
+            maxShorts: Number(r.get('Shorts por corrida')) || 0,
+            lastRun: r.get('Última corrida') || null,
+            project: r.get('Proyecto') || '',
+          };
+        }
+      }
+      next();
+    });
+  return found;
+}
+
 // Videos sin subtítulos (para backfill). Devuelve [{ recordId, videoId, url }].
 export async function getVideosWithoutSubtitles() {
   const out = [];

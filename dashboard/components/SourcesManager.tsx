@@ -83,15 +83,17 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     setScrapingId(row.id);
     setScrapeMsg('');
     setErr('');
+    const endpoint = type === 'yt_channel' ? '/api/scrape-channel' : '/api/scrape-ad';
+    const unidad = type === 'yt_channel' ? 'videos' : 'anuncios';
     try {
-      const res = await fetch('/api/scrape-ad', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: row.key }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al scrapear');
-      setScrapeMsg(`✓ ${row.key.replace(/^https?:\/\/(www\.)?/, '')}: ${data.inserted} anuncios nuevos`);
+      setScrapeMsg(`✓ ${row.key.replace(/^https?:\/\/(www\.)?/, '')}: ${data.inserted} ${unidad} nuevos`);
     } catch (e: any) {
       setErr(e.message);
     } finally {
@@ -315,12 +317,12 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>
                   <td className="p-2 text-center whitespace-nowrap">
-                    {type === 'fb_advertiser' && (
+                    {(type === 'fb_advertiser' || type === 'yt_channel') && (
                       <button
                         onClick={() => scrapeOne(r)}
                         disabled={scrapingId === r.id}
                         className="text-xs px-2 h-7 rounded-md border border-line bg-white hover:bg-gray-100 disabled:opacity-60 mr-1"
-                        title="Scrapear los anuncios de esta página ahora"
+                        title={type === 'yt_channel' ? 'Re-scrapear este canal ahora' : 'Scrapear los anuncios de esta página ahora'}
                       >
                         {scrapingId === r.id ? 'Scrapeando…' : '⚡ Scrapear'}
                       </button>
