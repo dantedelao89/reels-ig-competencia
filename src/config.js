@@ -64,8 +64,14 @@ export const config = {
     process.env.ENABLE_TRANSCRIPTION !== 'false' && !!process.env.OPENROUTER_API_KEY,
   transcribeModel: process.env.TRANSCRIBE_MODEL || 'openai/gpt-4o-mini-transcribe',
   transcribeFormat: process.env.TRANSCRIBE_FORMAT || 'm4a', // audioUrl de IG = AAC en mp4
-  maxTranscribeBytes: Number(process.env.MAX_TRANSCRIBE_BYTES || 24 * 1024 * 1024), // 24 MB
+  // Tope de descarga del audio. Con troceo soportamos audios grandes (videos largos), así que
+  // el tope es generoso; solo evita bajar archivos absurdos a memoria.
+  maxTranscribeBytes: Number(process.env.MAX_TRANSCRIBE_BYTES || 300 * 1024 * 1024), // 300 MB
   transcribeTimeoutMs: Number(process.env.TRANSCRIBE_TIMEOUT_MS || 120000),
+  // Si el audio supera este tamaño, se trocea con ffmpeg en segmentos antes de transcribir
+  // (OpenRouter rechaza con 502 audios muy largos en una sola llamada). Reels IG quedan debajo.
+  transcribeChunkThresholdBytes: Number(process.env.TRANSCRIBE_CHUNK_THRESHOLD_BYTES || 15 * 1024 * 1024), // 15 MB
+  transcribeChunkSeconds: Number(process.env.TRANSCRIBE_CHUNK_SECONDS || 600), // 10 min por trozo
 
   // Telegram (opcional): disparo manual desde el bot. Se activa solo si hay token.
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
