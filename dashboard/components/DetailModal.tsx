@@ -38,12 +38,21 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [searchingVar, setSearchingVar] = useState(false);
   const [varMsg, setVarMsg] = useState('');
 
+  // Traducción a español de la transcripción (manual, modelo barato de OpenRouter).
+  const [traduccion, setTraduccion] = useState('');
+  const [translating, setTranslating] = useState(false);
+  const [translateErr, setTranslateErr] = useState('');
+  const [showTranslation, setShowTranslation] = useState(false);
+
   useEffect(() => {
     let alive = true;
     setLoadingTr(true);
     setVariantes([]);
     setVideoId(null);
     setVarMsg('');
+    setTraduccion('');
+    setShowTranslation(false);
+    setTranslateErr('');
     fetch(`/api/item?platform=${item.platform}&id=${item.id}`)
       .then((r) => r.json())
       .then((d) => {
@@ -52,6 +61,10 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
         if (d.hashtags) setHashtags(d.hashtags);
         if (Array.isArray(d.variantes)) setVariantes(d.variantes);
         if (d.videoId) setVideoId(d.videoId);
+        if (d.traduccion) {
+          setTraduccion(d.traduccion);
+          setShowTranslation(true); // si ya hay traducción, mostrarla por defecto
+        }
       })
       .catch(() => {})
       .finally(() => alive && setLoadingTr(false));
@@ -110,6 +123,26 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       setTranscribeErr(err.message);
     } finally {
       setTranscribing(false);
+    }
+  }
+
+  async function translate() {
+    setTranslating(true);
+    setTranslateErr('');
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, platform: item.platform, text: transcripcion }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Falló la traducción');
+      setTraduccion(data.text);
+      setShowTranslation(true);
+    } catch (err: any) {
+      setTranslateErr(err.message);
+    } finally {
+      setTranslating(false);
     }
   }
 
@@ -271,15 +304,44 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 </div>
               )}
 
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[13px] font-medium">
+              <div className="flex items-center justify-between mb-2 gap-2">
+                <span className="text-[13px] font-medium shrink-0">
                   {item.platform === 'ig' ? 'Transcripción' : 'Transcripción / Subtítulos'}
                 </span>
-                {item.platform === 'yt' && transcripcion && !transcribing && (
-                  <button onClick={transcribe} className="text-xs text-muted hover:text-accent">
-                    ↻ Re-transcribir
-                  </button>
-                )}
+                <div className="flex items-center gap-3">
+                  {transcripcion && !transcribing && (
+                    traduccion ? (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <button
+                          onClick={() => setShowTranslation(false)}
+                          className={!showTranslation ? 'text-accent font-medium' : 'text-muted hover:text-gray-700'}
+                        >
+                          Original
+                        </button>
+                        <span className="text-line">·</span>
+                        <button
+                          onClick={() => setShowTranslation(true)}
+                          className={showTranslation ? 'text-accent font-medium' : 'text-muted hover:text-gray-700'}
+                        >
+                          Español
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={translate}
+                        disabled={translating}
+                        className="text-xs text-muted hover:text-accent disabled:opacity-50"
+                      >
+                        {translating ? 'Traduciendo…' : '🌐 Traducir a español'}
+                      </button>
+                    )
+                  )}
+                  {item.platform === 'yt' && transcripcion && !transcribing && (
+                    <button onClick={transcribe} className="text-xs text-muted hover:text-accent">
+                      ↻ Re-transcribir
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1 rounded-lg border border-line bg-gray-50 p-4 overflow-y-auto max-h-[52vh]">
@@ -290,7 +352,9 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                     <div className="text-xs mt-1">Bajando el audio y transcribiendo. Tarda ~1–2 min. No cierres la ventana.</div>
                   </div>
                 ) : transcripcion ? (
-                  <p className="text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap">{transcripcion}</p>
+                  <p className="text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap">
+                    {showTranslation && traduccion ? traduccion : transcripcion}
+                  </p>
                 ) : loadingTr ? (
                   <div className="text-sm text-muted text-center py-10">Cargando…</div>
                 ) : item.platform === 'yt' ? (
@@ -310,6 +374,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                   <div className="text-sm text-muted text-center py-10">Sin transcripción.</div>
                 )}
                 {transcribeErr && <p className="text-xs text-red-600 mt-3">{transcribeErr}</p>}
+                {translateErr && <p className="text-xs text-red-600 mt-3">Traducción: {translateErr}</p>}
               </div>
             </div>
           </div>

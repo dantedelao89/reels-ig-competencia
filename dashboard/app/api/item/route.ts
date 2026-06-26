@@ -19,12 +19,13 @@ export async function GET(req: NextRequest) {
   try {
     const { data, error } = await getSupabase()
       .from(table)
-      .select(`${textCol}, hashtags, mi_guion, mi_notas, mi_link, mi_video_url${extraCols}`)
+      .select(`${textCol}, traduccion, hashtags, mi_guion, mi_notas, mi_link, mi_video_url${extraCols}`)
       .eq('id', id)
       .single();
     if (error) throw new Error(error.message);
     return NextResponse.json({
       transcripcion: (data as any)[textCol] ?? null,
+      traduccion: (data as any).traduccion ?? null,
       hashtags: (data as any).hashtags ?? null,
       miGuion: (data as any).mi_guion ?? null,
       miNotas: (data as any).mi_notas ?? null,

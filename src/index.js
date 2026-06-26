@@ -12,6 +12,7 @@ import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
 import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
+import { translateToSpanish } from './translate.js';
 import { updateRowById, supabaseEnabled } from './supabase.js';
 
 const app = express();
@@ -209,6 +210,35 @@ app.post('/transcribe', async (req, res) => {
     res.json({ ok: true, text });
   } catch (err) {
     console.error(`[transcribe] error ${id}:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Traducción manual de una transcripción a español (botón en DISECTA). Recibe el texto desde el
+// dashboard (ya lo tiene cargado), lo traduce con Gemini 2.5 Flash y lo guarda en la columna traduccion.
+app.post('/translate', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const { platform, id, text } = req.body || {};
+  if ((platform !== 'yt' && platform !== 'ig') || !id || !text) {
+    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|ig), id y text válidos' });
+  }
+  if (!config.enableTranscription) {
+    return res.status(400).json({ ok: false, error: 'OpenRouter no configurado (falta OPENROUTER_API_KEY)' });
+  }
+  try {
+    const translated = await translateToSpanish(text);
+    if (!translated) throw new Error('La traducción quedó vacía');
+    const table = platform === 'yt' ? 'yt_videos' : 'ig_reels';
+    if (supabaseEnabled()) await updateRowById(table, id, { traduccion: translated });
+    console.log(`[translate] ${platform} ${id} → ${translated.length} chars`);
+    res.json({ ok: true, text: translated });
+  } catch (err) {
+    console.error(`[translate] error ${id}:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

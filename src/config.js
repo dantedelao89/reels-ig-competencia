@@ -68,6 +68,8 @@ export const config = {
   // el tope es generoso; solo evita bajar archivos absurdos a memoria.
   maxTranscribeBytes: Number(process.env.MAX_TRANSCRIBE_BYTES || 300 * 1024 * 1024), // 300 MB
   transcribeTimeoutMs: Number(process.env.TRANSCRIBE_TIMEOUT_MS || 120000),
+  // Traducción manual de transcripciones a español (botón en DISECTA). Modelo barato vía OpenRouter.
+  translateModel: process.env.TRANSLATE_MODEL || 'google/gemini-2.5-flash',
   // Si el audio supera este tamaño, se trocea con ffmpeg en segmentos antes de transcribir
   // (OpenRouter rechaza con 502 audios muy largos en una sola llamada). Reels IG quedan debajo.
   transcribeChunkThresholdBytes: Number(process.env.TRANSCRIBE_CHUNK_THRESHOLD_BYTES || 15 * 1024 * 1024), // 15 MB
