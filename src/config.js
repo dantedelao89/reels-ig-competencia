@@ -110,6 +110,9 @@ export const config = {
   adsMetaAdsTable: process.env.SUPABASE_ADS_TABLE || 'meta_ads',
   // Cron de ads: diario a las 8am CDMX (separado del orgánico de las 9am).
   adsCronSchedule: process.env.ADS_CRON_SCHEDULE || '0 8 * * *',
+  // Apaga SOLO el cron de ads (el scrape manual desde DISECTA sigue funcionando).
+  // Útil para no gastar en la corrida diaria de ads (~$1.6/día). ENABLE_ADS_CRON=false.
+  enableAdsCron: process.env.ENABLE_ADS_CRON !== 'false',
 
   // Cron interno: el mismo servicio se auto-dispara según este horario.
   // ENABLE_CRON=false para apagarlo. CRON_SCHEDULE en formato cron (5 campos).

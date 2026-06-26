@@ -259,7 +259,8 @@ app.listen(config.port, () => {
   }
 
   // Cron del pipeline de ads (8am CDMX), independiente del orgánico.
-  if (config.enableAds && config.enableCron) {
+  // enableAdsCron permite apagar SOLO esta corrida diaria sin tocar el scrape manual.
+  if (config.enableAds && config.enableCron && config.enableAdsCron) {
     if (cron.validate(config.adsCronSchedule)) {
       cron.schedule(
         config.adsCronSchedule,
