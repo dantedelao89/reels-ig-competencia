@@ -54,7 +54,7 @@ function mapAd(item, scrapedAtIso, project) {
     Activo: !!item.isActive,
     'Fecha inicio': item.startDateFormatted || null,
     'Fecha fin': item.endDateFormatted || null,
-    'Días corriendo': daysRunning(item),
+    'Días corriendo': item.daysActive ?? daysRunning(item),
     Thumbnail: thumb || '',
     'Video URL': video || '',
     'Scrapeado en': scrapedAtIso,
@@ -81,18 +81,16 @@ export async function runScrapeAds(opts = {}) {
   }
 
   const existing = await getExistingAdIds();
-  // Manual (una página) = jala TODO el histórico (sin ventana). Cron = solo recientes (barato).
-  const onlyNewerThan = opts.onlyUrl ? undefined : config.adsRecentLookback;
 
   let inserted = 0;
   const details = [];
-  // Una corrida del actor POR anunciante: respeta su propio límite (vacío = todos).
+  // Una corrida del actor POR anunciante. bovi colapsa por collation_id y filtra por activeStatus
+  // (config.adsActiveStatus) + países (config.adsCountries), así que no aplica ventana de fecha.
   for (const a of advertisers) {
     try {
       const items = await scrapeFacebookAds({
-        urls: [a.url],
-        resultsLimit: a.resultsLimit, // null = sin límite
-        onlyAdsNewerThan: onlyNewerThan,
+        url: a.url,
+        resultsLimit: a.resultsLimit, // null = usa config.adsMaxResults
       });
       const fresh = items.filter((it) => it.adArchiveID && !existing.has(it.adArchiveID.toString()));
       fresh.forEach((it) => existing.add(it.adArchiveID.toString()));

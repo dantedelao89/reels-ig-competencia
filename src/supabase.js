@@ -90,12 +90,16 @@ function adRow(item, scrapedAtIso, project, thumbnailUrl, videoUrlOverride) {
     activo: !!item.isActive,
     fecha_inicio: item.startDateFormatted || (item.startDate ? new Date(item.startDate * 1000).toISOString() : null),
     fecha_fin: item.endDateFormatted || (item.endDate ? new Date(item.endDate * 1000).toISOString() : null),
-    dias_corriendo: adDaysRunning(item),
+    dias_corriendo: item.daysActive ?? adDaysRunning(item),
     thumbnail_original: adMedia(item).thumb,
     thumbnail_url: thumbnailUrl,
     video_url: videoUrlOverride || video,
     proyecto: project || null,
     scrapeado_en: scrapedAtIso,
+    // Señales de bovi: agrupación oficial (dedup) + ganadores.
+    collation_id: item.collationId || null,
+    is_scaled: item.isScaled ?? null,
+    longevity_score: item.longevityScore ?? null,
   };
 }
 

@@ -108,6 +108,14 @@ export const config = {
   // el botón manual "Scrapear ahora", que NO aplica ventana). Mantiene barato el costo diario.
   adsRecentLookback: process.env.ADS_RECENT_LOOKBACK || '10 days',
   adsMetaAdsTable: process.env.SUPABASE_ADS_TABLE || 'meta_ads',
+  // Actor de ads: bovi expone collation_id (agrupación oficial de Meta para deduplicar) + is_scaled
+  // (anuncios ganadores) + longevity_score. Requiere países explícitos (no acepta "todos").
+  adsActor: process.env.ADS_ACTOR || 'bovi/meta-ads-library-scraper',
+  adsCountries: (process.env.ADS_COUNTRIES || 'MX,ES').split(',').map((c) => c.trim()).filter(Boolean),
+  adsActiveStatus: process.env.ADS_ACTIVE_STATUS || 'active', // active | inactive | all
+  adsMaxResults: Number(process.env.ADS_MAX_RESULTS || 200),
+  // Actor auxiliar solo para resolver el page_id real desde la URL del anunciante (onlyTotal, ~$0).
+  adsPageIdResolver: process.env.ADS_PAGEID_RESOLVER || 'apify/facebook-ads-scraper',
   // Cron de ads: diario a las 8am CDMX (separado del orgánico de las 9am).
   adsCronSchedule: process.env.ADS_CRON_SCHEDULE || '0 8 * * *',
   // Apaga SOLO el cron de ads (el scrape manual desde DISECTA sigue funcionando).
