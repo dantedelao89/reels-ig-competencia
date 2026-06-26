@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ContentItem, Estado } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
-import { fmtNum, fmtDateShort } from '@/lib/format';
+import { fmtNum, fmtDateShort, toParagraphs } from '@/lib/format';
 
 interface Props {
   item: ContentItem;
@@ -352,9 +352,11 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                     <div className="text-xs mt-1">Bajando el audio y transcribiendo. Tarda ~1–2 min. No cierres la ventana.</div>
                   </div>
                 ) : transcripcion ? (
-                  <p className="text-[13px] leading-relaxed text-gray-800 whitespace-pre-wrap">
-                    {showTranslation && traduccion ? traduccion : transcripcion}
-                  </p>
+                  <div className="space-y-3">
+                    {toParagraphs(showTranslation && traduccion ? traduccion : transcripcion).map((p, i) => (
+                      <p key={i} className="text-[13px] leading-relaxed text-gray-800">{p}</p>
+                    ))}
+                  </div>
                 ) : loadingTr ? (
                   <div className="text-sm text-muted text-center py-10">Cargando…</div>
                 ) : item.platform === 'yt' ? (
