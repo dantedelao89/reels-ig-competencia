@@ -171,7 +171,10 @@ export default function DashboardClient() {
         section={section}
         onSection={setSection}
         mode={mode}
-        onMode={setMode}
+        onMode={(m) => {
+          setMode(m);
+          setSection('contenido'); // al cambiar de Orgánico/Ads, aterriza en la galería
+        }}
       />
 
       <main className="flex-1 min-w-0 px-4 md:px-6 py-5">

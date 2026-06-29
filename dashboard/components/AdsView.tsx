@@ -55,11 +55,11 @@ export default function AdsView() {
   const [detail, setDetail] = useState<AdItem | null>(null);
 
   const refreshStats = useCallback(() => {
-    fetch('/api/ads/stats').then((r) => r.json()).then((d) => !d.error && setStats(d)).catch(() => {});
+    fetch('/api/ads/stats', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setStats(d)).catch(() => {});
   }, []);
   useEffect(() => {
     refreshStats();
-    fetch('/api/ads/facets').then((r) => r.json()).then((d) => !d.error && setFacets(d)).catch(() => {});
+    fetch('/api/ads/facets', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setFacets(d)).catch(() => {});
   }, [refreshStats]);
   useEffect(() => {
     const t = setTimeout(() => setDq(q), 350);
@@ -72,7 +72,7 @@ export default function AdsView() {
       const p = new URLSearchParams({ estado, q: dq, sort, dir, activo, page: String(pageNum), pageSize: String(PAGE_SIZE) });
       if (anunciantes.length) p.set('anunciante', anunciantes.join(','));
       if (proyectos.length) p.set('proyecto', proyectos.join(','));
-      const data = await (await fetch(`/api/ads?${p}`)).json();
+      const data = await (await fetch(`/api/ads?${p}`, { cache: 'no-store' })).json();
       setLoading(false);
       if (data.error) return;
       setTotal(data.total);

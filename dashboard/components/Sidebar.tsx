@@ -56,6 +56,22 @@ export default function Sidebar({ stats, estado, onEstado, section, onSection, m
         </>
       )}
 
+      {mode === 'ads' && (
+        <>
+          <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Anuncios</div>
+          <nav className="flex flex-col gap-0.5 mb-6">
+            <button
+              onClick={() => onSection('contenido')}
+              className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+                section === 'contenido' ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-gray-50 text-gray-700'
+              }`}
+            >
+              <span aria-hidden="true">▦</span> Galería
+            </button>
+          </nav>
+        </>
+      )}
+
       <div className="text-[11px] uppercase tracking-wide text-muted px-2 mb-2">Gestión</div>
       <nav className="flex flex-col gap-0.5">
         <button
