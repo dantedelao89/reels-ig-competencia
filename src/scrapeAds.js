@@ -11,7 +11,7 @@ import {
   updateAdvertiserLastRun,
 } from './airtable.js';
 import { scrapeFacebookAds } from './facebookAds.js';
-import { syncAds, supabaseEnabled } from './supabase.js';
+import { syncAds, supabaseEnabled, getSyncedAdIds } from './supabase.js';
 
 function mediaOf(item) {
   const s = item.snapshot || {};
@@ -81,6 +81,8 @@ export async function runScrapeAds(opts = {}) {
   }
 
   const existing = await getExistingAdIds();
+  // Dedup de Supabase INDEPENDIENTE de Airtable: si un sync falló antes, un re-scrape lo reintenta.
+  const synced0 = supabaseEnabled() ? await getSyncedAdIds() : new Set();
 
   let inserted = 0;
   const details = [];
@@ -92,6 +94,7 @@ export async function runScrapeAds(opts = {}) {
         url: a.url,
         resultsLimit: a.resultsLimit, // null = usa config.adsMaxResults
       });
+      // Nuevos para Airtable (lo que aún no está en Airtable).
       const fresh = items.filter((it) => it.adArchiveID && !existing.has(it.adArchiveID.toString()));
       fresh.forEach((it) => existing.add(it.adArchiveID.toString()));
 
@@ -100,17 +103,24 @@ export async function runScrapeAds(opts = {}) {
       if (rows.length) ins = await insertAds(rows);
       inserted += ins;
 
-      if (supabaseEnabled() && fresh.length) {
+      // Nuevos para Supabase (lo que aún no está en meta_ads), sin depender de Airtable.
+      const freshSupa = items.filter((it) => it.adArchiveID && !synced0.has(it.adArchiveID.toString()));
+      freshSupa.forEach((it) => synced0.add(it.adArchiveID.toString()));
+      let synced = 0;
+      let syncErr = null;
+      if (supabaseEnabled() && freshSupa.length) {
         try {
           const projectByUrl = new Map([[a.url.trim(), a.project]]);
-          const { synced, rehosted } = await syncAds(fresh, { scrapedAtIso: startedAt, projectByUrl });
-          console.log(`[ADS supabase ${a.marca || a.url}] sincronizados=${synced} rehospedadas=${rehosted}`);
+          const r = await syncAds(freshSupa, { scrapedAtIso: startedAt, projectByUrl });
+          synced = r.synced;
+          console.log(`[ADS supabase ${a.marca || a.url}] sincronizados=${r.synced} rehospedadas=${r.rehosted}`);
         } catch (e) {
+          syncErr = e.message;
           console.error(`[ADS supabase ${a.marca || a.url}] sync falló: ${e.message}`);
         }
       }
-      details.push({ anunciante: a.marca || a.url, scraped: items.length, inserted: ins });
-      console.log(`[ADS] ${a.marca || a.url} scrapeados=${items.length} nuevos=${ins}`);
+      details.push({ anunciante: a.marca || a.url, scraped: items.length, inserted: ins, synced, ...(syncErr ? { syncError: syncErr } : {}) });
+      console.log(`[ADS] ${a.marca || a.url} scrapeados=${items.length} nuevos=${ins} synced=${synced}`);
     } catch (err) {
       console.error(`[ADS ${a.marca || a.url}] ERROR:`, err.message);
       details.push({ anunciante: a.marca || a.url, error: err.message });

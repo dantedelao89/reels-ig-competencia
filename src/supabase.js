@@ -46,6 +46,26 @@ export async function updateRowById(table, id, fields) {
   return 1;
 }
 
+// IDs de anuncios ya presentes en Supabase (meta_ads). Sirve para deduplicar el sync de forma
+// independiente de Airtable: si un sync falló antes, un re-scrape sí reintenta (Airtable ya no bloquea).
+export async function getSyncedAdIds() {
+  if (!enabled) return new Set();
+  const c = await getClient();
+  const ids = new Set();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await c
+      .from(config.adsMetaAdsTable)
+      .select('ad_id')
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    data.forEach((r) => ids.add(String(r.ad_id)));
+    if (data.length < PAGE) break;
+  }
+  return ids;
+}
+
 // ----------------------------- Ads (Meta) -----------------------------
 
 function adMedia(item) {
