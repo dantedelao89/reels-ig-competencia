@@ -84,8 +84,9 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     setScrapingId(row.id);
     setScrapeMsg('');
     setErr('');
-    const endpoint = type === 'yt_channel' ? '/api/scrape-channel' : '/api/scrape-ad';
-    const unidad = type === 'yt_channel' ? 'videos' : 'anuncios';
+    const endpoint =
+      type === 'yt_channel' ? '/api/scrape-channel' : type === 'ig' ? '/api/scrape-creator' : '/api/scrape-ad';
+    const unidad = type === 'yt_channel' ? 'videos' : type === 'ig' ? 'reels' : 'anuncios';
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -344,12 +345,18 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>
                   <td className="p-2 text-center whitespace-nowrap">
-                    {(type === 'fb_advertiser' || type === 'yt_channel') && (
+                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig') && (
                       <button
                         onClick={() => scrapeOne(r)}
                         disabled={scrapingId === r.id}
                         className="text-xs px-2 h-7 rounded-md border border-line bg-white hover:bg-gray-100 disabled:opacity-60 mr-1"
-                        title={type === 'yt_channel' ? 'Re-scrapear este canal ahora' : 'Scrapear los anuncios de esta página ahora'}
+                        title={
+                          type === 'yt_channel'
+                            ? 'Re-scrapear este canal ahora'
+                            : type === 'ig'
+                            ? 'Re-scrapear los reels de este creador ahora'
+                            : 'Scrapear los anuncios de esta página ahora'
+                        }
                       >
                         {scrapingId === r.id ? 'Scrapeando…' : '⚡ Scrapear'}
                       </button>

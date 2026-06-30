@@ -28,6 +28,31 @@ export async function getActiveCreators() {
   return creators;
 }
 
+// Busca UN creador por su Username (acepta con o sin @). Lo usa el scrape individual manual.
+export async function getCreatorByUsername(usernameOrUrl) {
+  const target = (usernameOrUrl || '').trim().replace(/^@/, '').toLowerCase();
+  if (!target) return null;
+  let found = null;
+  await base(config.creatorsTable)
+    .select()
+    .eachPage((records, next) => {
+      for (const r of records) {
+        const u = (r.get('Username') || '').toString().trim().replace(/^@/, '').toLowerCase();
+        if (u && u === target) {
+          found = {
+            recordId: r.id,
+            username: (r.get('Username') || '').toString().trim().replace(/^@/, ''),
+            resultsLimit: Number(r.get('Reels por corrida')) || config.defaultResultsLimit,
+            lastRun: r.get('Última corrida') || null,
+            project: r.get('Proyecto') || '',
+          };
+        }
+      }
+      next();
+    });
+  return found;
+}
+
 // Devuelve un Set con todos los ShortCode ya guardados (para dedupe global).
 export async function getExistingShortCodes() {
   const set = new Set();

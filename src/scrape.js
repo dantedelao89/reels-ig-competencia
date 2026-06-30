@@ -5,6 +5,7 @@
 import { config } from './config.js';
 import {
   getActiveCreators,
+  getCreatorByUsername,
   getExistingShortCodes,
   insertReels,
   updateCreatorLastRun,
@@ -139,4 +140,38 @@ export async function runScrape() {
   }
 
   return { ok: true, creators: creators.length, inserted: totalInserted, transcribed: totalTranscribed, details };
+}
+
+// Re-scrape manual de UN solo creador de Instagram (disparado desde DISECTA cuando el cron no lo
+// alcanzó). Usa una ventana amplia (30 días) y más resultados para "ponerse al día".
+export async function runScrapeInstagramCreator(usernameOrUrl) {
+  const startedAt = new Date().toISOString();
+  const creator = await getCreatorByUsername(usernameOrUrl);
+  if (!creator) {
+    return { ok: false, error: `No se encontró el creador: ${usernameOrUrl}`, inserted: 0 };
+  }
+  const existing = await getExistingShortCodes();
+  const projectByUser = new Map([[creator.username.toLowerCase(), creator.project]]);
+  let inserted = 0;
+  let transcribed = 0;
+  try {
+    const items = await scrapeCreators({
+      usernames: [creator.username],
+      resultsLimit: Math.max(creator.resultsLimit || config.defaultResultsLimit, 15),
+      onlyPostsNewerThan: '30 days',
+    });
+    const r = await ingestReels(items, existing, startedAt, projectByUser);
+    inserted = r.inserted;
+    transcribed = r.transcribed;
+    console.log(`[IG manual] ${creator.username} scrapeados=${items.length} nuevos=${inserted} transcritos=${transcribed}`);
+  } catch (err) {
+    console.error(`[IG manual ${creator.username}] ERROR:`, err.message);
+    return { ok: false, error: err.message, inserted: 0 };
+  }
+  try {
+    await updateCreatorLastRun(creator.recordId, startedAt);
+  } catch (e) {
+    console.error(`[IG manual lastRun] ${e.message}`);
+  }
+  return { ok: true, creator: creator.username, inserted, transcribed };
 }
