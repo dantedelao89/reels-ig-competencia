@@ -167,6 +167,37 @@ export async function runScrapeYoutube() {
   return { ok: true, searches: searches.length, channels: channels.length, inserted: totalInserted, details };
 }
 
+// Búsqueda manual por palabra clave (ad-hoc, disparada desde DISECTA). No requiere que la búsqueda
+// exista en Airtable. Trae los videos recientes que matchean, ordenados por fecha, e ingesta lo nuevo.
+export async function runScrapeYoutubeSearch(query, opts = {}) {
+  const startedAt = new Date().toISOString();
+  const q = (query || '').trim();
+  if (!q) return { ok: false, error: 'query vacía', scraped: 0, inserted: 0 };
+  const window = opts.window || config.youtubeRecentLookback;
+  const maxResults = Math.max(Number(opts.maxResults) || 20, 1);
+  const existing = await getExistingVideoIds();
+  let scraped = 0;
+  let inserted = 0;
+  try {
+    const items = await scrapeSearches({
+      queries: [q],
+      maxResults,
+      maxShorts: 0,
+      onlyNewerThan: window,
+    });
+    scraped = items.length;
+    inserted = await ingestVideos(items, existing, startedAt, (it) => ({
+      project: opts.project || undefined,
+      origin: it.input || q,
+    }));
+    console.log(`[YT búsqueda manual] "${q}" ventana=${window} max=${maxResults} scrapeados=${scraped} nuevos=${inserted}`);
+  } catch (err) {
+    console.error(`[YT búsqueda manual "${q}"] ERROR:`, err.message);
+    return { ok: false, error: err.message, scraped, inserted: 0 };
+  }
+  return { ok: true, query: q, scraped, inserted };
+}
+
 // Re-scrape manual de UN solo canal (disparado desde DISECTA cuando el cron no lo alcanzó).
 // Usa una ventana amplia (30 días) y más resultados para "ponerse al día" con lo que faltó.
 export async function runScrapeYoutubeChannel(channelUrl) {

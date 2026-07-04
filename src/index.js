@@ -4,7 +4,7 @@ import express from 'express';
 import cron from 'node-cron';
 import { config } from './config.js';
 import { runScrape, runScrapeInstagramCreator } from './scrape.js';
-import { runScrapeYoutube, runScrapeYoutubeChannel } from './scrapeYoutube.js';
+import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch } from './scrapeYoutube.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
 import { runScrapeAds } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
@@ -124,6 +124,26 @@ app.post('/scrape-ads', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape-ads:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Búsqueda manual de YouTube por palabra clave (ad-hoc). Protegido con el secreto.
+// body: { query, window? (ej. "3 days"), maxResults? }
+app.post('/scrape-search', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const { query, window, maxResults } = req.body || {};
+  if (!query) return res.status(400).json({ ok: false, error: 'query requerida' });
+  try {
+    const result = await runScrapeYoutubeSearch(query, { window, maxResults });
+    res.json(result);
+  } catch (err) {
+    console.error('Error en /scrape-search:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
