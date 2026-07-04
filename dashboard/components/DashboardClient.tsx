@@ -39,6 +39,7 @@ export default function DashboardClient() {
   const [facets, setFacets] = useState<Facets | null>(null);
   const [creadores, setCreadores] = useState<string[]>([]);
   const [proyectos, setProyectos] = useState<string[]>([]);
+  const [origen, setOrigen] = useState(''); // '', 'canal', 'busqueda' (solo YouTube)
   const [date, setDate] = useState<DateState>({ dateField: 'fecha_publicacion', desde: '', hasta: '' });
 
   const [items, setItems] = useState<ContentItem[]>([]);
@@ -86,6 +87,7 @@ export default function DashboardClient() {
       });
       if (creadores.length) params.set('creador', creadores.join(','));
       if (proyectos.length) params.set('proyecto', proyectos.join(','));
+      if (origen) params.set('origen', origen);
       if (date.desde || date.hasta) {
         params.set('dateField', date.dateField);
         if (date.desde) params.set('desde', date.desde);
@@ -98,7 +100,7 @@ export default function DashboardClient() {
       setTotal(data.total);
       setItems((prev) => (replace ? data.items : [...prev, ...data.items]));
     },
-    [platform, estado, debouncedQ, sort, dir, creadores, proyectos, date]
+    [platform, estado, debouncedQ, sort, dir, creadores, proyectos, origen, date]
   );
 
   // Al cambiar filtros → reset a página 1.
@@ -204,12 +206,15 @@ export default function DashboardClient() {
           creadores={creadores}
           proyectos={proyectos}
           date={date}
+          origen={origen}
           onCreadores={setCreadores}
           onProyectos={setProyectos}
           onDate={setDate}
+          onOrigen={setOrigen}
           onClearAll={() => {
             setCreadores([]);
             setProyectos([]);
+            setOrigen('');
             setDate({ dateField: 'fecha_publicacion', desde: '', hasta: '' });
           }}
         />

@@ -73,6 +73,8 @@ export async function GET(req: NextRequest) {
   const creadores = (sp.get('creador') || '').split(',').map((s) => s.trim()).filter(Boolean);
   const proyectos = (sp.get('proyecto') || '').split(',').map((s) => s.trim()).filter(Boolean);
   const q = sp.get('q')?.trim() || '';
+  // Origen (solo YouTube): 'canal' = origen es una URL de canal; 'busqueda' = origen es palabra clave.
+  const origen = sp.get('origen') || '';
   const sort = sp.get('sort') || 'fecha_publicacion';
   const dir = sp.get('dir') === 'asc' ? 'asc' : 'desc';
   const dateField = sp.get('dateField') === 'scrapeado' ? 'scrapeado_en' : 'fecha_publicacion';
@@ -99,6 +101,9 @@ export async function GET(req: NextRequest) {
     if (q) query = query.textSearch('search_tsv', q, { config: 'spanish', type: 'websearch' });
     if (desde) query = query.gte(dateField, desde);
     if (hasta) query = query.lte(dateField, hasta);
+    // Filtro por origen: solo aplica a YouTube. Canal = origen tipo URL; búsqueda = palabra clave.
+    if (table === YT_TABLE && origen === 'canal') query = query.ilike('origen', 'http%');
+    if (table === YT_TABLE && origen === 'busqueda') query = query.not('origen', 'ilike', 'http%');
     const { data, error } = await query;
     if (error) throw new Error(`${table}: ${error.message}`);
     return data || [];
@@ -107,8 +112,10 @@ export async function GET(req: NextRequest) {
   try {
     const items: ContentItem[] = [];
     // Las dos tablas se consultan en paralelo (antes era secuencial).
+    // El filtro por origen es exclusivo de YouTube → si está activo, no consultamos Instagram.
+    const wantIg = platform !== 'yt' && !origen;
     const [igRows, ytRows] = await Promise.all([
-      platform !== 'yt' ? fetchTable(IG_TABLE, 'creador', IG_COLS) : Promise.resolve([]),
+      wantIg ? fetchTable(IG_TABLE, 'creador', IG_COLS) : Promise.resolve([]),
       platform !== 'ig' ? fetchTable(YT_TABLE, 'canal', YT_COLS) : Promise.resolve([]),
     ]);
     igRows.forEach((r) => items.push(igToItem(r)));

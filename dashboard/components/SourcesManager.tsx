@@ -85,8 +85,14 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     setScrapeMsg('');
     setErr('');
     const endpoint =
-      type === 'yt_channel' ? '/api/scrape-channel' : type === 'ig' ? '/api/scrape-creator' : '/api/scrape-ad';
-    const unidad = type === 'yt_channel' ? 'videos' : type === 'ig' ? 'reels' : 'anuncios';
+      type === 'yt_channel'
+        ? '/api/scrape-channel'
+        : type === 'ig'
+        ? '/api/scrape-creator'
+        : type === 'yt_search'
+        ? '/api/scrape-search'
+        : '/api/scrape-ad';
+    const unidad = type === 'ig' ? 'reels' : type === 'fb_advertiser' ? 'anuncios' : 'videos';
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -345,7 +351,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>
                   <td className="p-2 text-center whitespace-nowrap">
-                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig') && (
+                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig' || type === 'yt_search') && (
                       <button
                         onClick={() => scrapeOne(r)}
                         disabled={scrapingId === r.id}
@@ -355,6 +361,8 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                             ? 'Re-scrapear este canal ahora'
                             : type === 'ig'
                             ? 'Re-scrapear los reels de este creador ahora'
+                            : type === 'yt_search'
+                            ? 'Buscar videos recientes de esta palabra clave ahora'
                             : 'Scrapear los anuncios de esta página ahora'
                         }
                       >

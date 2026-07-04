@@ -16,11 +16,15 @@ interface Props {
   creadores: string[];
   proyectos: string[];
   date: DateState;
+  origen: string; // '', 'canal', 'busqueda' (solo YouTube)
   onCreadores: (v: string[]) => void;
   onProyectos: (v: string[]) => void;
   onDate: (v: DateState) => void;
+  onOrigen: (v: string) => void;
   onClearAll: () => void;
 }
+
+const ORIGEN_LABEL: Record<string, string> = { canal: 'Canales', busqueda: 'Búsquedas' };
 
 function chip(label: string, onRemove: () => void, key: string) {
   return (
@@ -45,12 +49,30 @@ function dateLabel(d: DateState): string {
 }
 
 export default function FilterBar(p: Props) {
-  const anyActive = p.creadores.length || p.proyectos.length || p.date.desde || p.date.hasta;
+  const anyActive = p.creadores.length || p.proyectos.length || p.date.desde || p.date.hasta || p.origen;
 
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-2">
         <PlatformToggle platform={p.platform} onPlatform={p.onPlatform} />
+        {/* Origen: solo aplica a YouTube (canal vs búsqueda). Se oculta si el filtro es solo Instagram. */}
+        {p.platform !== 'ig' && (
+          <div className="flex items-center bg-gray-100 rounded-md p-0.5 text-xs" title="Cómo se scrapeó el video de YouTube">
+            {[
+              ['', 'Todo origen'],
+              ['canal', 'Canales'],
+              ['busqueda', 'Búsquedas'],
+            ].map(([v, l]) => (
+              <button
+                key={v}
+                onClick={() => p.onOrigen(v)}
+                className={`px-2.5 h-7 rounded ${p.origen === v ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        )}
         <span className="w-px h-6 bg-line mx-1 hidden sm:block" />
         <FacetDropdown
           label="Creador"
@@ -82,6 +104,7 @@ export default function FilterBar(p: Props) {
           )}
           {(p.date.desde || p.date.hasta) &&
             chip(dateLabel(p.date), () => p.onDate({ ...p.date, desde: '', hasta: '' }), 'date')}
+          {p.origen && chip(`Origen: ${ORIGEN_LABEL[p.origen] || p.origen}`, () => p.onOrigen(''), 'origen')}
         </div>
       ) : null}
     </div>
