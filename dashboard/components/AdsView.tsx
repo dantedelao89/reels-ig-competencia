@@ -54,13 +54,26 @@ export default function AdsView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<AdItem | null>(null);
 
+  // Scrape individual de un anunciante (traer anuncios nuevos) desde la galería.
+  const [advList, setAdvList] = useState<{ url: string; name: string; adCount: number }[]>([]);
+  const [scrapeUrl, setScrapeUrl] = useState('');
+  const [scraping, setScraping] = useState(false);
+  const [scrapeMsg, setScrapeMsg] = useState('');
+
   const refreshStats = useCallback(() => {
     fetch('/api/ads/stats', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setStats(d)).catch(() => {});
   }, []);
+  const refreshFacets = useCallback(() => {
+    fetch('/api/ads/facets', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setFacets(d)).catch(() => {});
+  }, []);
+  const refreshAdvertisers = useCallback(() => {
+    fetch('/api/ads/advertisers', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setAdvList(d.advertisers || [])).catch(() => {});
+  }, []);
   useEffect(() => {
     refreshStats();
-    fetch('/api/ads/facets', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setFacets(d)).catch(() => {});
-  }, [refreshStats]);
+    refreshFacets();
+    refreshAdvertisers();
+  }, [refreshStats, refreshFacets, refreshAdvertisers]);
   useEffect(() => {
     const t = setTimeout(() => setDq(q), 350);
     return () => clearTimeout(t);
@@ -92,6 +105,33 @@ export default function AdsView() {
       return n;
     });
 
+  async function scrapeAdvertiser() {
+    if (!scrapeUrl || scraping) return;
+    setScraping(true);
+    setScrapeMsg('');
+    try {
+      const res = await fetch('/api/scrape-ad', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: scrapeUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al scrapear');
+      const name = advList.find((a) => a.url === scrapeUrl)?.name || 'anunciante';
+      setScrapeMsg(`✓ ${name}: ${data.inserted} anuncios nuevos`);
+      // Refresca la galería para que aparezcan los nuevos sin recargar.
+      refreshStats();
+      refreshFacets();
+      refreshAdvertisers();
+      setPage(1);
+      fetchPage(1, true);
+    } catch (e: any) {
+      setScrapeMsg('Error: ' + e.message);
+    } finally {
+      setScraping(false);
+    }
+  }
+
   async function setEstadoFor(ids: string[], nuevo: Estado) {
     if (!ids.length) return;
     await fetch('/api/items', {
@@ -111,12 +151,34 @@ export default function AdsView() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div>
           <h1 className="text-lg font-medium">Pipeline Ads</h1>
           <p className="text-sm text-muted">
             {stats ? `${stats.total} anuncios · ${stats.activos} activos` : '…'}
           </p>
+        </div>
+        {/* Traer anuncios nuevos de un anunciante individual (solo inserta los que no tenemos). */}
+        <div className="flex items-center gap-2 p-1.5 rounded-lg border border-line bg-gray-50">
+          <span className="text-xs font-medium text-gray-600 pl-1">⚡ Traer nuevos de:</span>
+          <select
+            value={scrapeUrl}
+            onChange={(e) => { setScrapeUrl(e.target.value); setScrapeMsg(''); }}
+            className="h-8 text-sm rounded-md border border-line bg-white px-2 max-w-[180px]"
+          >
+            <option value="">— Anunciante —</option>
+            {advList.map((a) => (
+              <option key={a.url} value={a.url}>{a.name} ({a.adCount})</option>
+            ))}
+          </select>
+          <button
+            onClick={scrapeAdvertiser}
+            disabled={!scrapeUrl || scraping}
+            className="h-8 px-3 text-xs rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {scraping ? 'Scrapeando…' : 'Scrapear'}
+          </button>
+          {scrapeMsg && <span className="text-xs text-muted whitespace-nowrap">{scrapeMsg}</span>}
         </div>
       </div>
 
