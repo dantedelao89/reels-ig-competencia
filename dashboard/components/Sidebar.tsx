@@ -1,6 +1,7 @@
 'use client';
 
 import { ESTADOS } from '@/lib/types';
+import ApifyStatus from './ApifyStatus';
 
 interface Props {
   stats: { total: number; porEstado: Record<string, number> } | null;
@@ -83,6 +84,8 @@ export default function Sidebar({ stats, estado, onEstado, section, onSection, m
           <span aria-hidden="true">⊕</span> Fuentes
         </button>
       </nav>
+
+      <ApifyStatus />
     </aside>
   );
 }
