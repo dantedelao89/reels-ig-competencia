@@ -128,6 +128,38 @@ app.post('/scrape-ads', async (req, res) => {
   }
 });
 
+// Info de la cuenta de Apify conectada (nombre + uso/saldo). La usa el panel privado de DISECTA.
+app.get('/apify-account', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  try {
+    const t = config.apifyToken;
+    const [meRes, limitsRes] = await Promise.all([
+      fetch(`https://api.apify.com/v2/users/me?token=${t}`),
+      fetch(`https://api.apify.com/v2/users/me/limits?token=${t}`),
+    ]);
+    const me = (await meRes.json().catch(() => ({})))?.data || {};
+    const limits = (await limitsRes.json().catch(() => ({})))?.data || {};
+    // Curamos: NUNCA exponemos el proxy password ni el token. Solo nombre + números de uso.
+    res.json({
+      ok: true,
+      username: me.username || null,
+      plan: me.plan?.description || me.plan?.id || null,
+      // Objetos de uso/límite (solo números, sin secretos) para armar el saldo en la UI.
+      current: limits.current || null,
+      limits: limits.limits || null,
+      monthlyCreditsUsd: me.plan?.monthlyUsageCreditsUsd ?? null,
+    });
+  } catch (err) {
+    console.error('Error en /apify-account:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // Búsqueda manual de YouTube por palabra clave (ad-hoc). Protegido con el secreto.
 // body: { query, window? (ej. "3 days"), maxResults? }
 app.post('/scrape-search', async (req, res) => {
