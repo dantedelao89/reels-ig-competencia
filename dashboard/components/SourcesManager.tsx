@@ -115,7 +115,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     setLoading(true);
     setErr('');
     try {
-      const res = await fetch(`/api/sources?type=${t}`);
+      const res = await fetch(`/api/sources?type=${t}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setRecords(data.records);
@@ -138,7 +138,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     : records;
 
   useEffect(() => {
-    fetch('/api/sources/projects')
+    fetch('/api/sources/projects', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => !d.error && setProjects(d.projects))
       .catch(() => {});
