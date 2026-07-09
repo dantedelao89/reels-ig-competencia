@@ -413,23 +413,37 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
       return;
     }
 
-    let final = raw;
-    if (!looksSpanish(raw) && config.enableTranscription) {
+    let translated = null;
+    const alreadySpanish = looksSpanish(raw);
+    if (!alreadySpanish && config.enableTranscription) {
       try {
-        final = (await translateToSpanish(raw)) || raw;
+        translated = await translateToSpanish(raw);
       } catch (e) {
-        console.error('[slack] traducción falló, se envía en el idioma original:', e.message);
+        console.error('[slack] traducción falló, solo se envía el original:', e.message);
       }
     }
 
-    const paragraphs = toParagraphs(final);
-    const chunks = chunkParagraphs(paragraphs, 3500);
-    const MAX_CHUNKS = 4; // el status ya gastó 1 de los 5 mensajes que permite response_url
-    for (let i = 0; i < Math.min(chunks.length, MAX_CHUNKS); i++) {
-      const isLast = i === MAX_CHUNKS - 1 && chunks.length > MAX_CHUNKS;
-      const header = chunks.length > 1 ? `*📝 Transcripción (${i + 1}/${Math.min(chunks.length, MAX_CHUNKS)}):*\n\n` : '*📝 Transcripción:*\n\n';
-      const suffix = isLast ? '\n\n_…(recortado, transcripción muy larga)_' : '';
-      await slackReply(responseUrl, `${header}${chunks[i]}${suffix}`);
+    // response_url solo permite 5 mensajes en 30 min y el status ya gastó 1: reparte lo que
+    // queda entre original y traducida (2 y 2) si hay traducción, o 4 si no la hay.
+    const remaining = 4;
+    const perVersion = translated ? Math.floor(remaining / 2) : remaining;
+
+    async function sendVersion(label, txt) {
+      const chunks = chunkParagraphs(toParagraphs(txt), 3500);
+      const n = Math.min(chunks.length, perVersion);
+      for (let i = 0; i < n; i++) {
+        const isLastSent = i === n - 1 && chunks.length > n;
+        const parte = chunks.length > 1 ? ` (${i + 1}/${n})` : '';
+        const suffix = isLastSent ? '\n\n_…(recortado, transcripción muy larga)_' : '';
+        await slackReply(responseUrl, `*${label}${parte}:*\n\n${chunks[i]}${suffix}`);
+      }
+    }
+
+    if (translated) {
+      await sendVersion('🇬🇧 Transcripción original', raw);
+      await sendVersion('🇪🇸 Traducción', translated);
+    } else {
+      await sendVersion(alreadySpanish ? '📝 Transcripción' : '🇬🇧 Transcripción original (sin traducir)', raw);
     }
   } catch (err) {
     console.error('Error en /slack/scrape:', err);

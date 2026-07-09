@@ -40,7 +40,12 @@ async function translateChunk(text) {
         {
           role: 'system',
           content:
-            'Eres un traductor profesional. Traduce el texto del usuario al español neutro. ' +
+            'Eres un traductor profesional especializado en contenido tech/IA. Traduce el texto del ' +
+            'usuario al español neutro. ' +
+            'NO traduzcas nombres propios ni términos técnicos: nombres de herramientas, productos, ' +
+            'librerías, modelos de IA, comandos, nombres de archivo, extensiones (ej. "design.md", ' +
+            '"ClaudeCode", "GitHub", "design system"), marcas ni handles/usuarios (@algo). Déjalos ' +
+            'exactamente como aparecen en el original, integrados en la frase en español. ' +
             'Devuelve SOLO la traducción: sin notas, sin comillas, sin explicaciones ni encabezados. ' +
             'Conserva los saltos de línea. Si el texto ya está en español, devuélvelo igual.',
         },
