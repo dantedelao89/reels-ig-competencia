@@ -45,7 +45,7 @@ function mapReel(item, scrapedAtIso, project) {
 // creador dueño (projectByUser). Devuelve { inserted, transcribed }.
 async function ingestReels(items, existing, startedAt, projectByUser) {
   const fresh = items.filter((it) => it.shortCode && !existing.has(it.shortCode));
-  if (fresh.length === 0) return { inserted: 0, transcribed: 0 };
+  if (fresh.length === 0) return { inserted: 0, transcribed: 0, transcriptionByShort: new Map() };
 
   const rows = fresh.map((it) =>
     mapReel(it, startedAt, projectByUser.get((it.ownerUsername || '').toLowerCase()))
