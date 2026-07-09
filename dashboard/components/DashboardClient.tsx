@@ -159,10 +159,16 @@ export default function DashboardClient() {
   async function addByUrl() {
     const u = igUrl.trim();
     if (!u || addingUrl) return;
+    const isYt = /youtu\.?be/i.test(u);
+    const isIg = /instagram\.com/i.test(u);
+    if (!isYt && !isIg) {
+      setAddUrlMsg('Pega una URL de Instagram o YouTube');
+      return;
+    }
     setAddingUrl(true);
     setAddUrlMsg('');
     try {
-      const res = await fetch('/api/scrape-ig-url', {
+      const res = await fetch(isYt ? '/api/scrape-yt-url' : '/api/scrape-ig-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: u }),
@@ -170,7 +176,8 @@ export default function DashboardClient() {
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || 'Error al agregar');
       if (data.inserted > 0) {
-        setAddUrlMsg(`✓ Agregado${data.creador ? ` (@${data.creador})` : ''}`);
+        const quien = data.creador || data.canal;
+        setAddUrlMsg(`✓ Agregado${quien ? ` (${quien})` : ''}`);
         setIgUrl('');
         refreshStats();
         setPage(1);
@@ -254,7 +261,7 @@ export default function DashboardClient() {
         />
 
         <div className="flex flex-wrap items-center gap-2 mb-4 p-2.5 rounded-lg border border-line bg-gray-50">
-          <span className="text-xs font-medium text-gray-600 shrink-0">＋ Agregar por URL de Instagram:</span>
+          <span className="text-xs font-medium text-gray-600 shrink-0">＋ Agregar por URL:</span>
           <input
             value={igUrl}
             onChange={(e) => {
@@ -262,7 +269,7 @@ export default function DashboardClient() {
               setAddUrlMsg('');
             }}
             onKeyDown={(e) => e.key === 'Enter' && addByUrl()}
-            placeholder="https://instagram.com/reel/…  ·  /p/…  (reel, post o carrusel)"
+            placeholder="URL de Instagram (reel/post/carrusel) o de YouTube (video)"
             className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
           />
           <button

@@ -12,7 +12,7 @@ import {
   updateSearchLastRun,
   updateChannelLastRun,
 } from './airtable.js';
-import { scrapeSearches, scrapeChannels } from './youtubeApify.js';
+import { scrapeSearches, scrapeChannels, scrapeVideosByUrls } from './youtubeApify.js';
 import { syncVideos, supabaseEnabled } from './supabase.js';
 
 // El actor devuelve `subtitles` a veces como objeto y a veces como array de pistas.
@@ -165,6 +165,43 @@ export async function runScrapeYoutube() {
   }
 
   return { ok: true, searches: searches.length, channels: channels.length, inserted: totalInserted, details };
+}
+
+// Agrega UN video de YouTube por su URL directa, pegada en DISECTA. Reutiliza el mismo pipeline:
+// mapeo, subtítulos, rehost de thumbnail a R2 y espejo a Supabase. Hereda proyecto si el canal ya
+// es una fuente nuestra.
+export async function runScrapeYoutubeVideo(videoUrl) {
+  const startedAt = new Date().toISOString();
+  const url = (videoUrl || '').trim();
+  if (!/youtu\.?be/i.test(url)) {
+    return { ok: false, error: 'URL de YouTube inválida', inserted: 0 };
+  }
+  const existing = await getExistingVideoIds();
+  let items;
+  try {
+    items = await scrapeVideosByUrls([url]);
+  } catch (err) {
+    console.error(`[YT url ${url}] ERROR:`, err.message);
+    return { ok: false, error: err.message, inserted: 0 };
+  }
+  if (!items.length) {
+    return { ok: true, inserted: 0, message: 'No se pudo extraer el video de esa URL' };
+  }
+  // Si el canal ya es una fuente nuestra, hereda su proyecto.
+  let projByHandle = new Map();
+  try {
+    const channels = await getActiveChannels();
+    projByHandle = new Map(channels.map((c) => [handleFromUrl(c.channelUrl), c.project]));
+  } catch (e) {
+    console.error(`[YT url] no se pudo leer canales: ${e.message}`);
+  }
+  const inserted = await ingestVideos(items, existing, startedAt, (it) => ({
+    project: projByHandle.get((it.channelUsername || '').toLowerCase()),
+    origin: it.channelUrl || url,
+  }));
+  const it = items[0];
+  console.log(`[YT url] ${url} videoId=${it.id} nuevo=${inserted}`);
+  return { ok: true, inserted, videoId: it.id, titulo: it.title || null, canal: it.channelName || null };
 }
 
 // Búsqueda manual por palabra clave (ad-hoc, disparada desde DISECTA). No requiere que la búsqueda
