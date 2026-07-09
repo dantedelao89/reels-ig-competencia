@@ -87,7 +87,7 @@ async function ingestReels(items, existing, startedAt, projectByUser) {
     }
   }
 
-  return { inserted: created.length, transcribed };
+  return { inserted: created.length, transcribed, transcriptionByShort };
 }
 
 export async function runScrape() {
@@ -169,7 +169,7 @@ export async function runScrapeInstagramUrl(url) {
   } catch (e) {
     console.error(`[IG url] no se pudo leer proyectos de creadores: ${e.message}`);
   }
-  const { inserted, transcribed } = await ingestReels(items, existing, startedAt, projectByUser);
+  const { inserted, transcribed, transcriptionByShort } = await ingestReels(items, existing, startedAt, projectByUser);
   const it = items[0];
   console.log(`[IG url] ${clean} shortCode=${it.shortCode} nuevo=${inserted} transcrito=${transcribed}`);
   return {
@@ -179,6 +179,7 @@ export async function runScrapeInstagramUrl(url) {
     shortCode: it.shortCode,
     creador: it.ownerUsername || null,
     tipo: it.type || null,
+    transcripcion: transcriptionByShort.get(it.shortCode) || null,
   };
 }
 

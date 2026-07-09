@@ -14,7 +14,8 @@ import { verifySlackSignature, slackReply } from './slack.js';
 import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
-import { updateRowById, supabaseEnabled } from './supabase.js';
+import { updateRowById, getRowByField, supabaseEnabled } from './supabase.js';
+import { toParagraphs, looksSpanish, chunkParagraphs } from './format.js';
 
 const app = express();
 app.use(express.json());
@@ -393,6 +394,43 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
         ? `✅ Agregado${quien ? ` (${quien})` : ''}: ${text}`
         : `ℹ️ Ya estaba en la base${quien ? ` (${quien})` : ''}: ${text}`;
     await slackReply(responseUrl, msg);
+
+    // Transcripción: viene en el resultado si el item se acaba de scrapear; si ya existía
+    // (inserted=0), se lee de Supabase.
+    let raw = isYt ? result.subtitulos : result.transcripcion;
+    if (!raw && result.inserted === 0 && supabaseEnabled()) {
+      try {
+        const row = isYt
+          ? await getRowByField('yt_videos', 'video_id', result.videoId, 'subtitulos')
+          : await getRowByField('ig_reels', 'shortcode', result.shortCode, 'transcripcion');
+        raw = isYt ? row?.subtitulos : row?.transcripcion;
+      } catch (e) {
+        console.error('[slack] no se pudo leer transcripción existente:', e.message);
+      }
+    }
+    if (!raw) {
+      await slackReply(responseUrl, 'ℹ️ Sin transcripción disponible para este contenido.');
+      return;
+    }
+
+    let final = raw;
+    if (!looksSpanish(raw) && config.enableTranscription) {
+      try {
+        final = (await translateToSpanish(raw)) || raw;
+      } catch (e) {
+        console.error('[slack] traducción falló, se envía en el idioma original:', e.message);
+      }
+    }
+
+    const paragraphs = toParagraphs(final);
+    const chunks = chunkParagraphs(paragraphs, 3500);
+    const MAX_CHUNKS = 4; // el status ya gastó 1 de los 5 mensajes que permite response_url
+    for (let i = 0; i < Math.min(chunks.length, MAX_CHUNKS); i++) {
+      const isLast = i === MAX_CHUNKS - 1 && chunks.length > MAX_CHUNKS;
+      const header = chunks.length > 1 ? `*📝 Transcripción (${i + 1}/${Math.min(chunks.length, MAX_CHUNKS)}):*\n\n` : '*📝 Transcripción:*\n\n';
+      const suffix = isLast ? '\n\n_…(recortado, transcripción muy larga)_' : '';
+      await slackReply(responseUrl, `${header}${chunks[i]}${suffix}`);
+    }
   } catch (err) {
     console.error('Error en /slack/scrape:', err);
     await slackReply(responseUrl, `❌ Error: ${err.message}`);

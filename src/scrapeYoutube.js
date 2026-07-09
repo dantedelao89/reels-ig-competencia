@@ -201,7 +201,14 @@ export async function runScrapeYoutubeVideo(videoUrl) {
   }));
   const it = items[0];
   console.log(`[YT url] ${url} videoId=${it.id} nuevo=${inserted}`);
-  return { ok: true, inserted, videoId: it.id, titulo: it.title || null, canal: it.channelName || null };
+  return {
+    ok: true,
+    inserted,
+    videoId: it.id,
+    titulo: it.title || null,
+    canal: it.channelName || null,
+    subtitulos: extractSubtitles(it.subtitles) || null,
+  };
 }
 
 // Búsqueda manual por palabra clave (ad-hoc, disparada desde DISECTA). No requiere que la búsqueda

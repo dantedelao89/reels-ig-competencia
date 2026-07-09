@@ -46,6 +46,16 @@ export async function updateRowById(table, id, fields) {
   return 1;
 }
 
+// Busca un row por una columna única (ej. shortcode / video_id). Lo usa el slash command de Slack
+// para leer la transcripción de contenido que ya existía en la base (inserted=0).
+export async function getRowByField(table, field, value, select = '*') {
+  if (!enabled) return null;
+  const c = await getClient();
+  const { data, error } = await c.from(table).select(select).eq(field, value).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 // IDs de anuncios ya presentes en Supabase (meta_ads). Sirve para deduplicar el sync de forma
 // independiente de Airtable: si un sync falló antes, un re-scrape sí reintenta (Airtable ya no bloquea).
 export async function getSyncedAdIds() {
