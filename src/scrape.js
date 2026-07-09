@@ -11,7 +11,7 @@ import {
   updateCreatorLastRun,
   updateReelTranscription,
 } from './airtable.js';
-import { scrapeCreators } from './apify.js';
+import { scrapeCreators, scrapeInstagramUrl } from './apify.js';
 import { transcribeAudio } from './transcribe.js';
 import { syncReels, supabaseEnabled } from './supabase.js';
 
@@ -140,6 +140,46 @@ export async function runScrape() {
   }
 
   return { ok: true, creators: creators.length, inserted: totalInserted, transcribed: totalTranscribed, details };
+}
+
+// Agrega UN contenido de Instagram (reel/post/carrusel) por su URL directa, pegada en DISECTA.
+// Reutiliza todo el pipeline: mapeo, transcripción (si trae audio), R2 y espejo a Supabase.
+export async function runScrapeInstagramUrl(url) {
+  const startedAt = new Date().toISOString();
+  const clean = (url || '').trim();
+  if (!/instagram\.com/i.test(clean)) {
+    return { ok: false, error: 'URL de Instagram inválida', inserted: 0 };
+  }
+  const existing = await getExistingShortCodes();
+  let items;
+  try {
+    items = await scrapeInstagramUrl(clean);
+  } catch (err) {
+    console.error(`[IG url ${clean}] ERROR:`, err.message);
+    return { ok: false, error: err.message, inserted: 0 };
+  }
+  if (!items.length) {
+    return { ok: true, inserted: 0, message: 'No se pudo extraer contenido de esa URL' };
+  }
+  // Si el dueño ya es un creador nuestro, hereda su proyecto; si no, queda sin proyecto.
+  let projectByUser = new Map();
+  try {
+    const creators = await getActiveCreators();
+    projectByUser = new Map(creators.map((c) => [c.username.toLowerCase(), c.project]));
+  } catch (e) {
+    console.error(`[IG url] no se pudo leer proyectos de creadores: ${e.message}`);
+  }
+  const { inserted, transcribed } = await ingestReels(items, existing, startedAt, projectByUser);
+  const it = items[0];
+  console.log(`[IG url] ${clean} shortCode=${it.shortCode} nuevo=${inserted} transcrito=${transcribed}`);
+  return {
+    ok: true,
+    inserted,
+    transcribed,
+    shortCode: it.shortCode,
+    creador: it.ownerUsername || null,
+    tipo: it.type || null,
+  };
 }
 
 // Re-scrape manual de UN solo creador de Instagram (disparado desde DISECTA cuando el cron no lo

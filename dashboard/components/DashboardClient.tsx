@@ -52,6 +52,11 @@ export default function DashboardClient() {
   const [section, setSection] = useState<'contenido' | 'fuentes'>('contenido');
   const [mode, setMode] = useState<'organico' | 'ads'>('organico');
 
+  // Agregar contenido ad-hoc pegando una URL de Instagram (reel/post/carrusel).
+  const [igUrl, setIgUrl] = useState('');
+  const [addingUrl, setAddingUrl] = useState(false);
+  const [addUrlMsg, setAddUrlMsg] = useState('');
+
   const refreshStats = useCallback(() => {
     fetch('/api/stats')
       .then((r) => r.json())
@@ -151,6 +156,35 @@ export default function DashboardClient() {
     setDetail((d) => (d && d.id === target.id ? { ...d, ...patch } : d));
   }
 
+  async function addByUrl() {
+    const u = igUrl.trim();
+    if (!u || addingUrl) return;
+    setAddingUrl(true);
+    setAddUrlMsg('');
+    try {
+      const res = await fetch('/api/scrape-ig-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: u }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'Error al agregar');
+      if (data.inserted > 0) {
+        setAddUrlMsg(`✓ Agregado${data.creador ? ` (@${data.creador})` : ''}`);
+        setIgUrl('');
+        refreshStats();
+        setPage(1);
+        fetchPage(1, true);
+      } else {
+        setAddUrlMsg(data.message || 'Ya estaba en la base');
+      }
+    } catch (e: any) {
+      setAddUrlMsg('Error: ' + e.message);
+    } finally {
+      setAddingUrl(false);
+    }
+  }
+
   function downloadThumbs(target: ContentItem[]) {
     target.forEach((it, i) => {
       if (!it.thumbnail) return;
@@ -218,6 +252,28 @@ export default function DashboardClient() {
             setDate({ dateField: 'fecha_publicacion', desde: '', hasta: '' });
           }}
         />
+
+        <div className="flex flex-wrap items-center gap-2 mb-4 p-2.5 rounded-lg border border-line bg-gray-50">
+          <span className="text-xs font-medium text-gray-600 shrink-0">＋ Agregar por URL de Instagram:</span>
+          <input
+            value={igUrl}
+            onChange={(e) => {
+              setIgUrl(e.target.value);
+              setAddUrlMsg('');
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && addByUrl()}
+            placeholder="https://instagram.com/reel/…  ·  /p/…  (reel, post o carrusel)"
+            className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
+          />
+          <button
+            onClick={addByUrl}
+            disabled={!igUrl.trim() || addingUrl}
+            className="h-9 px-4 text-sm rounded-lg bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {addingUrl ? 'Agregando…' : 'Agregar'}
+          </button>
+          {addUrlMsg && <span className="text-xs text-muted whitespace-nowrap">{addUrlMsg}</span>}
+        </div>
 
         {selected.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 px-3 py-2 mb-3 rounded-lg bg-accent-soft">

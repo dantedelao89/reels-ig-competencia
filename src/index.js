@@ -3,7 +3,7 @@
 import express from 'express';
 import cron from 'node-cron';
 import { config } from './config.js';
-import { runScrape, runScrapeInstagramCreator } from './scrape.js';
+import { runScrape, runScrapeInstagramCreator, runScrapeInstagramUrl } from './scrape.js';
 import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch } from './scrapeYoutube.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
 import { runScrapeAds } from './scrapeAds.js';
@@ -176,6 +176,25 @@ app.post('/scrape-search', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape-search:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Agrega UN contenido de Instagram por su URL (reel/post/carrusel), pegada en DISECTA. Protegido.
+app.post('/scrape-ig-url', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const url = req.body?.url;
+  if (!url) return res.status(400).json({ ok: false, error: 'url requerida' });
+  try {
+    const result = await runScrapeInstagramUrl(url);
+    res.json(result);
+  } catch (err) {
+    console.error('Error en /scrape-ig-url:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

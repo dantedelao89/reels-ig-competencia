@@ -24,6 +24,8 @@ export const config = {
 
   // Actor de Apify (Instagram)
   actorId: process.env.APIFY_ACTOR_ID || 'apify/instagram-reel-scraper',
+  // Actor para scrapear UNA URL directa (post/reel/carrusel) al agregar contenido ad-hoc desde DISECTA.
+  igUrlActorId: process.env.APIFY_IG_URL_ACTOR || 'apify/instagram-scraper',
 
   // Reels máximos por creador si la columna "Reels por corrida" está vacía
   defaultResultsLimit: Number(process.env.DEFAULT_RESULTS_LIMIT || 30),

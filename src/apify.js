@@ -16,3 +16,16 @@ export async function scrapeCreators({ usernames, resultsLimit, onlyPostsNewerTh
   const items = await runActorItems(config.actorId, input);
   return items.filter((it) => it && it.shortCode && !it.error);
 }
+
+// Scrapea UN contenido de Instagram por su URL directa (reel, post o carrusel). Usa el actor general
+// que soporta los 3 tipos y devuelve el mismo shape (shortCode, caption, videoUrl, audioUrl, etc.).
+export async function scrapeInstagramUrl(url) {
+  const isReel = /\/reels?\//i.test(url);
+  const input = {
+    directUrls: [url],
+    resultsType: isReel ? 'reels' : 'posts',
+    resultsLimit: 1,
+  };
+  const items = await runActorItems(config.igUrlActorId, input);
+  return items.filter((it) => it && it.shortCode && !it.error);
+}
