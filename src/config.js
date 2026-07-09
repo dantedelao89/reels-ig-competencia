@@ -86,6 +86,10 @@ export const config = {
   // Secreto que valida que el webhook venga de Telegram (reusa TRIGGER_SECRET por defecto).
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || process.env.TRIGGER_SECRET || '',
 
+  // Slack (opcional): slash command /scrape <url> desde el workspace. Firma cada request con
+  // este secreto (Basic Information → Signing Secret de la Slack App).
+  slackSigningSecret: process.env.SLACK_SIGNING_SECRET || '',
+
   // --- Espejo en Supabase (opcional): alimenta el dashboard de curación. ---
   // Se activa solo si hay URL + service key. Nunca rompe el flujo de Airtable (errores se loguean).
   supabaseUrl: process.env.SUPABASE_URL || '',

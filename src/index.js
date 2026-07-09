@@ -10,6 +10,7 @@ import { runScrapeAds } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
+import { verifySlackSignature, slackReply } from './slack.js';
 import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
@@ -17,6 +18,15 @@ import { updateRowById, supabaseEnabled } from './supabase.js';
 
 const app = express();
 app.use(express.json());
+
+// Parser dedicado para el slash command de Slack: viene como x-www-form-urlencoded y necesita el
+// body crudo para verificar la firma (HMAC contra config.slackSigningSecret).
+const slackFormParser = express.urlencoded({
+  extended: true,
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  },
+});
 
 // Guarda el resultado de la última corrida para poder consultarlo aunque el HTTP del webhook
 // se corte por timeout del edge (corridas largas).
@@ -349,6 +359,43 @@ app.post('/translate', async (req, res) => {
   } catch (err) {
     console.error(`[translate] error ${id}:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Slash command de Slack: /scrape <url de Instagram o YouTube>. Responde rápido (ACK) y el
+// resultado real llega después vía response_url, igual que la barra "＋ Agregar por URL" de DISECTA.
+app.post('/slack/scrape', slackFormParser, async (req, res) => {
+  if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
+
+  const text = (req.body?.text || '').trim();
+  const responseUrl = req.body?.response_url;
+  const isYt = /youtu\.?be/i.test(text);
+  const isIg = /instagram\.com/i.test(text);
+
+  if (!text || (!isYt && !isIg)) {
+    return res.json({
+      response_type: 'ephemeral',
+      text: 'Uso: `/scrape <url de Instagram o YouTube>`',
+    });
+  }
+
+  res.json({ response_type: 'in_channel', text: `🔄 Procesando ${text}…` });
+
+  try {
+    const result = isYt ? await runScrapeYoutubeVideo(text) : await runScrapeInstagramUrl(text);
+    if (result.ok === false) {
+      await slackReply(responseUrl, `❌ Error: ${result.error}`);
+      return;
+    }
+    const quien = result.canal || result.creador;
+    const msg =
+      result.inserted > 0
+        ? `✅ Agregado${quien ? ` (${quien})` : ''}: ${text}`
+        : `ℹ️ Ya estaba en la base${quien ? ` (${quien})` : ''}: ${text}`;
+    await slackReply(responseUrl, msg);
+  } catch (err) {
+    console.error('Error en /slack/scrape:', err);
+    await slackReply(responseUrl, `❌ Error: ${err.message}`);
   }
 });
 
