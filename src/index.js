@@ -378,9 +378,15 @@ app.listen(config.port, () => {
     console.log(`Bot de Telegram activo (${config.telegramAllowedChatIds.length} chat IDs autorizados)`);
   }
 
+  // ⏸️ CRONS AUTOMÁTICOS PAUSADOS a pedido de Dante (2026-07-08). Los scrapes MANUALES (botones de
+  // DISECTA: creador, canal, búsqueda, anunciante, URL) siguen funcionando normal.
+  // Para REACTIVAR: cambiar esta constante a false (o mejor, quitarla y usar ENABLE_CRON en Railway).
+  const CRONS_PAUSED = true;
+  if (CRONS_PAUSED) console.log('⏸️  Crons automáticos PAUSADOS (orgánico + ads). Los scrapes manuales siguen activos.');
+
   // Cron del pipeline de ads (8am CDMX), independiente del orgánico.
   // enableAdsCron permite apagar SOLO esta corrida diaria sin tocar el scrape manual.
-  if (config.enableAds && config.enableCron && config.enableAdsCron) {
+  if (!CRONS_PAUSED && config.enableAds && config.enableCron && config.enableAdsCron) {
     if (cron.validate(config.adsCronSchedule)) {
       cron.schedule(
         config.adsCronSchedule,
@@ -401,7 +407,7 @@ app.listen(config.port, () => {
     }
   }
 
-  if (config.enableCron) {
+  if (!CRONS_PAUSED && config.enableCron) {
     if (!cron.validate(config.cronSchedule)) {
       console.error(`CRON_SCHEDULE inválido: "${config.cronSchedule}" — cron desactivado`);
       return;
