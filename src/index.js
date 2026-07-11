@@ -398,16 +398,36 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
     // Transcripción: viene en el resultado si el item se acaba de scrapear; si ya existía
     // (inserted=0), se lee de Supabase.
     let raw = isYt ? result.subtitulos : result.transcripcion;
-    if (!raw && result.inserted === 0 && supabaseEnabled()) {
+    let ytRowId = null;
+    if (!raw && supabaseEnabled()) {
       try {
         const row = isYt
-          ? await getRowByField('yt_videos', 'video_id', result.videoId, 'subtitulos')
+          ? await getRowByField('yt_videos', 'video_id', result.videoId, 'id,subtitulos')
           : await getRowByField('ig_reels', 'shortcode', result.shortCode, 'transcripcion');
         raw = isYt ? row?.subtitulos : row?.transcripcion;
+        if (isYt) ytRowId = row?.id || null;
       } catch (e) {
         console.error('[slack] no se pudo leer transcripción existente:', e.message);
       }
     }
+
+    // YouTube sin subtítulos: transcribe el audio bajo demanda (mismo flujo que el botón de
+    // DISECTA). Puede tardar varios minutos en videos largos (chunking con ffmpeg).
+    if (!raw && isYt && config.enableTranscription) {
+      await slackReply(responseUrl, '🎙️ Sin subtítulos, transcribiendo el audio… puede tardar un poco.');
+      try {
+        const audioUrl = await getYoutubeAudioUrl(text);
+        if (audioUrl) {
+          raw = await transcribeAudio(audioUrl);
+          if (raw && ytRowId) await updateRowById('yt_videos', ytRowId, { subtitulos: raw });
+        }
+      } catch (e) {
+        console.error('[slack] transcripción bajo demanda falló:', e.message);
+        await slackReply(responseUrl, `❌ No se pudo transcribir el audio: ${e.message}`);
+        return;
+      }
+    }
+
     if (!raw) {
       await slackReply(responseUrl, 'ℹ️ Sin transcripción disponible para este contenido.');
       return;
