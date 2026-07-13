@@ -201,7 +201,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
   }
 
   async function remove(id: string) {
-    if (!confirm('¿Eliminar esta fuente de Airtable?')) return;
+    if (!confirm('¿Eliminar esta fuente?')) return;
     setRecords((r) => r.filter((x) => x.id !== id));
     await fetch(`/api/sources?type=${type}&id=${id}`, { method: 'DELETE' }).catch(() => {});
   }
@@ -215,7 +215,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       <div className="mb-1">
         <h1 className="text-lg font-medium">Fuentes</h1>
         <p className="text-sm text-muted">
-          Se guardan en Airtable (fuente única). El scraper las toma en su próxima corrida.
+          Se guardan en Supabase (fuente única). El scraper las toma en su próxima corrida.
         </p>
       </div>
 

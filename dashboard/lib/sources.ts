@@ -1,14 +1,13 @@
-// Definición de las 3 fuentes que se gestionan desde DISECTA. Airtable es la fuente única:
-// estos mapeos coinciden con los campos que lee el scraper (airtable.js).
+// Definición de las 4 fuentes que se gestionan desde DISECTA. Supabase es la fuente única:
+// estos mapeos coinciden con las tablas/columnas que lee el scraper (src/sources.js).
 
 export type SourceType = 'ig' | 'yt_channel' | 'yt_search' | 'fb_advertiser';
 
 export interface SourceDef {
   label: string;
-  tableEnv: string;
-  tableDefault: string;
-  keyField: string;
-  numField: string;
+  table: string;
+  keyColumn: string;
+  numColumn: string;
   keyLabel: string;
   keyPlaceholder: string;
 }
@@ -16,37 +15,33 @@ export interface SourceDef {
 export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
   ig: {
     label: 'Creadores IG',
-    tableEnv: 'CREATORS_TABLE',
-    tableDefault: 'Creadores',
-    keyField: 'Username',
-    numField: 'Reels por corrida',
+    table: 'ig_creators',
+    keyColumn: 'username',
+    numColumn: 'reels_por_corrida',
     keyLabel: '@usuario',
     keyPlaceholder: '@usuario',
   },
   yt_channel: {
     label: 'Canales YT',
-    tableEnv: 'YT_CHANNELS_TABLE',
-    tableDefault: 'Canales YT',
-    keyField: 'Canal',
-    numField: 'Videos por corrida',
+    table: 'yt_channels',
+    keyColumn: 'canal_url',
+    numColumn: 'videos_por_corrida',
     keyLabel: 'URL del canal',
     keyPlaceholder: 'https://youtube.com/@canal',
   },
   yt_search: {
     label: 'Búsquedas YT',
-    tableEnv: 'YT_SEARCHES_TABLE',
-    tableDefault: 'Búsquedas YT',
-    keyField: 'Búsqueda',
-    numField: 'Videos por búsqueda',
+    table: 'yt_searches',
+    keyColumn: 'busqueda',
+    numColumn: 'videos_por_busqueda',
     keyLabel: 'Palabra clave',
     keyPlaceholder: 'ej. claude code',
   },
   fb_advertiser: {
     label: 'Anunciantes',
-    tableEnv: 'ADVERTISERS_TABLE',
-    tableDefault: 'Anunciantes',
-    keyField: 'URL',
-    numField: 'Anuncios por corrida',
+    table: 'fb_advertisers',
+    keyColumn: 'url',
+    numColumn: 'anuncios_por_corrida',
     keyLabel: 'URL de página de Facebook',
     keyPlaceholder: 'https://www.facebook.com/MARCA',
   },
