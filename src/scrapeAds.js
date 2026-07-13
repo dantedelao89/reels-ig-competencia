@@ -3,13 +3,8 @@
 // lo espeja a Supabase (con rehospedaje de creatividad a R2). Hereda Proyecto por anunciante.
 
 import { config } from './config.js';
-import {
-  getActiveAdvertisers,
-  getAdvertiserByUrl,
-  getExistingAdIds,
-  insertAds,
-  updateAdvertiserLastRun,
-} from './airtable.js';
+import { getActiveAdvertisers, getAdvertiserByUrl, updateAdvertiserLastRun } from './sources.js';
+import { getExistingAdIds, insertAds } from './airtable.js';
 import { scrapeFacebookAds } from './facebookAds.js';
 import { syncAds, supabaseEnabled, getSyncedAdIds } from './supabase.js';
 

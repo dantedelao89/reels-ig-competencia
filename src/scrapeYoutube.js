@@ -8,11 +8,10 @@ import {
   getActiveChannels,
   getChannelByUrl,
   createChannel,
-  getExistingVideoIds,
-  insertVideos,
   updateSearchLastRun,
   updateChannelLastRun,
-} from './airtable.js';
+} from './sources.js';
+import { getExistingVideoIds, insertVideos } from './airtable.js';
 import { scrapeSearches, scrapeChannels, scrapeVideosByUrls } from './youtubeApify.js';
 import { syncVideos, supabaseEnabled } from './supabase.js';
 

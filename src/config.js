@@ -97,6 +97,12 @@ export const config = {
   igReelsTable: process.env.SUPABASE_IG_TABLE || 'ig_reels',
   ytVideosTable: process.env.SUPABASE_YT_TABLE || 'yt_videos',
 
+  // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
+  igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
+  ytChannelsTable: process.env.SUPABASE_YT_CHANNELS_TABLE || 'yt_channels',
+  ytSearchesTable: process.env.SUPABASE_YT_SEARCHES_TABLE || 'yt_searches',
+  fbAdvertisersTable: process.env.SUPABASE_FB_ADVERTISERS_TABLE || 'fb_advertisers',
+
   // --- Cloudflare R2 (opcional): rehospeda thumbnails para que no expiren (las de IG caducan). ---
   // Se activa solo si están las 4 credenciales. Sin esto, thumbnail_url queda null y el dashboard
   // cae a thumbnail_original (la URL efímera de IG).

@@ -14,7 +14,7 @@ export function supabaseEnabled() {
   return enabled;
 }
 
-async function getClient() {
+export async function getClient() {
   if (client) return client;
   const { createClient } = await import('@supabase/supabase-js');
   client = createClient(config.supabaseUrl, config.supabaseServiceKey, {
@@ -164,6 +164,11 @@ export async function upsertReelRows(rows) {
 }
 export async function upsertVideoRows(rows) {
   return upsert(config.ytVideosTable, rows, 'video_id');
+}
+
+// Upsert genérico por tabla/columna única. Lo usan el backfill de Fuentes y src/sources.js.
+export async function upsertRows(table, rows, onConflict) {
+  return upsert(table, rows, onConflict);
 }
 
 // ----------------------------- Instagram -----------------------------

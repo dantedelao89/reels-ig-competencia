@@ -3,15 +3,8 @@
 // deduplica por ShortCode, inserta solo lo nuevo, transcribe y hereda Proyecto.
 
 import { config } from './config.js';
-import {
-  getActiveCreators,
-  getCreatorByUsername,
-  createCreator,
-  getExistingShortCodes,
-  insertReels,
-  updateCreatorLastRun,
-  updateReelTranscription,
-} from './airtable.js';
+import { getActiveCreators, getCreatorByUsername, createCreator, updateCreatorLastRun } from './sources.js';
+import { getExistingShortCodes, insertReels, updateReelTranscription } from './airtable.js';
 import { scrapeCreators, scrapeInstagramUrl } from './apify.js';
 import { transcribeAudio } from './transcribe.js';
 import { syncReels, supabaseEnabled } from './supabase.js';
