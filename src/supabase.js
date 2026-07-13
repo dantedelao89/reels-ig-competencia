@@ -37,6 +37,43 @@ async function upsert(table, rows, onConflict) {
   return n;
 }
 
+// Igual que upsert(), pero devuelve las filas insertadas/actualizadas (columnas de `select`).
+// Lo usa syncReels para poder transcribir DESPUÉS de insertar (necesita el id de Supabase).
+async function upsertReturning(table, rows, onConflict, select) {
+  if (!enabled || rows.length === 0) return [];
+  const c = await getClient();
+  const out = [];
+  for (let i = 0; i < rows.length; i += 100) {
+    const chunk = rows.slice(i, i + 100);
+    const { data, error } = await c.from(table).upsert(chunk, { onConflict }).select(select);
+    if (error) throw new Error(error.message);
+    out.push(...(data || []));
+  }
+  return out;
+}
+
+// Sets de dedup: IDs ya presentes en Supabase (fuente única desde la fase 3 de la migración).
+export async function getExistingShortcodes() {
+  return getExistingColumn(config.igReelsTable, 'shortcode');
+}
+export async function getExistingVideoIds() {
+  return getExistingColumn(config.ytVideosTable, 'video_id');
+}
+async function getExistingColumn(table, column) {
+  if (!enabled) return new Set();
+  const c = await getClient();
+  const ids = new Set();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await c.from(table).select(column).range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    data.forEach((r) => ids.add(String(r[column])));
+    if (data.length < PAGE) break;
+  }
+  return ids;
+}
+
 // Actualiza campos de un row por id (lo usa la transcripción manual bajo demanda).
 export async function updateRowById(table, id, fields) {
   if (!enabled) return 0;
@@ -135,7 +172,8 @@ function adRow(item, scrapedAtIso, project, thumbnailUrl, videoUrlOverride) {
 
 // Sincroniza anuncios nuevos a Supabase. ctx: { scrapedAtIso, projectByUrl }.
 export async function syncAds(items, ctx = {}) {
-  if (!enabled || !items?.length) return { synced: 0, rehosted: 0 };
+  if (!enabled) throw new Error('Supabase no está configurado (faltan SUPABASE_URL / SUPABASE_SERVICE_KEY)');
+  if (!items?.length) return { synced: 0, rehosted: 0 };
   const { scrapedAtIso, projectByUrl } = ctx;
   let rehosted = 0;
   const rows = [];
@@ -201,9 +239,12 @@ function reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl) {
 }
 
 // Sincroniza reels nuevos a Supabase. ctx: { scrapedAtIso, projectByUser, transcriptionByShort }.
-// Devuelve { synced, rehosted }. Resiliente: lanza solo si el upsert falla (el llamador lo envuelve).
+// Devuelve { synced, rehosted, idsByShortcode }. idsByShortcode permite transcribir DESPUÉS de
+// insertar (Supabase es ahora el destino primario, no un mirror best-effort: si el upsert falla,
+// lanza y el llamador debe propagar el error).
 export async function syncReels(items, ctx = {}) {
-  if (!enabled || !items?.length) return { synced: 0, rehosted: 0 };
+  if (!enabled) throw new Error('Supabase no está configurado (faltan SUPABASE_URL / SUPABASE_SERVICE_KEY)');
+  if (!items?.length) return { synced: 0, rehosted: 0, idsByShortcode: new Map() };
   const { scrapedAtIso, projectByUser, transcriptionByShort } = ctx;
   let rehosted = 0;
   const rows = [];
@@ -218,8 +259,9 @@ export async function syncReels(items, ctx = {}) {
     }
     rows.push(reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl));
   }
-  const synced = await upsert(config.igReelsTable, rows, 'shortcode');
-  return { synced, rehosted };
+  const data = await upsertReturning(config.igReelsTable, rows, 'shortcode', 'id, shortcode');
+  const idsByShortcode = new Map(data.map((r) => [r.shortcode, r.id]));
+  return { synced: data.length, rehosted, idsByShortcode };
 }
 
 // ----------------------------- YouTube -----------------------------
@@ -247,7 +289,8 @@ function videoRow(item, scrapedAtIso, project, origin, subtitulos, thumbnailUrl)
 // Sincroniza videos nuevos a Supabase. ctx: { scrapedAtIso, resolve(item)->{project,origin}, subtitlesOf(item)->text }.
 // Las thumbnails de YouTube no expiran, pero igual se rehospedan a R2 si está activo (opcional/uniforme).
 export async function syncVideos(items, ctx = {}) {
-  if (!enabled || !items?.length) return { synced: 0, rehosted: 0 };
+  if (!enabled) throw new Error('Supabase no está configurado (faltan SUPABASE_URL / SUPABASE_SERVICE_KEY)');
+  if (!items?.length) return { synced: 0, rehosted: 0 };
   const { scrapedAtIso, resolve, subtitlesOf } = ctx;
   let rehosted = 0;
   const rows = [];

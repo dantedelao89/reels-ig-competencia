@@ -11,12 +11,11 @@ import {
   updateSearchLastRun,
   updateChannelLastRun,
 } from './sources.js';
-import { getExistingVideoIds, insertVideos } from './airtable.js';
 import { scrapeSearches, scrapeChannels, scrapeVideosByUrls } from './youtubeApify.js';
-import { syncVideos, supabaseEnabled } from './supabase.js';
+import { syncVideos, getExistingVideoIds } from './supabase.js';
 
 // El actor devuelve `subtitles` a veces como objeto y a veces como array de pistas.
-const MAX_SUBTITLE_CHARS = 95000; // Airtable limita la celda a 100k
+const MAX_SUBTITLE_CHARS = 95000;
 
 export function extractSubtitles(subs) {
   if (!subs) return '';
@@ -33,57 +32,19 @@ function handleFromUrl(url) {
   return m ? m[1].toLowerCase() : '';
 }
 
-function mapVideo(item, scrapedAtIso, project, origin) {
-  const fields = {
-    'Video ID': item.id,
-    Título: item.title || '',
-    Canal: item.channelName || '',
-    'Canal URL': item.channelUrl || '',
-    URL: item.url || '',
-    'Fecha publicación': item.date || null,
-    Views: item.viewCount ?? null,
-    Likes: item.likes ?? null,
-    Comentarios: item.commentsCount ?? null,
-    Duración: item.duration || '',
-    Suscriptores: item.numberOfSubscribers ?? null,
-    Descripción: item.text || '',
-    Hashtags: (item.hashtags || []).map((h) => `#${h}`).join(' '),
-    Thumbnail: item.thumbnailUrl || '',
-    Origen: origin || '',
-    Formato: (item.url || '').includes('/shorts/') ? 'Short' : 'Video',
-    Subtítulos: extractSubtitles(item.subtitles),
-    'Scrapeado en': scrapedAtIso,
-  };
-  if (project) fields.Proyecto = project;
-  return fields;
-}
-
-// Inserta los videos nuevos; resolve(item) → { project, origin }. Devuelve cuántos insertó.
+// Inserta los videos nuevos en Supabase (destino primario); resolve(item) → { project, origin }.
+// Devuelve cuántos insertó.
 async function ingestVideos(items, existing, startedAt, resolve) {
   const fresh = items.filter((it) => it.id && !existing.has(it.id));
   if (fresh.length === 0) return 0;
-  const rows = fresh.map((it) => {
-    const { project, origin } = resolve(it);
-    return mapVideo(it, startedAt, project, origin);
+  const { synced, rehosted } = await syncVideos(fresh, {
+    scrapedAtIso: startedAt,
+    resolve,
+    subtitlesOf: (it) => extractSubtitles(it.subtitles),
   });
-  const inserted = await insertVideos(rows);
-  rows.forEach((r) => existing.add(r['Video ID']));
-
-  // Espejo a Supabase (dashboard). Solo los videos nuevos → nunca pisa la capa de curación.
-  if (supabaseEnabled()) {
-    try {
-      const { synced, rehosted } = await syncVideos(fresh, {
-        scrapedAtIso: startedAt,
-        resolve,
-        subtitlesOf: (it) => extractSubtitles(it.subtitles),
-      });
-      console.log(`[YT supabase] sincronizados=${synced} thumbnails_rehospedadas=${rehosted}`);
-    } catch (e) {
-      console.error(`[YT supabase] sync falló: ${e.message}`);
-    }
-  }
-
-  return inserted;
+  fresh.forEach((it) => existing.add(it.id));
+  console.log(`[YT supabase] sincronizados=${synced} thumbnails_rehospedadas=${rehosted}`);
+  return synced;
 }
 
 export async function runScrapeYoutube() {

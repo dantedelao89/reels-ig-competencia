@@ -4,84 +4,44 @@
 
 import { config } from './config.js';
 import { getActiveCreators, getCreatorByUsername, createCreator, updateCreatorLastRun } from './sources.js';
-import { getExistingShortCodes, insertReels, updateReelTranscription } from './airtable.js';
 import { scrapeCreators, scrapeInstagramUrl } from './apify.js';
 import { transcribeAudio } from './transcribe.js';
-import { syncReels, supabaseEnabled } from './supabase.js';
+import { syncReels, getExistingShortcodes, updateRowById } from './supabase.js';
 
-function mapReel(item, scrapedAtIso, project) {
-  const music = item.musicInfo
-    ? [item.musicInfo.song_name, item.musicInfo.artist_name].filter(Boolean).join(' — ')
-    : '';
-  const fields = {
-    ShortCode: item.shortCode,
-    Creador: item.ownerUsername || '',
-    URL: item.url || '',
-    Caption: item.caption || '',
-    'Fecha publicación': item.timestamp || null,
-    Likes: item.likesCount ?? null,
-    Comentarios: item.commentsCount ?? null,
-    Views: item.videoViewCount ?? item.videoPlayCount ?? null,
-    'Duración (seg)': item.videoDuration ?? null,
-    Hashtags: (item.hashtags || []).map((h) => `#${h}`).join(' '),
-    Mentions: (item.mentions || []).join(' '),
-    Tipo: item.productType || item.type || '',
-    Música: music,
-    Thumbnail: item.displayUrl || '',
-    'Video URL': item.videoUrl || '',
-    'Scrapeado en': scrapedAtIso,
-  };
-  if (project) fields.Proyecto = project;
-  return fields;
-}
-
-// Inserta los reels nuevos de un conjunto de items y los transcribe. Asigna Proyecto según el
-// creador dueño (projectByUser). Devuelve { inserted, transcribed }.
+// Inserta los reels nuevos de un conjunto de items en Supabase (destino primario) y los
+// transcribe después de insertar (necesita el id de Supabase para guardar la transcripción).
+// Asigna Proyecto según el creador dueño (projectByUser). Devuelve { inserted, transcribed }.
 async function ingestReels(items, existing, startedAt, projectByUser) {
   const fresh = items.filter((it) => it.shortCode && !existing.has(it.shortCode));
   if (fresh.length === 0) return { inserted: 0, transcribed: 0, transcriptionByShort: new Map() };
 
-  const rows = fresh.map((it) =>
-    mapReel(it, startedAt, projectByUser.get((it.ownerUsername || '').toLowerCase()))
-  );
-  const created = await insertReels(rows);
-  rows.forEach((r) => existing.add(r.ShortCode));
+  const { synced, rehosted, idsByShortcode } = await syncReels(fresh, {
+    scrapedAtIso: startedAt,
+    projectByUser,
+  });
+  fresh.forEach((it) => existing.add(it.shortCode));
+  console.log(`[IG supabase] sincronizados=${synced} thumbnails_rehospedadas=${rehosted}`);
 
   let transcribed = 0;
   const transcriptionByShort = new Map();
   if (config.enableTranscription) {
-    const itemByShort = new Map(fresh.map((it) => [it.shortCode, it]));
-    for (const rec of created) {
-      const item = itemByShort.get(rec.shortCode);
-      if (!item?.audioUrl) continue;
+    for (const item of fresh) {
+      const id = idsByShortcode.get(item.shortCode);
+      if (!item.audioUrl || !id) continue;
       try {
         const text = await transcribeAudio(item.audioUrl);
         if (text) {
-          await updateReelTranscription(rec.id, text);
-          transcriptionByShort.set(rec.shortCode, text);
+          await updateRowById(config.igReelsTable, id, { transcripcion: text });
+          transcriptionByShort.set(item.shortCode, text);
           transcribed++;
         }
       } catch (e) {
-        console.error(`[IG transcripción ${rec.shortCode}] falló: ${e.message}`);
+        console.error(`[IG transcripción ${item.shortCode}] falló: ${e.message}`);
       }
     }
   }
 
-  // Espejo a Supabase (dashboard). Solo los reels nuevos → nunca pisa la capa de curación.
-  if (supabaseEnabled()) {
-    try {
-      const { synced, rehosted } = await syncReels(fresh, {
-        scrapedAtIso: startedAt,
-        projectByUser,
-        transcriptionByShort,
-      });
-      console.log(`[IG supabase] sincronizados=${synced} thumbnails_rehospedadas=${rehosted}`);
-    } catch (e) {
-      console.error(`[IG supabase] sync falló: ${e.message}`);
-    }
-  }
-
-  return { inserted: created.length, transcribed, transcriptionByShort };
+  return { inserted: synced, transcribed, transcriptionByShort };
 }
 
 export async function runScrape() {
@@ -91,7 +51,7 @@ export async function runScrape() {
     return { ok: true, message: 'No hay creadores activos.', creators: 0, inserted: 0, details: [] };
   }
 
-  const existing = await getExistingShortCodes();
+  const existing = await getExistingShortcodes();
   const projectByUser = new Map(creators.map((c) => [c.username.toLowerCase(), c.project]));
 
   // Dos grupos: nunca corridos (ventana amplia) y ya corridos (ventana corta).
@@ -144,7 +104,7 @@ export async function runScrapeInstagramUrl(url) {
   if (!/instagram\.com/i.test(clean)) {
     return { ok: false, error: 'URL de Instagram inválida', inserted: 0 };
   }
-  const existing = await getExistingShortCodes();
+  const existing = await getExistingShortcodes();
   let items;
   try {
     items = await scrapeInstagramUrl(clean);
@@ -206,7 +166,7 @@ export async function runScrapeInstagramCreator(usernameOrUrl) {
   if (!creator) {
     return { ok: false, error: `No se encontró el creador: ${usernameOrUrl}`, inserted: 0 };
   }
-  const existing = await getExistingShortCodes();
+  const existing = await getExistingShortcodes();
   const projectByUser = new Map([[creator.username.toLowerCase(), creator.project]]);
   let inserted = 0;
   let transcribed = 0;
