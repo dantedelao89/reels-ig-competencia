@@ -389,11 +389,12 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
       return;
     }
     const quien = result.canal || result.creador;
+    const fuenteNueva = result.canalNuevo || result.creadorNuevo;
     const msg =
       result.inserted > 0
         ? `✅ Agregado${quien ? ` (${quien})` : ''}: ${text}`
         : `ℹ️ Ya estaba en la base${quien ? ` (${quien})` : ''}: ${text}`;
-    await slackReply(responseUrl, msg);
+    await slackReply(responseUrl, fuenteNueva ? `${msg}\n🆕 ${quien} se agregó como fuente nueva a Fuentes.` : msg);
 
     // Transcripción: viene en el resultado si el item se acaba de scrapear; si ya existía
     // (inserted=0), se lee de Supabase.

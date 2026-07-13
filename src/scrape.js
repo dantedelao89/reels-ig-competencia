@@ -6,6 +6,7 @@ import { config } from './config.js';
 import {
   getActiveCreators,
   getCreatorByUsername,
+  createCreator,
   getExistingShortCodes,
   insertReels,
   updateCreatorLastRun,
@@ -161,7 +162,8 @@ export async function runScrapeInstagramUrl(url) {
   if (!items.length) {
     return { ok: true, inserted: 0, message: 'No se pudo extraer contenido de esa URL' };
   }
-  // Si el dueño ya es un creador nuestro, hereda su proyecto; si no, queda sin proyecto.
+  // Si el dueño ya es un creador nuestro, hereda su proyecto; si no, lo da de alta como fuente
+  // nueva (activa, sin proyecto) para que el próximo cron ya lo cubra solo.
   let projectByUser = new Map();
   try {
     const creators = await getActiveCreators();
@@ -169,8 +171,27 @@ export async function runScrapeInstagramUrl(url) {
   } catch (e) {
     console.error(`[IG url] no se pudo leer proyectos de creadores: ${e.message}`);
   }
-  const { inserted, transcribed, transcriptionByShort } = await ingestReels(items, existing, startedAt, projectByUser);
   const it = items[0];
+  let creadorNuevo = false;
+  if (it.ownerUsername) {
+    const key = it.ownerUsername.toLowerCase();
+    if (!projectByUser.has(key)) {
+      try {
+        const existing = await getCreatorByUsername(it.ownerUsername);
+        if (existing) {
+          projectByUser.set(key, existing.project);
+        } else {
+          const created = await createCreator(it.ownerUsername);
+          projectByUser.set(key, created.project);
+          creadorNuevo = true;
+          console.log(`[IG url] creador nuevo agregado a Fuentes: ${it.ownerUsername}`);
+        }
+      } catch (e) {
+        console.error(`[IG url] no se pudo dar de alta al creador ${it.ownerUsername}: ${e.message}`);
+      }
+    }
+  }
+  const { inserted, transcribed, transcriptionByShort } = await ingestReels(items, existing, startedAt, projectByUser);
   console.log(`[IG url] ${clean} shortCode=${it.shortCode} nuevo=${inserted} transcrito=${transcribed}`);
   return {
     ok: true,
@@ -180,6 +201,7 @@ export async function runScrapeInstagramUrl(url) {
     creador: it.ownerUsername || null,
     tipo: it.type || null,
     transcripcion: transcriptionByShort.get(it.shortCode) || null,
+    creadorNuevo,
   };
 }
 

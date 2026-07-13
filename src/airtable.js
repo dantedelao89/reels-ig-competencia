@@ -88,6 +88,16 @@ export async function updateCreatorLastRun(recordId, isoDate) {
   await base(config.creatorsTable).update(recordId, { 'Última corrida': isoDate });
 }
 
+// Da de alta un creador nuevo como fuente activa (lo dispara el scrape manual por URL cuando el
+// dueño del contenido todavía no era una fuente nuestra). Sin Proyecto: se puede asignar después.
+export async function createCreator(username) {
+  const recs = await base(config.creatorsTable).create(
+    [{ fields: { Username: username, Activo: true } }],
+    { typecast: true }
+  );
+  return { recordId: recs[0].id, username, resultsLimit: config.defaultResultsLimit, lastRun: null, project: '' };
+}
+
 // ---- YouTube (búsqueda por palabra clave) ----
 
 // Lee las búsquedas marcadas como Activo.
@@ -168,6 +178,23 @@ export async function getActiveChannels() {
 
 export async function updateChannelLastRun(recordId, isoDate) {
   await base(config.channelsTable).update(recordId, { 'Última corrida': isoDate });
+}
+
+// Da de alta un canal de YouTube nuevo como fuente activa (lo dispara el scrape manual por URL
+// cuando el canal todavía no era una fuente nuestra). Sin Proyecto: se puede asignar después.
+export async function createChannel(channelUrl) {
+  const recs = await base(config.channelsTable).create(
+    [{ fields: { Canal: channelUrl, Activo: true } }],
+    { typecast: true }
+  );
+  return {
+    recordId: recs[0].id,
+    channelUrl,
+    maxResults: config.youtubeDefaultMaxResults,
+    maxShorts: 0,
+    lastRun: null,
+    project: '',
+  };
 }
 
 // Busca un canal de YouTube por su URL (para el re-scrape manual de un solo canal).

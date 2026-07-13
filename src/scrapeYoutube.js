@@ -7,6 +7,7 @@ import {
   getActiveSearches,
   getActiveChannels,
   getChannelByUrl,
+  createChannel,
   getExistingVideoIds,
   insertVideos,
   updateSearchLastRun,
@@ -187,7 +188,8 @@ export async function runScrapeYoutubeVideo(videoUrl) {
   if (!items.length) {
     return { ok: true, inserted: 0, message: 'No se pudo extraer el video de esa URL' };
   }
-  // Si el canal ya es una fuente nuestra, hereda su proyecto.
+  // Si el canal ya es una fuente nuestra, hereda su proyecto; si no, lo da de alta como fuente
+  // nueva (activa, sin proyecto) para que el próximo cron ya lo cubra solo.
   let projByHandle = new Map();
   try {
     const channels = await getActiveChannels();
@@ -195,11 +197,28 @@ export async function runScrapeYoutubeVideo(videoUrl) {
   } catch (e) {
     console.error(`[YT url] no se pudo leer canales: ${e.message}`);
   }
-  const inserted = await ingestVideos(items, existing, startedAt, (it) => ({
-    project: projByHandle.get((it.channelUsername || '').toLowerCase()),
-    origin: it.channelUrl || url,
-  }));
   const it = items[0];
+  const handle = (it.channelUsername || handleFromUrl(it.channelUrl || '')).toLowerCase();
+  let canalNuevo = false;
+  if (handle && !projByHandle.has(handle) && it.channelUrl) {
+    try {
+      const existingChannel = await getChannelByUrl(it.channelUrl);
+      if (existingChannel) {
+        projByHandle.set(handle, existingChannel.project);
+      } else {
+        const created = await createChannel(it.channelUrl);
+        projByHandle.set(handle, created.project);
+        canalNuevo = true;
+        console.log(`[YT url] canal nuevo agregado a Fuentes: ${it.channelUrl}`);
+      }
+    } catch (e) {
+      console.error(`[YT url] no se pudo dar de alta al canal ${it.channelUrl}: ${e.message}`);
+    }
+  }
+  const inserted = await ingestVideos(items, existing, startedAt, (it2) => ({
+    project: projByHandle.get((it2.channelUsername || '').toLowerCase()),
+    origin: it2.channelUrl || url,
+  }));
   console.log(`[YT url] ${url} videoId=${it.id} nuevo=${inserted}`);
   return {
     ok: true,
@@ -207,6 +226,7 @@ export async function runScrapeYoutubeVideo(videoUrl) {
     videoId: it.id,
     titulo: it.title || null,
     canal: it.channelName || null,
+    canalNuevo,
     subtitulos: extractSubtitles(it.subtitles) || null,
   };
 }
