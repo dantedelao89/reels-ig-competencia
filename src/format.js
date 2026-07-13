@@ -1,17 +1,12 @@
 // Helpers de texto compartidos por el dashboard y el bot de Slack: ordenar una transcripción
 // "corrida" en párrafos legibles, y detectar si ya está en español (para no traducir de más).
 
-// Convierte una transcripción en párrafos: respeta párrafos ya existentes (doble salto de línea);
-// si no, parte en oraciones y agrupa de a varias por párrafo. Espejo de dashboard/lib/format.ts.
+// Convierte una transcripción en párrafos agrupando por oraciones. Ignora a propósito los saltos
+// de línea originales: los subtítulos traen un salto por línea de caption, no por párrafo real.
+// Espejo de dashboard/lib/format.ts.
 export function toParagraphs(text, sentencesPerPara = 3) {
   const trimmed = (text || '').trim();
   if (!trimmed) return [];
-  if (/\n\s*\n/.test(trimmed)) {
-    return trimmed
-      .split(/\n\s*\n+/)
-      .map((p) => p.replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
-  }
   const clean = trimmed.replace(/\s+/g, ' ');
   const sentences = clean.match(/[^.!?…]+[.!?…]+["'”’)\]]*|\S.*$/g) || [clean];
   const paras = [];

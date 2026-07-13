@@ -43,6 +43,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [translating, setTranslating] = useState(false);
   const [translateErr, setTranslateErr] = useState('');
   const [showTranslation, setShowTranslation] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -341,10 +342,32 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                       ↻ Re-transcribir
                     </button>
                   )}
+                  {transcripcion && !transcribing && (
+                    <button
+                      onClick={() => setExpanded((e) => !e)}
+                      className="text-xs text-muted hover:text-accent"
+                      title={expanded ? 'Colapsar' : 'Expandir para leer completa'}
+                    >
+                      {expanded ? '⤡ Colapsar' : '⤢ Expandir'}
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="flex-1 rounded-lg border border-line bg-gray-50 p-4 overflow-y-auto max-h-[52vh]">
+              <div
+                className={`flex-1 rounded-lg border border-line bg-gray-50 p-4 overflow-y-auto ${
+                  expanded ? 'fixed inset-4 z-[60] bg-white shadow-2xl max-h-none' : 'max-h-[52vh]'
+                }`}
+              >
+                {expanded && (
+                  <button
+                    onClick={() => setExpanded(false)}
+                    className="fixed top-6 right-6 z-[61] h-9 w-9 rounded-full bg-white border border-line shadow flex items-center justify-center text-gray-600 hover:text-gray-900"
+                    aria-label="Cerrar vista expandida"
+                  >
+                    ✕
+                  </button>
+                )}
                 {transcribing ? (
                   <div className="h-full flex flex-col items-center justify-center text-center text-muted py-10">
                     <div className="text-2xl mb-2 animate-pulse">✨</div>

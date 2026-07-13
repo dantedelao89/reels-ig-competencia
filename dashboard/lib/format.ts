@@ -23,18 +23,12 @@ export function fmtDateShort(iso: string | null): string {
   return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
-// Convierte una transcripción "corrida" en párrafos legibles: respeta párrafos ya existentes
-// (doble salto de línea); si no, parte en oraciones y agrupa de a varias por párrafo.
+// Convierte una transcripción "corrida" en párrafos legibles agrupando por oraciones. Ignora a
+// propósito los saltos de línea del texto original: los subtítulos de YouTube traen un salto por
+// cada línea de caption (no por párrafo), así que respetarlos deja bloques enormes o cortados mal.
 export function toParagraphs(text: string | null | undefined, sentencesPerPara = 3): string[] {
   const trimmed = (text || '').trim();
   if (!trimmed) return [];
-  // Ya viene con párrafos: respétalos (normalizando espacios internos).
-  if (/\n\s*\n/.test(trimmed)) {
-    return trimmed
-      .split(/\n\s*\n+/)
-      .map((p) => p.replace(/\s+/g, ' ').trim())
-      .filter(Boolean);
-  }
   const clean = trimmed.replace(/\s+/g, ' ');
   // Oraciones: texto hasta un . ! ? … (con posible cierre de comillas/paréntesis), o el resto final.
   const sentences = clean.match(/[^.!?…]+[.!?…]+["'”’)\]]*|\S.*$/g) || [clean];
