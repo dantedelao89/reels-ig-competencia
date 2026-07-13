@@ -58,7 +58,7 @@ export default function DashboardClient() {
   const [addUrlMsg, setAddUrlMsg] = useState('');
 
   const refreshStats = useCallback(() => {
-    fetch('/api/stats')
+    fetch('/api/stats', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => !d.error && setStats(d))
       .catch(() => {});
@@ -66,7 +66,7 @@ export default function DashboardClient() {
 
   useEffect(() => {
     refreshStats();
-    fetch('/api/facets')
+    fetch('/api/facets', { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => !d.error && setFacets(d))
       .catch(() => {});
@@ -98,7 +98,7 @@ export default function DashboardClient() {
         if (date.desde) params.set('desde', date.desde);
         if (date.hasta) params.set('hasta', date.hasta);
       }
-      const res = await fetch(`/api/content?${params}`);
+      const res = await fetch(`/api/content?${params}`, { cache: 'no-store' });
       const data = await res.json();
       setLoading(false);
       if (data.error) return;

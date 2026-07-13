@@ -54,7 +54,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     setTraduccion('');
     setShowTranslation(false);
     setTranslateErr('');
-    fetch(`/api/item?platform=${item.platform}&id=${item.id}`)
+    fetch(`/api/item?platform=${item.platform}&id=${item.id}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
         if (!alive || d.error) return;
