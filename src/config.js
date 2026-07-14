@@ -8,12 +8,6 @@ function required(name) {
 
 export const config = {
   apifyToken: required('APIFY_TOKEN'),
-  airtableToken: required('AIRTABLE_TOKEN'),
-  airtableBaseId: required('AIRTABLE_BASE_ID'),
-
-  // Nombres de tabla (overridables; defaults coinciden con la base "Benchmarking Dante")
-  creatorsTable: process.env.CREATORS_TABLE || 'Creadores',
-  reelsTable: process.env.REELS_TABLE || 'Reels',
 
   // Ejecución de actores Apify (compartido). Las corridas son secuenciales (1 a la vez), así que
   // nunca se excede el cupo de memoria de la cuenta (32 GB). Estos parámetros blindan el caso de
@@ -41,9 +35,6 @@ export const config = {
 
   // ---- YouTube (búsqueda por palabra clave y por canal) ----
   youtubeActorId: process.env.YT_ACTOR_ID || 'streamers/youtube-scraper',
-  searchesTable: process.env.YT_SEARCHES_TABLE || 'Búsquedas YT',
-  channelsTable: process.env.YT_CHANNELS_TABLE || 'Canales YT',
-  videosTable: process.env.YT_VIDEOS_TABLE || 'Videos YT',
   // Videos por búsqueda si la columna está vacía
   youtubeDefaultMaxResults: Number(process.env.YT_DEFAULT_MAX_RESULTS || 5),
   // Si una búsqueda/canal nunca se ha corrido, qué tan atrás traer
@@ -115,8 +106,6 @@ export const config = {
 
   // --- Pipeline Ads (Meta Ad Library vía apify/facebook-ads-scraper) ---
   enableAds: process.env.ENABLE_ADS !== 'false',
-  advertisersTable: process.env.ADVERTISERS_TABLE || 'Anunciantes',
-  adsTable: process.env.ADS_TABLE || 'Anuncios',
   adsBatchMaxResults: Number(process.env.ADS_BATCH_MAX_RESULTS || 30),
   // Ventana del cron diario de ads: solo anuncios recientes (el histórico completo se trae con
   // el botón manual "Scrapear ahora", que NO aplica ventana). Mantiene barato el costo diario.
