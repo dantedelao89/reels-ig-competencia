@@ -33,7 +33,7 @@ function normalizeBovi(b, inputUrl) {
     isActive: !!b.is_active,
     startDateFormatted: b.ad_delivery_start_date || null,
     endDateFormatted: b.ad_delivery_stop_date || null,
-    // Campos nuevos de bovi (los consumen los mappers de Airtable/Supabase).
+    // Campos nuevos de bovi (los consume el mapper de Supabase).
     daysActive: b.days_active ?? null,
     collationId: b.collation_id != null ? String(b.collation_id) : null,
     collationCount: b.collation_count ?? null,

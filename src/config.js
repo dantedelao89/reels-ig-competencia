@@ -81,8 +81,7 @@ export const config = {
   // este secreto (Basic Information → Signing Secret de la Slack App).
   slackSigningSecret: process.env.SLACK_SIGNING_SECRET || '',
 
-  // --- Espejo en Supabase (opcional): alimenta el dashboard de curación. ---
-  // Se activa solo si hay URL + service key. Nunca rompe el flujo de Airtable (errores se loguean).
+  // --- Supabase: destino primario del contenido scrapeado y fuente del dashboard de curación. ---
   supabaseUrl: process.env.SUPABASE_URL || '',
   supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
   igReelsTable: process.env.SUPABASE_IG_TABLE || 'ig_reels',

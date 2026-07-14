@@ -192,7 +192,7 @@ export async function runScrapeYoutubeVideo(videoUrl) {
 }
 
 // Búsqueda manual por palabra clave (ad-hoc, disparada desde DISECTA). No requiere que la búsqueda
-// exista en Airtable. Trae los videos recientes que matchean, ordenados por fecha, e ingesta lo nuevo.
+// exista como fuente guardada. Trae los videos recientes que matchean, ordenados por fecha, e ingesta lo nuevo.
 export async function runScrapeYoutubeSearch(query, opts = {}) {
   const startedAt = new Date().toISOString();
   const q = (query || '').trim();

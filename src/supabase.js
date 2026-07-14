@@ -115,8 +115,7 @@ export async function getRowByField(table, field, value, select = '*') {
   return data;
 }
 
-// IDs de anuncios ya presentes en Supabase (meta_ads). Sirve para deduplicar el sync de forma
-// independiente de Airtable: si un sync falló antes, un re-scrape sí reintenta (Airtable ya no bloquea).
+// IDs de anuncios ya presentes en Supabase (meta_ads). Dedup primario del pipeline de ads.
 export async function getSyncedAdIds() {
   if (!enabled) return new Set();
   const c = await getClient();
@@ -216,19 +215,6 @@ export async function syncAds(items, ctx = {}) {
   }
   const synced = await upsert(config.adsMetaAdsTable, rows, 'ad_id');
   return { synced, rehosted };
-}
-
-// Upsert directo de filas ya mapeadas (snake_case). Lo usa el backfill desde Airtable.
-export async function upsertReelRows(rows) {
-  return upsert(config.igReelsTable, rows, 'shortcode');
-}
-export async function upsertVideoRows(rows) {
-  return upsert(config.ytVideosTable, rows, 'video_id');
-}
-
-// Upsert genérico por tabla/columna única. Lo usan el backfill de Fuentes y src/sources.js.
-export async function upsertRows(table, rows, onConflict) {
-  return upsert(table, rows, onConflict);
 }
 
 // ----------------------------- Instagram -----------------------------
