@@ -74,6 +74,28 @@ async function getExistingColumn(table, column) {
   return ids;
 }
 
+// Videos sin subtítulos (para backfillSubtitles). Devuelve [{ recordId, videoId, url }].
+export async function getVideosWithoutSubtitles() {
+  if (!enabled) return [];
+  const c = await getClient();
+  const out = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await c
+      .from(config.ytVideosTable)
+      .select('id, video_id, url')
+      .or('subtitulos.is.null,subtitulos.eq.')
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    for (const r of data) {
+      if (r.video_id && r.url) out.push({ recordId: r.id, videoId: r.video_id, url: r.url });
+    }
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+
 // Actualiza campos de un row por id (lo usa la transcripción manual bajo demanda).
 export async function updateRowById(table, id, fields) {
   if (!enabled) return 0;

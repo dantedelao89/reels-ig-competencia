@@ -1,9 +1,10 @@
-// Backfill de subtítulos: rellena la columna Subtítulos de los videos ya guardados que están
-// vacíos (p. ej. insertados antes del fix). No duplica filas; solo actualiza la columna.
+// Backfill de subtítulos: rellena la columna subtitulos de los videos ya guardados en Supabase
+// que están vacíos (p. ej. insertados antes del fix). No duplica filas; solo actualiza la columna.
 
-import { getVideosWithoutSubtitles, updateVideoSubtitles } from './airtable.js';
+import { getVideosWithoutSubtitles, updateRowById } from './supabase.js';
 import { scrapeVideosByUrls } from './youtubeApify.js';
 import { extractSubtitles } from './scrapeYoutube.js';
+import { config } from './config.js';
 
 export async function backfillSubtitles() {
   const videos = await getVideosWithoutSubtitles();
@@ -19,7 +20,7 @@ export async function backfillSubtitles() {
       const text = textById.get(v.videoId);
       if (!text) continue;
       try {
-        await updateVideoSubtitles(v.recordId, text);
+        await updateRowById(config.ytVideosTable, v.recordId, { subtitulos: text });
         updated++;
       } catch (e) {
         console.error(`[backfill] no se pudo actualizar ${v.videoId}: ${e.message}`);
