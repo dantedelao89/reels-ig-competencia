@@ -1,8 +1,8 @@
 // Cliente Apify compartido + ejecución de actores con reintentos.
-// Las corridas se disparan SIEMPRE de una en una (el orquestador es secuencial), así que nunca
-// se corren actores en paralelo y no nos acercamos al tope de memoria de la cuenta (32 GB).
-// Aun así, si Apify rechaza una corrida porque el cupo de memoria está lleno (p. ej. porque hay
-// otros actores corriendo fuera de este sistema), esperamos y reintentamos en vez de fallar.
+// Las corridas pueden dispararse EN PARALELO (varios scrapes simultáneos desde DISECTA). El único
+// techo es el cupo de memoria de la cuenta Apify (32 GB): si Apify rechaza una corrida porque el
+// cupo está lleno, esperamos y reintentamos con backoff en vez de fallar. Así se aprovecha la
+// concurrencia sin nunca exceder la memoria.
 
 import { ApifyClient } from 'apify-client';
 import { config } from './config.js';

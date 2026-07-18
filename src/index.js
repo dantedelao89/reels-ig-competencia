@@ -44,33 +44,28 @@ async function runAll() {
   return result;
 }
 
-// Evita que el cron y un disparo manual corran a la vez (o dos crons solapados).
-let running = false;
+// Corridas simultáneas permitidas: NO se serializan. El único techo es el cupo de memoria de Apify,
+// que ya gestiona apifyRun.js (si Apify rechaza por memoria llena, espera y reintenta con backoff).
+// Estos contadores son solo para reportar cuántas corridas hay en curso (status), no bloquean.
+let activeRuns = 0;
 async function runGuarded(origen) {
-  if (running) {
-    console.log(`[${origen}] omitido: ya hay una corrida en curso`);
-    return { ok: false, error: 'Ya hay una corrida en curso' };
-  }
-  running = true;
+  activeRuns++;
+  console.log(`[${origen}] corrida iniciada (${activeRuns} en curso)`);
   try {
     return await runAll();
   } finally {
-    running = false;
+    activeRuns--;
   }
 }
 
-// Guard independiente para el pipeline de ads (puede correr en paralelo al orgánico).
-let runningAds = false;
+let activeAdsRuns = 0;
 async function runAdsGuarded(origen, opts = {}) {
-  if (runningAds) {
-    console.log(`[${origen}] ads omitido: ya hay una corrida de ads en curso`);
-    return { ok: false, error: 'Ya hay una corrida de ads en curso' };
-  }
-  runningAds = true;
+  activeAdsRuns++;
+  console.log(`[${origen}] corrida de ads iniciada (${activeAdsRuns} en curso)`);
   try {
     return await runScrapeAds(opts);
   } finally {
-    runningAds = false;
+    activeAdsRuns--;
   }
 }
 
@@ -546,12 +541,9 @@ app.post('/telegram/webhook', async (req, res) => {
   if (cmd === '/start' || cmd === '/help') {
     await tgSend(chatId, '🤖 *Reels IG Competencia*\n\n/scrape — disparar una corrida ahora\n/status — estado del servicio');
   } else if (cmd === '/status') {
-    await tgSend(chatId, running ? '⏳ Hay una corrida en curso.' : '✅ Listo. Sin corridas en curso.');
+    await tgSend(chatId, activeRuns > 0 ? `⏳ Hay ${activeRuns} corrida(s) en curso.` : '✅ Listo. Sin corridas en curso.');
   } else if (cmd === '/scrape') {
-    if (running) {
-      await tgSend(chatId, '⏳ Ya hay una corrida en curso, espera a que termine.');
-      return;
-    }
+    // Se permite disparar aunque ya haya una corrida: se ejecutan en paralelo (el techo es la memoria de Apify).
     await tgSend(chatId, '🔄 Iniciando scrape de la competencia… te aviso al terminar.');
     runGuarded('telegram')
       .then((r) => tgSend(chatId, formatResult(r)))
