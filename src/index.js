@@ -392,15 +392,33 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
   const responseUrl = req.body?.response_url;
   const isYt = /youtu\.?be/i.test(text);
   const isIg = /instagram\.com/i.test(text);
+  const isAd = /facebook\.com/i.test(text);
 
-  if (!text || (!isYt && !isIg)) {
+  if (!text || (!isYt && !isIg && !isAd)) {
     return res.json({
       response_type: 'ephemeral',
-      text: 'Uso: `/scrape <url de Instagram o YouTube>`',
+      text: 'Uso: `/scrape <url de Instagram, YouTube o Facebook>`',
     });
   }
 
   res.json({ response_type: 'in_channel', text: `🔄 Procesando ${text}…` });
+
+  // Ads (Facebook): sin transcripción, responde y termina aquí.
+  if (isAd) {
+    try {
+      const result = await runScrapeAdvertiserUrl(text);
+      if (result.ok === false) {
+        await slackReply(responseUrl, `❌ Error: ${result.error}`);
+        return;
+      }
+      const msg = `✅ ${result.inserted} anuncios nuevos de ${result.anunciante}`;
+      await slackReply(responseUrl, result.anuncianteNuevo ? `${msg}\n🆕 Se agregó como fuente nueva a Fuentes.` : msg);
+    } catch (err) {
+      console.error('Error en /slack/scrape (ads):', err);
+      await slackReply(responseUrl, `❌ Error: ${err.message}`);
+    }
+    return;
+  }
 
   try {
     const result = isYt ? await runScrapeYoutubeVideo(text) : await runScrapeInstagramUrl(text);

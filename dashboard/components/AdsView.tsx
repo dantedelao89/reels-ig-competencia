@@ -69,6 +69,11 @@ export default function AdsView() {
   const [scrapeUrl, setScrapeUrl] = useState('');
   const [scraping, setScraping] = useState(false);
   const [scrapeMsg, setScrapeMsg] = useState('');
+  // Agregar un anunciante NUEVO pegando cualquier link de Facebook (post, anuncio, página).
+  const [scrapeMode, setScrapeMode] = useState<'existente' | 'url'>('existente');
+  const [adUrl, setAdUrl] = useState('');
+  const [addingUrl, setAddingUrl] = useState(false);
+  const [addUrlMsg, setAddUrlMsg] = useState('');
 
   const refreshStats = useCallback(() => {
     fetch('/api/ads/stats', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setStats(d)).catch(() => {});
@@ -139,6 +144,33 @@ export default function AdsView() {
       setScrapeMsg('Error: ' + e.message);
     } finally {
       setScraping(false);
+    }
+  }
+
+  async function addAdvertiserByUrl() {
+    const u = adUrl.trim();
+    if (!u || addingUrl) return;
+    setAddingUrl(true);
+    setAddUrlMsg('');
+    try {
+      const res = await fetch('/api/scrape-ad-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: u }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'Error al agregar');
+      setAddUrlMsg(`✓ ${data.inserted} anuncios${data.anuncianteNuevo ? ' (anunciante nuevo)' : ''}`);
+      setAdUrl('');
+      refreshStats();
+      refreshFacets();
+      refreshAdvertisers();
+      setPage(1);
+      fetchPage(1, true);
+    } catch (e: any) {
+      setAddUrlMsg('Error: ' + e.message);
+    } finally {
+      setAddingUrl(false);
     }
   }
 
@@ -255,26 +287,59 @@ export default function AdsView() {
           {scrapeOpen && (
             <>
               <div className="fixed inset-0 z-20" onClick={() => setScrapeOpen(false)} />
-              <div className="absolute right-0 z-30 mt-1 w-72 bg-white border border-line rounded-xl shadow-lg p-3">
-                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Traer anuncios nuevos de:</div>
-                <select
-                  value={scrapeUrl}
-                  onChange={(e) => { setScrapeUrl(e.target.value); setScrapeMsg(''); }}
-                  className="w-full h-9 text-sm rounded-md border border-line bg-white px-2 mb-2"
-                >
-                  <option value="">— Anunciante —</option>
-                  {advList.map((a) => (
-                    <option key={a.url} value={a.url}>{a.name} ({a.adCount})</option>
-                  ))}
-                </select>
-                <button
-                  onClick={scrapeAdvertiser}
-                  disabled={!scrapeUrl || scraping}
-                  className="w-full h-9 text-sm rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {scraping ? 'Scrapeando…' : 'Scrapear'}
-                </button>
-                {scrapeMsg && <div className="text-xs text-muted mt-2">{scrapeMsg}</div>}
+              <div className="absolute right-0 z-30 mt-1 w-80 bg-white border border-line rounded-xl shadow-lg p-3">
+                <div className="flex items-center bg-gray-100 rounded-md p-0.5 text-xs mb-2 w-fit">
+                  <button onClick={() => setScrapeMode('existente')} className={`px-2.5 h-7 rounded ${scrapeMode === 'existente' ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>Anunciante existente</button>
+                  <button onClick={() => setScrapeMode('url')} className={`px-2.5 h-7 rounded ${scrapeMode === 'url' ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>＋ Por URL</button>
+                </div>
+
+                {scrapeMode === 'existente' ? (
+                  <>
+                    <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Traer anuncios nuevos de:</div>
+                    <select
+                      value={scrapeUrl}
+                      onChange={(e) => { setScrapeUrl(e.target.value); setScrapeMsg(''); }}
+                      className="w-full h-9 text-sm rounded-md border border-line bg-white px-2 mb-2"
+                    >
+                      <option value="">— Anunciante —</option>
+                      {advList.map((a) => (
+                        <option key={a.url} value={a.url}>{a.name} ({a.adCount})</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={scrapeAdvertiser}
+                      disabled={!scrapeUrl || scraping}
+                      className="w-full h-9 text-sm rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {scraping ? 'Scrapeando…' : 'Scrapear'}
+                    </button>
+                    {scrapeMsg && <div className="text-xs text-muted mt-2">{scrapeMsg}</div>}
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[11px] uppercase tracking-wide text-muted mb-2">
+                      Link de un post/anuncio/página de Facebook:
+                    </div>
+                    <input
+                      value={adUrl}
+                      onChange={(e) => { setAdUrl(e.target.value); setAddUrlMsg(''); }}
+                      onKeyDown={(e) => e.key === 'Enter' && addAdvertiserByUrl()}
+                      placeholder="https://www.facebook.com/…"
+                      className="w-full h-9 px-2 text-sm rounded-md border border-line bg-white mb-2"
+                    />
+                    <button
+                      onClick={addAdvertiserByUrl}
+                      disabled={!adUrl.trim() || addingUrl}
+                      className="w-full h-9 text-sm rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {addingUrl ? 'Agregando…' : 'Agregar'}
+                    </button>
+                    {addUrlMsg && <div className="text-xs text-muted mt-2">{addUrlMsg}</div>}
+                    <div className="text-[11px] text-muted mt-2">
+                      Si el anunciante no existe, se agrega solo a Fuentes.
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}
