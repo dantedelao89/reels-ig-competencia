@@ -304,10 +304,20 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
                 <button onClick={() => toggle(it.id)} className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-[5px] flex items-center justify-center text-[11px] ${sel ? 'bg-accent text-white' : 'bg-black/45 text-transparent group-hover:text-white/80'}`}>✓</button>
                 <button onClick={() => setDetail(it)} className="block w-full text-left">
                   <div className="relative w-full pt-[100%] bg-gray-200">
-                    {it.thumbnail && (
+                    {it.thumbnail ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={it.thumbnail} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-                    )}
+                    ) : it.videoUrl ? (
+                      // Anuncios de video sin thumbnail (bovi no da preview): usamos el primer frame
+                      // del video (R2). preload=metadata + #t fuerza a pintar ese frame como portada.
+                      <video
+                        src={`${it.videoUrl}#t=0.5`}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : null}
                     {it.videoUrl && (
                       <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/55 text-white flex items-center justify-center text-sm">▶</span>
                     )}
@@ -347,7 +357,7 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
                 return (
                   <tr key={it.id} className="border-t border-line hover:bg-gray-50">
                     <td className="p-2 text-center"><input type="checkbox" checked={selected.has(it.id)} onChange={() => toggle(it.id)} /></td>
-                    <td className="p-2"><div className="w-9 h-9 rounded bg-gray-200 overflow-hidden">{it.thumbnail && (/* eslint-disable-next-line @next/next/no-img-element */ <img src={it.thumbnail} alt="" className="w-full h-full object-cover" />)}</div></td>
+                    <td className="p-2"><div className="w-9 h-9 rounded bg-gray-200 overflow-hidden">{it.thumbnail ? (/* eslint-disable-next-line @next/next/no-img-element */ <img src={it.thumbnail} alt="" className="w-full h-full object-cover" />) : it.videoUrl ? (<video src={`${it.videoUrl}#t=0.5`} muted playsInline preload="metadata" className="w-full h-full object-cover" />) : null}</div></td>
                     <td className="p-2"><button onClick={() => setDetail(it)} className="block text-left hover:text-accent break-words" style={clamp2}>{cleanAdText(it.copy || it.titulo, '(sin copy)')}</button></td>
                     <td className="p-2 text-muted truncate">{cleanAdText(it.anunciante, '—')}</td>
                     <td className="p-2 tabular-nums">{it.diasCorriendo ?? '—'}</td>
