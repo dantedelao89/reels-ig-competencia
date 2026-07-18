@@ -6,6 +6,7 @@ import { ESTADO_STYLE } from '@/lib/estados';
 import { fmtDateShort, toParagraphs } from '@/lib/format';
 import FacetDropdown from './FacetDropdown';
 import { useToast } from './ui/Toast';
+import { useActivity } from './ui/Activity';
 import { CardGridSkeleton } from './ui/Skeleton';
 import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
@@ -76,6 +77,7 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<AdItem | null>(null);
   const toast = useToast();
+  const activity = useActivity();
 
   // Agregar/scrapear un anunciante pegando cualquier link de Facebook (post, anuncio, página).
   // Si ya existe, solo trae sus anuncios nuevos (dedup); si no, lo da de alta en Fuentes.
@@ -131,6 +133,7 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
     const u = adUrl.trim();
     if (!u || addingUrl) return;
     setAddingUrl(true);
+    const doneAct = activity.begin(`Scrapeando anuncio: ${u.slice(0, 40)}…`);
     try {
       const res = await fetch('/api/scrape-ad-url', {
         method: 'POST',
@@ -153,6 +156,7 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
       toast.error(e.message || 'No se pudo agregar');
     } finally {
       setAddingUrl(false);
+      doneAct();
     }
   }
 
@@ -460,6 +464,7 @@ function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => vo
 // ofrece transcribir con IA (baja el audio del video en R2 y lo transcribe). Espejo de DetailModal.
 function AdTranscription({ item }: { item: AdItem }) {
   const toast = useToast();
+  const activity = useActivity();
   const [transcripcion, setTranscripcion] = useState('');
   const [traduccion, setTraduccion] = useState('');
   const [showTranslation, setShowTranslation] = useState(false);
@@ -487,6 +492,7 @@ function AdTranscription({ item }: { item: AdItem }) {
 
   async function transcribe() {
     setTranscribing(true);
+    const doneAct = activity.begin(`Transcribiendo anuncio${item.anunciante ? `: ${item.anunciante}` : ''}…`);
     try {
       const res = await fetch('/api/transcribe', {
         method: 'POST',
@@ -501,11 +507,13 @@ function AdTranscription({ item }: { item: AdItem }) {
       toast.error(e.message || 'Falló la transcripción');
     } finally {
       setTranscribing(false);
+      doneAct();
     }
   }
 
   async function translate() {
     setTranslating(true);
+    const doneAct = activity.begin('Traduciendo transcripción…');
     try {
       const res = await fetch('/api/translate', {
         method: 'POST',
@@ -520,6 +528,7 @@ function AdTranscription({ item }: { item: AdItem }) {
       toast.error(e.message || 'Falló la traducción');
     } finally {
       setTranslating(false);
+      doneAct();
     }
   }
 

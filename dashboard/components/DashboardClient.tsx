@@ -12,6 +12,7 @@ import DetailModal from './DetailModal';
 import SourcesManager from './SourcesManager';
 import AdsView from './AdsView';
 import { useToast } from './ui/Toast';
+import { useActivity } from './ui/Activity';
 import { CardGridSkeleton } from './ui/Skeleton';
 import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
@@ -33,6 +34,7 @@ const PAGE_SIZE = 40;
 
 export default function DashboardClient() {
   const toast = useToast();
+  const activity = useActivity();
   const [stats, setStats] = useState<Stats | null>(null);
   const [platform, setPlatform] = useState('all');
   const [estado, setEstado] = useState('');
@@ -59,6 +61,9 @@ export default function DashboardClient() {
   const [detail, setDetail] = useState<ContentItem | null>(null);
   const [section, setSection] = useState<'contenido' | 'fuentes'>('contenido');
   const [mode, setMode] = useState<'organico' | 'ads'>('organico');
+  // hydrated = ya restauramos la navegación guardada. Hasta entonces no persistimos, para no pisar
+  // lo guardado con los valores por defecto en el primer render.
+  const [hydrated, setHydrated] = useState(false);
 
   // Estado + stats del pipeline de Ads viven aquí (no dentro de AdsView) para que el sidebar los
   // muestre igual que el pipeline de Orgánico. Así ambas vistas comparten el mismo patrón de navegación.
@@ -77,6 +82,30 @@ export default function DashboardClient() {
   // Agregar contenido ad-hoc pegando una URL de Instagram/YouTube. El feedback va por toast.
   const [igUrl, setIgUrl] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
+
+  // Restaura la navegación (Orgánico/Ads + sección + filtro de pipeline) al recargar la página, para
+  // que el usuario aterrice donde estaba en vez de volver siempre a Orgánico.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('disecta.nav');
+      if (raw) {
+        const nav = JSON.parse(raw);
+        if (nav.mode === 'ads' || nav.mode === 'organico') setMode(nav.mode);
+        if (nav.section === 'fuentes' || nav.section === 'contenido') setSection(nav.section);
+        if (typeof nav.estado === 'string') setEstado(nav.estado);
+        if (typeof nav.adsEstado === 'string') setAdsEstado(nav.adsEstado);
+      }
+    } catch {}
+    setHydrated(true);
+  }, []);
+
+  // Persiste la navegación cada vez que cambia (solo después de restaurar).
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem('disecta.nav', JSON.stringify({ mode, section, estado, adsEstado }));
+    } catch {}
+  }, [hydrated, mode, section, estado, adsEstado]);
 
   const refreshStats = useCallback(() => {
     fetch('/api/stats', { cache: 'no-store' })
@@ -206,6 +235,7 @@ export default function DashboardClient() {
       return;
     }
     setAddingUrl(true);
+    const doneAct = activity.begin(`Scrapeando ${isYt ? 'YouTube' : 'Instagram'}: ${u.slice(0, 40)}…`);
     try {
       const res = await fetch(isYt ? '/api/scrape-yt-url' : '/api/scrape-ig-url', {
         method: 'POST',
@@ -228,6 +258,7 @@ export default function DashboardClient() {
       toast.error(e.message || 'No se pudo agregar');
     } finally {
       setAddingUrl(false);
+      doneAct();
     }
   }
 

@@ -5,6 +5,7 @@ import type { ContentItem, Estado } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
 import { fmtNum, fmtDateShort, toParagraphs } from '@/lib/format';
 import { useToast } from './ui/Toast';
+import { useActivity } from './ui/Activity';
 import ProgressBar from './ui/ProgressBar';
 import Spinner from './ui/Spinner';
 
@@ -18,6 +19,7 @@ interface Props {
 
 export default function DetailModal({ item, onClose, onEstado, onSaveProduction, onUploaded }: Props) {
   const toast = useToast();
+  const activity = useActivity();
   const [tab, setTab] = useState<'detalle' | 'miversion'>('detalle');
 
   const [guion, setGuion] = useState(item.miGuion || '');
@@ -121,6 +123,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
 
   async function transcribe() {
     setTranscribing(true);
+    const doneAct = activity.begin(`Transcribiendo${item.creador ? ` @${item.creador}` : ''}…`);
     try {
       const res = await fetch('/api/transcribe', {
         method: 'POST',
@@ -136,11 +139,13 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       toast.error(err.message || 'Falló la transcripción');
     } finally {
       setTranscribing(false);
+      doneAct();
     }
   }
 
   async function translate() {
     setTranslating(true);
+    const doneAct = activity.begin('Traduciendo transcripción…');
     try {
       const res = await fetch('/api/translate', {
         method: 'POST',
@@ -155,6 +160,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       toast.error(err.message || 'Falló la traducción');
     } finally {
       setTranslating(false);
+      doneAct();
     }
   }
 
@@ -162,6 +168,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     if (!videoId) return;
     setSearchingVar(true);
     setVarMsg('');
+    const doneAct = activity.begin('Buscando variantes A/B…');
     try {
       const res = await fetch('/api/scrape-video', {
         method: 'POST',
@@ -176,6 +183,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       toast.error(err.message || 'No se pudo buscar variantes');
     } finally {
       setSearchingVar(false);
+      doneAct();
     }
   }
 

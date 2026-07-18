@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { ToastProvider } from '@/components/ui/Toast';
+import { ActivityProvider } from '@/components/ui/Activity';
 
 export const metadata: Metadata = {
   title: 'DISECTA — Espionaje',
@@ -13,7 +14,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body>
         <ErrorBoundary>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <ActivityProvider>{children}</ActivityProvider>
+          </ToastProvider>
         </ErrorBoundary>
       </body>
     </html>

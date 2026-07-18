@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP de Railway — arquitectura e infografía</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css">
+<style>
+  :root{
+    --color-background-primary:#ffffff; --color-background-secondary:#f3f3f1; --color-background-tertiary:#e9e9e6;
+    --color-background-info:#e6f1fb; --color-background-success:#e4f3e9; --color-background-warning:#faeeda; --color-background-danger:#fcebeb;
+    --color-text-primary:#1a1a18; --color-text-secondary:#6b6b66; --color-text-tertiary:#9a9a94;
+    --color-text-info:#185fa5; --color-text-success:#1d7a4d; --color-text-warning:#854f0b; --color-text-danger:#a32d2d;
+    --color-border-tertiary:rgba(0,0,0,0.12); --color-border-secondary:rgba(0,0,0,0.22); --color-border-info:#378add;
+    --border-radius-md:8px; --border-radius-lg:12px;
+    --font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f6f7f9;color:var(--color-text-primary);font-family:var(--font-sans);line-height:1.5;-webkit-font-smoothing:antialiased;padding:24px 16px}
+  h1{font-size:22px;font-weight:500;margin:0}
+  h2{font-size:18px;font-weight:500}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .sheet{max-width:780px;margin:0 auto 28px;background:transparent}
+  .ti{font-size:16px;line-height:1;vertical-align:-2px}
+</style>
+</head>
+<body>
+
+<div class="sheet">
+<!-- ============ DIAGRAMA DE ARQUITECTURA ============ -->
+<div style="padding:0.5rem 0; max-width:760px; margin:0 auto;">
+  <h2 style="text-align:center; margin:0 0 1rem;">Tu arquitectura en Railway</h2>
+  <div style="border:1.5px dashed var(--color-border-secondary); border-radius:var(--border-radius-lg); padding:1rem; margin-bottom:1rem;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <i class="ti ti-box" style="font-size:18px; color:var(--color-text-secondary);"></i>
+      <span style="font-size:13px; font-weight:500;">Proyecto: invigorating-elegance</span>
+      <span style="font-size:11px; color:var(--color-text-tertiary);">(el contenedor — agrupa todo)</span>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px;">
+      <div style="background:var(--color-background-primary); border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-md); padding:0.9rem;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <div style="width:30px; height:30px; border-radius:8px; background:var(--color-background-warning); display:flex; align-items:center; justify-content:center;"><i class="ti ti-robot" style="font-size:17px; color:var(--color-text-warning);"></i></div>
+          <div><div style="font-size:14px; font-weight:500;">Servicio: scraper</div><div style="font-size:11px; color:var(--color-text-tertiary);">reels-ig-competencia</div></div>
+        </div>
+        <div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:8px;">Corre el cron diario, scrapea IG/YT y guarda los datos. Sin interfaz.</div>
+        <div style="font-size:11px; color:var(--color-text-tertiary); margin-bottom:3px;">Construye desde: raíz del repo</div>
+        <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+          <span style="font-size:10px; background:var(--color-background-secondary); padding:2px 6px; border-radius:5px;">APIFY_TOKEN</span>
+          <span style="font-size:10px; background:var(--color-background-secondary); padding:2px 6px; border-radius:5px;">AIRTABLE_TOKEN</span>
+          <span style="font-size:10px; background:var(--color-background-secondary); padding:2px 6px; border-radius:5px;">OPENROUTER</span>
+        </div>
+      </div>
+      <div style="background:var(--color-background-primary); border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-md); padding:0.9rem;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <div style="width:30px; height:30px; border-radius:8px; background:var(--color-background-info); display:flex; align-items:center; justify-content:center;"><i class="ti ti-layout-dashboard" style="font-size:17px; color:var(--color-text-info);"></i></div>
+          <div><div style="font-size:14px; font-weight:500;">Servicio: dashboard</div><div style="font-size:11px; color:var(--color-text-tertiary);">dashboard</div></div>
+        </div>
+        <div style="font-size:12px; color:var(--color-text-secondary); margin-bottom:8px;">La web Next.js para ver y curar. Tiene interfaz y dominio propio.</div>
+        <div style="font-size:11px; color:var(--color-text-tertiary); margin-bottom:3px;">Construye desde: carpeta dashboard/</div>
+        <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+          <span style="font-size:10px; background:var(--color-background-secondary); padding:2px 6px; border-radius:5px;">DASHBOARD_PASSWORD</span>
+          <span style="font-size:10px; background:var(--color-background-secondary); padding:2px 6px; border-radius:5px;">SESSION_SECRET</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div style="text-align:center; color:var(--color-text-tertiary); margin:4px 0;"><i class="ti ti-arrows-down-up" style="font-size:18px;"></i></div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+    <div style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:0.8rem; text-align:center;">
+      <i class="ti ti-database" style="font-size:20px; color:var(--color-text-success);"></i>
+      <div style="font-size:13px; font-weight:500; margin-top:4px;">Supabase (base de datos)</div>
+      <div style="font-size:11px; color:var(--color-text-secondary); margin-top:3px;">El scraper <b style="font-weight:500;">escribe</b> · el dashboard <b style="font-weight:500;">lee</b>. Aquí colaboran.</div>
+    </div>
+    <div style="background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:0.8rem; text-align:center;">
+      <i class="ti ti-photo" style="font-size:20px; color:var(--color-text-success);"></i>
+      <div style="font-size:13px; font-weight:500; margin-top:4px;">Cloudflare R2 (imágenes)</div>
+      <div style="font-size:11px; color:var(--color-text-secondary); margin-top:3px;">El scraper sube thumbnails · el dashboard las muestra.</div>
+    </div>
+  </div>
+  <div style="font-size:11px; color:var(--color-text-tertiary); text-align:center; margin-top:10px;">Cada servicio tiene SUS propias variables y SU propio dominio. No se hablan directo — colaboran a través de Supabase y R2.</div>
+</div>
+</div>
+
+<div class="sheet">
+<!-- ============ INFOGRAFÍA LOCAL VS REMOTO ============ -->
+<div style="padding:0.5rem 0; max-width:760px; margin:0 auto;">
+  <div style="text-align:center; margin-bottom:1.25rem;">
+    <div style="display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--color-text-secondary); border:0.5px solid var(--color-border-tertiary); border-radius:999px; padding:4px 12px; margin-bottom:10px;">
+      <i class="ti ti-plug-connected" style="font-size:14px;"></i> Guía visual
+    </div>
+    <h1 style="margin:0 0 6px;">MCP de Railway: local vs remoto</h1>
+    <p style="font-size:14px; color:var(--color-text-secondary); margin:0 auto; max-width:560px;">El MCP es el puente que deja a un agente de IA operar tu Railway (desplegar, ver logs, cambiar variables). Hay dos formas de conectarlo.</p>
+  </div>
+
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px; margin-bottom:1.25rem;">
+    <div style="background:var(--color-background-primary); border:2px solid var(--color-border-info); border-radius:var(--border-radius-lg); padding:1rem 1.1rem; position:relative;">
+      <div style="position:absolute; top:-10px; left:16px; background:var(--color-background-info); color:var(--color-text-info); font-size:11px; padding:3px 10px; border-radius:var(--border-radius-md);">Recomendado para nosotros</div>
+      <div style="display:flex; align-items:center; gap:10px; margin:6px 0 10px;">
+        <div style="width:40px; height:40px; border-radius:10px; background:var(--color-background-info); display:flex; align-items:center; justify-content:center;"><i class="ti ti-device-laptop" style="font-size:21px; color:var(--color-text-info);"></i></div>
+        <div><div style="font-size:17px; font-weight:500;">Local</div><div style="font-size:12px; color:var(--color-text-secondary);">Corre en tu máquina, vía el CLI</div></div>
+      </div>
+      <p style="font-size:13px; color:var(--color-text-secondary); margin:0 0 10px;">El agente usa el CLI de Railway que ya tienes instalado. Más poder, menos fricción de login.</p>
+      <code style="display:block; font-size:12px; background:var(--color-background-secondary); padding:7px 9px; border-radius:8px;">railway setup agent</code>
+    </div>
+    <div style="background:var(--color-background-primary); border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-lg); padding:1rem 1.1rem;">
+      <div style="display:flex; align-items:center; gap:10px; margin:6px 0 10px;">
+        <div style="width:40px; height:40px; border-radius:10px; background:var(--color-background-secondary); display:flex; align-items:center; justify-content:center;"><i class="ti ti-cloud" style="font-size:21px; color:var(--color-text-secondary);"></i></div>
+        <div><div style="font-size:17px; font-weight:500;">Remoto</div><div style="font-size:12px; color:var(--color-text-secondary);">Hospedado por Railway en la nube</div></div>
+      </div>
+      <p style="font-size:13px; color:var(--color-text-secondary); margin:0 0 10px;">El agente se conecta a un endpoint de Railway. Sin instalar nada local.</p>
+      <code style="display:block; font-size:12px; background:var(--color-background-secondary); padding:7px 9px; border-radius:8px;">railway setup agent --remote</code>
+    </div>
+  </div>
+
+  <div style="background:var(--color-background-secondary); border-radius:var(--border-radius-lg); padding:1rem 1.1rem; margin-bottom:1.25rem;">
+    <div style="font-size:13px; font-weight:500; margin-bottom:12px; display:flex; align-items:center; gap:7px;"><i class="ti ti-route" style="font-size:16px; color:var(--color-text-info);"></i> ¿Cuál elegir? Flujo de decisión</div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; align-items:center; gap:10px; background:var(--color-background-primary); border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-md); padding:9px 11px;">
+        <span style="font-size:13px; flex:1;">¿Necesitas <b style="font-weight:500;">logs, variables o dominios</b> desde el agente?</span>
+        <i class="ti ti-arrow-right" style="font-size:15px; color:var(--color-text-tertiary);"></i>
+        <span style="font-size:12px; font-weight:500; color:var(--color-text-info); background:var(--color-background-info); padding:3px 10px; border-radius:6px;">Local</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; background:var(--color-background-primary); border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-md); padding:9px 11px;">
+        <span style="font-size:13px; flex:1;">¿Quieres <b style="font-weight:500;">cero instalación</b> y tokens revocables?</span>
+        <i class="ti ti-arrow-right" style="font-size:15px; color:var(--color-text-tertiary);"></i>
+        <span style="font-size:12px; font-weight:500; color:var(--color-text-secondary); background:var(--color-background-tertiary); padding:3px 10px; border-radius:6px;">Remoto</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; background:var(--color-background-primary); border:0.5px solid var(--color-border-tertiary); border-radius:var(--border-radius-md); padding:9px 11px;">
+        <span style="font-size:13px; flex:1;">¿Quieres un <b style="font-weight:500;">agente de IA</b> que analice logs y depure?</span>
+        <i class="ti ti-arrow-right" style="font-size:15px; color:var(--color-text-tertiary);"></i>
+        <span style="font-size:12px; font-weight:500; color:var(--color-text-secondary); background:var(--color-background-tertiary); padding:3px 10px; border-radius:6px;">Remoto</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:var(--color-background-secondary); border-radius:var(--border-radius-lg); padding:0.9rem 1.1rem; margin-bottom:1.25rem;">
+    <div style="font-size:13px; font-weight:500; margin-bottom:10px;">Cobertura de las herramientas que usamos a diario</div>
+    <div style="display:grid; grid-template-columns:1fr auto auto; gap:7px 14px; font-size:13px; align-items:center;">
+      <div style="font-size:11px; color:var(--color-text-tertiary);"></div><div style="font-size:11px; color:var(--color-text-tertiary); text-align:center;">Local</div><div style="font-size:11px; color:var(--color-text-tertiary); text-align:center;">Remoto</div>
+      <div>Ver logs de build y deploy</div><div style="text-align:center; color:var(--color-text-success);"><i class="ti ti-check"></i></div><div style="text-align:center; color:var(--color-text-danger);"><i class="ti ti-x"></i></div>
+      <div>Setear variables de entorno</div><div style="text-align:center; color:var(--color-text-success);"><i class="ti ti-check"></i></div><div style="text-align:center; color:var(--color-text-danger);"><i class="ti ti-x"></i></div>
+      <div>Configurar dominios</div><div style="text-align:center; color:var(--color-text-success);"><i class="ti ti-check"></i></div><div style="text-align:center; color:var(--color-text-danger);"><i class="ti ti-x"></i></div>
+      <div>Redeploy de servicios</div><div style="text-align:center; color:var(--color-text-success);"><i class="ti ti-check"></i></div><div style="text-align:center; color:var(--color-text-success);"><i class="ti ti-check"></i></div>
+      <div>Agente de IA para depurar</div><div style="text-align:center; color:var(--color-text-tertiary);"><i class="ti ti-minus"></i></div><div style="text-align:center; color:var(--color-text-success);"><i class="ti ti-check"></i></div>
+    </div>
+  </div>
+
+  <div style="background:var(--color-background-info); border-radius:var(--border-radius-lg); padding:1rem 1.1rem; display:flex; gap:12px; align-items:flex-start;">
+    <i class="ti ti-bulb" style="font-size:22px; color:var(--color-text-info); margin-top:2px;"></i>
+    <div>
+      <div style="font-size:14px; font-weight:500; color:var(--color-text-info); margin-bottom:3px;">Nuestra elección: el MCP local</div>
+      <div style="font-size:13px; color:var(--color-text-info);">Usamos mucho <b style="font-weight:500;">logs, variables y dominios</b>, y eso solo vive en el local. El único pendiente es <b style="font-weight:500;">reiniciar Claude Code</b> para que tome el token fresco del CLI. El remoto lo dejamos como extra por su agente de IA de depuración.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

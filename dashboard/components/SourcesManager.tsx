@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SOURCE_DEFS, SOURCE_ORDER, ADS_SOURCE_ORDER, SourceType, SourceRecord, normalizeKey } from '@/lib/sources';
 import { fmtDateShort } from '@/lib/format';
 import { useToast } from './ui/Toast';
+import { useActivity } from './ui/Activity';
 import { RowSkeleton } from './ui/Skeleton';
 import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
@@ -73,6 +74,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     setType(order[0]);
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const toast = useToast();
+  const activity = useActivity();
   const keyInputRef = useRef<HTMLInputElement>(null);
   const [records, setRecords] = useState<SourceRecord[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
@@ -97,6 +99,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
         ? '/api/scrape-search'
         : '/api/scrape-ad';
     const unidad = type === 'ig' ? 'reels' : type === 'fb_advertiser' ? 'anuncios' : 'videos';
+    const doneAct = activity.begin(`Scrapeando ${unidad}: ${row.key.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}…`);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -110,6 +113,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       toast.error(e.message || 'No se pudo scrapear');
     } finally {
       setScrapingId('');
+      doneAct();
     }
   }
 
