@@ -66,7 +66,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             role="status"
-            className={`flex items-start gap-2 px-3.5 py-2.5 rounded-lg border shadow-sm text-sm animate-[toast-in_180ms_ease-out] ${STYLES[t.kind]}`}
+            className={`flex items-start gap-2 px-3.5 py-2.5 rounded-lg border shadow-sm text-sm animate-toast-in ${STYLES[t.kind]}`}
           >
             <span className="shrink-0 leading-5" aria-hidden="true">{ICONS[t.kind]}</span>
             <span className="flex-1 break-words leading-5">{t.message}</span>

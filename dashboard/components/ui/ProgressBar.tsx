@@ -13,7 +13,7 @@ export default function ProgressBar({ value, className = '' }: Props) {
     <div className={`h-1.5 w-full rounded-full bg-gray-200 overflow-hidden ${className}`}>
       <div
         className={`h-full bg-accent rounded-full transition-[width] duration-200 ease-out ${
-          indeterminate ? 'animate-[progress-indet_1.1s_ease-in-out_infinite]' : ''
+          indeterminate ? 'animate-progress-indet' : ''
         }`}
         style={indeterminate ? undefined : { width: `${pct}%` }}
       />
