@@ -52,6 +52,20 @@ export default function DashboardClient() {
   const [section, setSection] = useState<'contenido' | 'fuentes'>('contenido');
   const [mode, setMode] = useState<'organico' | 'ads'>('organico');
 
+  // Estado + stats del pipeline de Ads viven aquí (no dentro de AdsView) para que el sidebar los
+  // muestre igual que el pipeline de Orgánico. Así ambas vistas comparten el mismo patrón de navegación.
+  const [adsEstado, setAdsEstado] = useState('');
+  const [adsStats, setAdsStats] = useState<{ total: number; activos: number; porEstado: Record<string, number> } | null>(null);
+  const refreshAdsStats = useCallback(() => {
+    fetch('/api/ads/stats', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => !d.error && setAdsStats(d))
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (mode === 'ads') refreshAdsStats();
+  }, [mode, refreshAdsStats]);
+
   // Agregar contenido ad-hoc pegando una URL de Instagram (reel/post/carrusel).
   const [igUrl, setIgUrl] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
@@ -208,9 +222,9 @@ export default function DashboardClient() {
   return (
     <div className="flex">
       <Sidebar
-        stats={stats}
-        estado={estado}
-        onEstado={setEstado}
+        stats={mode === 'ads' ? adsStats : stats}
+        estado={mode === 'ads' ? adsEstado : estado}
+        onEstado={mode === 'ads' ? setAdsEstado : setEstado}
         section={section}
         onSection={setSection}
         mode={mode}
@@ -222,7 +236,9 @@ export default function DashboardClient() {
 
       <main className="flex-1 min-w-0 px-4 md:px-6 py-5">
         {section === 'fuentes' && <SourcesManager mode={mode} />}
-        {section !== 'fuentes' && mode === 'ads' && <AdsView />}
+        {section !== 'fuentes' && mode === 'ads' && (
+          <AdsView estado={adsEstado} stats={adsStats} onStatsChange={refreshAdsStats} />
+        )}
         <div style={{ display: section === 'fuentes' || mode === 'ads' ? 'none' : undefined }}>
         <Topbar
           q={q}

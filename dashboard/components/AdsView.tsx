@@ -42,10 +42,14 @@ function cleanAdText(text: string | null, fallback: string): string {
   return t;
 }
 
-export default function AdsView() {
-  const [stats, setStats] = useState<{ total: number; activos: number; porEstado: Record<string, number> } | null>(null);
+interface AdsViewProps {
+  estado: string; // el filtro de pipeline vive en el sidebar (DashboardClient), llega como prop
+  stats: { total: number; activos: number; porEstado: Record<string, number> } | null;
+  onStatsChange: () => void; // refresca los conteos del sidebar tras un scrape / cambio de estado
+}
+
+export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) {
   const [facets, setFacets] = useState<{ anunciantes: any[]; proyectos: any[] } | null>(null);
-  const [estado, setEstado] = useState('');
   const [anunciantes, setAnunciantes] = useState<string[]>([]);
   const [proyectos, setProyectos] = useState<string[]>([]);
   const [activo, setActivo] = useState(''); // '', 'true', 'false'
@@ -55,7 +59,6 @@ export default function AdsView() {
   const [dir, setDir] = useState('desc');
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [scrapeOpen, setScrapeOpen] = useState(false);
 
   const [items, setItems] = useState<AdItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -64,31 +67,18 @@ export default function AdsView() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<AdItem | null>(null);
 
-  // Scrape individual de un anunciante (traer anuncios nuevos) desde la galería.
-  const [advList, setAdvList] = useState<{ url: string; name: string; adCount: number }[]>([]);
-  const [scrapeUrl, setScrapeUrl] = useState('');
-  const [scraping, setScraping] = useState(false);
-  const [scrapeMsg, setScrapeMsg] = useState('');
-  // Agregar un anunciante NUEVO pegando cualquier link de Facebook (post, anuncio, página).
-  const [scrapeMode, setScrapeMode] = useState<'existente' | 'url'>('existente');
+  // Agregar/scrapear un anunciante pegando cualquier link de Facebook (post, anuncio, página).
+  // Si ya existe, solo trae sus anuncios nuevos (dedup); si no, lo da de alta en Fuentes.
   const [adUrl, setAdUrl] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
   const [addUrlMsg, setAddUrlMsg] = useState('');
 
-  const refreshStats = useCallback(() => {
-    fetch('/api/ads/stats', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setStats(d)).catch(() => {});
-  }, []);
   const refreshFacets = useCallback(() => {
     fetch('/api/ads/facets', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setFacets(d)).catch(() => {});
   }, []);
-  const refreshAdvertisers = useCallback(() => {
-    fetch('/api/ads/advertisers', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setAdvList(d.advertisers || [])).catch(() => {});
-  }, []);
   useEffect(() => {
-    refreshStats();
     refreshFacets();
-    refreshAdvertisers();
-  }, [refreshStats, refreshFacets, refreshAdvertisers]);
+  }, [refreshFacets]);
   useEffect(() => {
     const t = setTimeout(() => setDq(q), 350);
     return () => clearTimeout(t);
@@ -120,33 +110,6 @@ export default function AdsView() {
       return n;
     });
 
-  async function scrapeAdvertiser() {
-    if (!scrapeUrl || scraping) return;
-    setScraping(true);
-    setScrapeMsg('');
-    try {
-      const res = await fetch('/api/scrape-ad', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: scrapeUrl }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al scrapear');
-      const name = advList.find((a) => a.url === scrapeUrl)?.name || 'anunciante';
-      setScrapeMsg(`✓ ${name}: ${data.inserted} anuncios nuevos`);
-      // Refresca la galería para que aparezcan los nuevos sin recargar.
-      refreshStats();
-      refreshFacets();
-      refreshAdvertisers();
-      setPage(1);
-      fetchPage(1, true);
-    } catch (e: any) {
-      setScrapeMsg('Error: ' + e.message);
-    } finally {
-      setScraping(false);
-    }
-  }
-
   async function addAdvertiserByUrl() {
     const u = adUrl.trim();
     if (!u || addingUrl) return;
@@ -162,9 +125,8 @@ export default function AdsView() {
       if (!res.ok || data.ok === false) throw new Error(data.error || 'Error al agregar');
       setAddUrlMsg(`✓ ${data.inserted} anuncios${data.anuncianteNuevo ? ' (anunciante nuevo)' : ''}`);
       setAdUrl('');
-      refreshStats();
+      onStatsChange();
       refreshFacets();
-      refreshAdvertisers();
       setPage(1);
       fetchPage(1, true);
     } catch (e: any) {
@@ -183,12 +145,11 @@ export default function AdsView() {
     });
     setSelected(new Set());
     setDetail(null);
-    refreshStats();
+    onStatsChange();
     fetchPage(1, true);
     setPage(1);
   }
 
-  const estadoRows = [{ key: '', label: 'Todo', count: stats?.total }, ...ESTADOS.map((e) => ({ key: e.key, label: e.label, count: stats?.porEstado?.[e.key] }))];
   const more = items.length < total;
 
   return (
@@ -202,22 +163,8 @@ export default function AdsView() {
         </div>
       </div>
 
-      {/* estado pills: SOLO el pipeline de curación (Activo/Inactivo vive en Filtros, es otra cosa). */}
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {estadoRows.map((r) => (
-          <button
-            key={r.key || 'all'}
-            onClick={() => setEstado(r.key)}
-            className={`h-8 px-3 text-xs rounded-full border ${
-              estado === r.key ? 'border-accent bg-accent-soft text-accent font-medium' : 'border-line bg-white text-gray-600'
-            }`}
-          >
-            {r.label} {r.count != null && <span className="text-muted">· {r.count}</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* toolbar: buscador siempre visible + Filtros (agrupa anunciante/proyecto/activo/orden) + Scrapear + vista */}
+      {/* toolbar: buscador + Filtros (anunciante/proyecto/activo/orden) + vista. El pipeline vive
+          en el sidebar (igual que Orgánico), así no hay dos sistemas de filtrado compitiendo. */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <div className="relative flex-1 min-w-[180px]">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en copy…" className="w-full h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent" />
@@ -277,78 +224,31 @@ export default function AdsView() {
           )}
         </div>
 
-        <div className="relative">
-          <button
-            onClick={() => setScrapeOpen((o) => !o)}
-            className="h-9 px-3 text-sm rounded-lg border border-line bg-white text-gray-700 inline-flex items-center gap-1.5"
-          >
-            ⚡ Scrapear <span className="text-[10px]">▾</span>
-          </button>
-          {scrapeOpen && (
-            <>
-              <div className="fixed inset-0 z-20" onClick={() => setScrapeOpen(false)} />
-              <div className="absolute right-0 z-30 mt-1 w-80 bg-white border border-line rounded-xl shadow-lg p-3">
-                <div className="flex items-center bg-gray-100 rounded-md p-0.5 text-xs mb-2 w-fit">
-                  <button onClick={() => setScrapeMode('existente')} className={`px-2.5 h-7 rounded ${scrapeMode === 'existente' ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>Anunciante existente</button>
-                  <button onClick={() => setScrapeMode('url')} className={`px-2.5 h-7 rounded ${scrapeMode === 'url' ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>＋ Por URL</button>
-                </div>
-
-                {scrapeMode === 'existente' ? (
-                  <>
-                    <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Traer anuncios nuevos de:</div>
-                    <select
-                      value={scrapeUrl}
-                      onChange={(e) => { setScrapeUrl(e.target.value); setScrapeMsg(''); }}
-                      className="w-full h-9 text-sm rounded-md border border-line bg-white px-2 mb-2"
-                    >
-                      <option value="">— Anunciante —</option>
-                      {advList.map((a) => (
-                        <option key={a.url} value={a.url}>{a.name} ({a.adCount})</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={scrapeAdvertiser}
-                      disabled={!scrapeUrl || scraping}
-                      className="w-full h-9 text-sm rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {scraping ? 'Scrapeando…' : 'Scrapear'}
-                    </button>
-                    {scrapeMsg && <div className="text-xs text-muted mt-2">{scrapeMsg}</div>}
-                  </>
-                ) : (
-                  <>
-                    <div className="text-[11px] uppercase tracking-wide text-muted mb-2">
-                      Link de un post/anuncio/página de Facebook:
-                    </div>
-                    <input
-                      value={adUrl}
-                      onChange={(e) => { setAdUrl(e.target.value); setAddUrlMsg(''); }}
-                      onKeyDown={(e) => e.key === 'Enter' && addAdvertiserByUrl()}
-                      placeholder="https://www.facebook.com/…"
-                      className="w-full h-9 px-2 text-sm rounded-md border border-line bg-white mb-2"
-                    />
-                    <button
-                      onClick={addAdvertiserByUrl}
-                      disabled={!adUrl.trim() || addingUrl}
-                      className="w-full h-9 text-sm rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {addingUrl ? 'Agregando…' : 'Agregar'}
-                    </button>
-                    {addUrlMsg && <div className="text-xs text-muted mt-2">{addUrlMsg}</div>}
-                    <div className="text-[11px] text-muted mt-2">
-                      Si el anunciante no existe, se agrega solo a Fuentes.
-                    </div>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
         <div className="flex border border-line rounded-lg overflow-hidden bg-white">
           <button onClick={() => setView('grid')} className={`px-3 h-9 text-sm ${view === 'grid' ? 'bg-gray-100' : ''}`}>▦</button>
           <button onClick={() => setView('table')} className={`px-3 h-9 text-sm border-l border-line ${view === 'table' ? 'bg-gray-100' : ''}`}>▤</button>
         </div>
+      </div>
+
+      {/* Barra fija "Agregar por URL" (mismo patrón que Orgánico): pega cualquier link de Facebook
+          — si el anunciante ya existe, trae sus anuncios nuevos; si no, lo da de alta en Fuentes. */}
+      <div className="flex flex-wrap items-center gap-2 mb-4 p-2.5 rounded-lg border border-line bg-gray-50">
+        <span className="text-xs font-medium text-gray-600 shrink-0">⚡ Agregar / scrapear por URL:</span>
+        <input
+          value={adUrl}
+          onChange={(e) => { setAdUrl(e.target.value); setAddUrlMsg(''); }}
+          onKeyDown={(e) => e.key === 'Enter' && addAdvertiserByUrl()}
+          placeholder="Link de un anuncio, post o página de Facebook"
+          className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
+        />
+        <button
+          onClick={addAdvertiserByUrl}
+          disabled={!adUrl.trim() || addingUrl}
+          className="h-9 px-4 text-sm rounded-lg bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {addingUrl ? 'Agregando…' : 'Agregar'}
+        </button>
+        {addUrlMsg && <span className="text-xs text-muted whitespace-nowrap">{addUrlMsg}</span>}
       </div>
 
       {selected.size > 0 && (
