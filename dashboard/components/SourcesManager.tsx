@@ -67,6 +67,83 @@ function ProjectSelect({
   );
 }
 
+// Selector de proyecto para una fila existente: permite elegir un proyecto o crear uno nuevo
+// (escribiéndolo). Confirma con Enter o al perder el foco; Escape cancela. onCommit hace el PATCH.
+function RowProjectSelect({
+  value,
+  projects,
+  onCommit,
+}: {
+  value: string | null;
+  projects: string[];
+  onCommit: (v: string) => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState('');
+  const opts = value && !projects.includes(value) ? [value, ...projects] : projects;
+
+  function commit() {
+    const v = draft.trim();
+    setCreating(false);
+    setDraft('');
+    if (v && v !== value) onCommit(v);
+  }
+
+  if (creating) {
+    return (
+      <div className="flex gap-1 items-center">
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') {
+              setCreating(false);
+              setDraft('');
+            }
+          }}
+          onBlur={commit}
+          placeholder="Nuevo proyecto"
+          className="w-full h-7 px-1.5 text-xs border border-line rounded bg-white outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          // preventDefault en mousedown para que el clic no dispare el onBlur (commit) antes de cancelar.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => {
+            setCreating(false);
+            setDraft('');
+          }}
+          className="h-7 px-1.5 text-xs border border-line rounded bg-white shrink-0"
+          title="Cancelar"
+        >
+          ↩
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value || ''}
+      onChange={(e) => {
+        if (e.target.value === '__new__') setCreating(true);
+        else onCommit(e.target.value);
+      }}
+      className="w-full h-8 px-1.5 text-xs border border-transparent hover:border-line focus:border-accent rounded outline-none bg-transparent"
+    >
+      <option value="">—</option>
+      {opts.map((p) => (
+        <option key={p} value={p}>
+          {p}
+        </option>
+      ))}
+      <option value="__new__">+ Nuevo proyecto…</option>
+    </select>
+  );
+}
+
 export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico' | 'ads' }) {
   const order = mode === 'ads' ? ADS_SOURCE_ORDER : SOURCE_ORDER;
   const [type, setType] = useState<SourceType>(order[0]);
@@ -233,9 +310,6 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     }
   }
 
-  function projOptions(current: string | null): string[] {
-    return current && !projects.includes(current) ? [current, ...projects] : projects;
-  }
 
   return (
     <div>
@@ -365,18 +439,11 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     )}
                   </td>
                   <td className="p-2">
-                    <select
-                      value={r.proyecto || ''}
-                      onChange={(e) => patch(r.id, { proyecto: e.target.value })}
-                      className="w-full h-8 px-1.5 text-xs border border-transparent hover:border-line focus:border-accent rounded outline-none bg-transparent"
-                    >
-                      <option value="">—</option>
-                      {projOptions(r.proyecto).map((p) => (
-                        <option key={p} value={p}>
-                          {p}
-                        </option>
-                      ))}
-                    </select>
+                    <RowProjectSelect
+                      value={r.proyecto}
+                      projects={projects}
+                      onCommit={(v) => patch(r.id, { proyecto: v })}
+                    />
                   </td>
                   <td className="p-2">
                     <input
