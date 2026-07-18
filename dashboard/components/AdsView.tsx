@@ -5,6 +5,11 @@ import { ESTADOS, Estado } from '@/lib/types';
 import { ESTADO_STYLE } from '@/lib/estados';
 import { fmtDateShort } from '@/lib/format';
 import FacetDropdown from './FacetDropdown';
+import { useToast } from './ui/Toast';
+import { CardGridSkeleton } from './ui/Skeleton';
+import EmptyState from './ui/EmptyState';
+import ErrorState from './ui/ErrorState';
+import AsyncButton from './ui/AsyncButton';
 
 export interface AdItem {
   id: string;
@@ -65,14 +70,16 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false); // ya llegó al menos una respuesta OK (para skeleton inicial)
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<AdItem | null>(null);
+  const toast = useToast();
 
   // Agregar/scrapear un anunciante pegando cualquier link de Facebook (post, anuncio, página).
   // Si ya existe, solo trae sus anuncios nuevos (dedup); si no, lo da de alta en Fuentes.
   const [adUrl, setAdUrl] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
-  const [addUrlMsg, setAddUrlMsg] = useState('');
 
   const refreshFacets = useCallback(() => {
     fetch('/api/ads/facets', { cache: 'no-store' }).then((r) => r.json()).then((d) => !d.error && setFacets(d)).catch(() => {});
@@ -88,14 +95,22 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
   const fetchPage = useCallback(
     async (pageNum: number, replace: boolean) => {
       setLoading(true);
-      const p = new URLSearchParams({ estado, q: dq, sort, dir, activo, page: String(pageNum), pageSize: String(PAGE_SIZE) });
-      if (anunciantes.length) p.set('anunciante', anunciantes.join(','));
-      if (proyectos.length) p.set('proyecto', proyectos.join(','));
-      const data = await (await fetch(`/api/ads?${p}`, { cache: 'no-store' })).json();
-      setLoading(false);
-      if (data.error) return;
-      setTotal(data.total);
-      setItems((prev) => (replace ? data.items : [...prev, ...data.items]));
+      if (replace) setLoadError(null);
+      try {
+        const p = new URLSearchParams({ estado, q: dq, sort, dir, activo, page: String(pageNum), pageSize: String(PAGE_SIZE) });
+        if (anunciantes.length) p.set('anunciante', anunciantes.join(','));
+        if (proyectos.length) p.set('proyecto', proyectos.join(','));
+        const res = await fetch(`/api/ads?${p}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || `Error ${res.status}`);
+        setTotal(data.total);
+        setItems((prev) => (replace ? data.items : [...prev, ...data.items]));
+        setLoaded(true);
+      } catch (e: any) {
+        if (replace) setLoadError(e?.message || 'No se pudo cargar');
+      } finally {
+        setLoading(false);
+      }
     },
     [estado, dq, sort, dir, activo, anunciantes, proyectos]
   );
@@ -115,7 +130,6 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
     const u = adUrl.trim();
     if (!u || addingUrl) return;
     setAddingUrl(true);
-    setAddUrlMsg('');
     try {
       const res = await fetch('/api/scrape-ad-url', {
         method: 'POST',
@@ -124,16 +138,18 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || 'Error al agregar');
-      if (data.message && data.inserted === 0) setAddUrlMsg(data.message);
-      else if (data.unico) setAddUrlMsg(data.inserted > 0 ? '✓ Video agregado' : 'ℹ️ Ese video ya estaba');
-      else setAddUrlMsg(`✓ ${data.inserted} anuncios${data.anuncianteNuevo ? ' (anunciante nuevo)' : ''}`);
+      let msg: string;
+      if (data.message && data.inserted === 0) msg = data.message;
+      else if (data.unico) msg = data.inserted > 0 ? 'Video agregado' : 'Ese video ya estaba en la base';
+      else msg = `${data.inserted} anuncios nuevos${data.anuncianteNuevo ? ' (anunciante nuevo)' : ''}`;
+      toast.success(msg);
       setAdUrl('');
       onStatsChange();
       refreshFacets();
       setPage(1);
       fetchPage(1, true);
     } catch (e: any) {
-      setAddUrlMsg('Error: ' + e.message);
+      toast.error(e.message || 'No se pudo agregar');
     } finally {
       setAddingUrl(false);
     }
@@ -238,19 +254,19 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
         <span className="text-xs font-medium text-gray-600 shrink-0">⚡ Agregar / scrapear por URL:</span>
         <input
           value={adUrl}
-          onChange={(e) => { setAdUrl(e.target.value); setAddUrlMsg(''); }}
+          onChange={(e) => setAdUrl(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addAdvertiserByUrl()}
           placeholder="Link de un anuncio, post o página de Facebook"
           className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
         />
-        <button
+        <AsyncButton
           onClick={addAdvertiserByUrl}
-          disabled={!adUrl.trim() || addingUrl}
-          className="h-9 px-4 text-sm rounded-lg bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={!adUrl.trim()}
+          loading={addingUrl}
+          loadingLabel="Agregando…"
         >
-          {addingUrl ? 'Agregando…' : 'Agregar'}
-        </button>
-        {addUrlMsg && <span className="text-xs text-muted whitespace-nowrap">{addUrlMsg}</span>}
+          Agregar
+        </AsyncButton>
       </div>
 
       {selected.size > 0 && (
@@ -264,6 +280,18 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
         </div>
       )}
 
+      {loadError && items.length === 0 ? (
+        <ErrorState message={loadError} onRetry={() => fetchPage(1, true)} />
+      ) : !loaded ? (
+        <CardGridSkeleton count={12} variant="ad" />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon="📢"
+          title="Sin anuncios"
+          description="Pega el link de un anuncio o página de Facebook en la barra de arriba, o agrega anunciantes en Fuentes."
+        />
+      ) : (
+      <>
       <div className="text-xs text-muted mb-2">{total.toLocaleString('es-MX')} resultados</div>
 
       {view === 'grid' ? (
@@ -333,11 +361,11 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
         </div>
       )}
 
-      {items.length === 0 && !loading && <div className="text-center text-muted text-sm py-16">Sin anuncios. Agrega anunciantes en Fuentes y corre un scrape.</div>}
-
       <div className="flex justify-center py-6">
         {more && <button onClick={() => { const n = page + 1; setPage(n); fetchPage(n, false); }} disabled={loading} className="h-10 px-5 text-sm rounded-lg border border-line bg-white">{loading ? 'Cargando…' : 'Cargar más'}</button>}
       </div>
+      </>
+      )}
 
       {detail && <AdDetail item={detail} onClose={() => setDetail(null)} onEstado={(e) => setEstadoFor([detail.id], e)} />}
     </div>

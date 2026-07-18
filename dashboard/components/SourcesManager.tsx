@@ -1,8 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { SOURCE_DEFS, SOURCE_ORDER, ADS_SOURCE_ORDER, SourceType, SourceRecord, normalizeKey } from '@/lib/sources';
 import { fmtDateShort } from '@/lib/format';
+import { useToast } from './ui/Toast';
+import { RowSkeleton } from './ui/Skeleton';
+import EmptyState from './ui/EmptyState';
+import ErrorState from './ui/ErrorState';
+import AsyncButton from './ui/AsyncButton';
 
 // Desplegable de proyecto: lista los existentes + opción de escribir uno nuevo.
 function ProjectSelect({
@@ -67,23 +72,22 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
   useEffect(() => {
     setType(order[0]);
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toast = useToast();
+  const keyInputRef = useRef<HTMLInputElement>(null);
   const [records, setRecords] = useState<SourceRecord[]>([]);
   const [projects, setProjects] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState('');
+  const [loadErr, setLoadErr] = useState('');
 
   const [newKey, setNewKey] = useState('');
   const [newProyecto, setNewProyecto] = useState('');
   const [newNum, setNewNum] = useState('');
   const [adding, setAdding] = useState(false);
   const [scrapingId, setScrapingId] = useState('');
-  const [scrapeMsg, setScrapeMsg] = useState('');
   const [filter, setFilter] = useState('');
 
   async function scrapeOne(row: SourceRecord) {
     setScrapingId(row.id);
-    setScrapeMsg('');
-    setErr('');
     const endpoint =
       type === 'yt_channel'
         ? '/api/scrape-channel'
@@ -101,9 +105,9 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al scrapear');
-      setScrapeMsg(`✓ ${row.key.replace(/^https?:\/\/(www\.)?/, '')}: ${data.inserted} ${unidad} nuevos`);
+      toast.success(`${data.inserted} ${unidad} nuevos de ${row.key.replace(/^https?:\/\/(www\.)?/, '')}`);
     } catch (e: any) {
-      setErr(e.message);
+      toast.error(e.message || 'No se pudo scrapear');
     } finally {
       setScrapingId('');
     }
@@ -113,14 +117,14 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
 
   const load = useCallback(async (t: SourceType) => {
     setLoading(true);
-    setErr('');
+    setLoadErr('');
     try {
       const res = await fetch(`/api/sources?type=${t}`, { cache: 'no-store' });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setRecords(data.records);
     } catch (e: any) {
-      setErr(e.message);
+      setLoadErr(e.message || 'No se pudo cargar');
       setRecords([]);
     } finally {
       setLoading(false);
@@ -154,11 +158,10 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     // Candado anti-duplicados en el cliente (feedback inmediato).
     const norm = normalizeKey(type, key);
     if (records.some((r) => normalizeKey(type, r.key) === norm)) {
-      setErr(`Ya existe "${key}" en ${def.label}.`);
+      toast.error(`Ya existe "${key}" en ${def.label}.`);
       return;
     }
     setAdding(true);
-    setErr('');
     try {
       const res = await fetch('/api/sources', {
         method: 'POST',
@@ -172,8 +175,9 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       setNewKey('');
       setNewProyecto('');
       setNewNum('');
+      toast.success('Fuente añadida');
     } catch (e: any) {
-      setErr(e.message);
+      toast.error(e.message || 'No se pudo añadir');
     } finally {
       setAdding(false);
     }
@@ -193,17 +197,31 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       )
     );
     if ('proyecto' in fields) rememberProject(fields.proyecto!);
-    await fetch('/api/sources', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, id, ...fields }),
-    }).catch(() => {});
+    try {
+      const res = await fetch('/api/sources', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, id, ...fields }),
+      });
+      if (!res.ok) throw new Error('No se pudo guardar el cambio');
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo guardar');
+      load(type); // revierte el cambio optimista releyendo del servidor
+    }
   }
 
   async function remove(id: string) {
     if (!confirm('¿Eliminar esta fuente?')) return;
+    const prev = records;
     setRecords((r) => r.filter((x) => x.id !== id));
-    await fetch(`/api/sources?type=${type}&id=${id}`, { method: 'DELETE' }).catch(() => {});
+    try {
+      const res = await fetch(`/api/sources?type=${type}&id=${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('No se pudo eliminar');
+      toast.success('Fuente eliminada');
+    } catch (e: any) {
+      setRecords(prev); // restaura si falló
+      toast.error(e.message || 'No se pudo eliminar');
+    }
   }
 
   function projOptions(current: string | null): string[] {
@@ -238,6 +256,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
         <div className="flex-1 min-w-[200px]">
           <label className="text-xs text-muted block mb-1">{def.keyLabel}</label>
           <input
+            ref={keyInputRef}
             value={newKey}
             onChange={(e) => setNewKey(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && add()}
@@ -258,17 +277,10 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
             className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
           />
         </div>
-        <button
-          onClick={add}
-          disabled={adding || !newKey.trim()}
-          className="h-9 px-4 text-sm rounded-md bg-ink text-white disabled:opacity-50"
-        >
-          {adding ? 'Añadiendo…' : 'Añadir'}
-        </button>
+        <AsyncButton onClick={add} disabled={!newKey.trim()} loading={adding} loadingLabel="Añadiendo…">
+          Añadir
+        </AsyncButton>
       </div>
-
-      {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
-      {scrapeMsg && <p className="text-sm text-green-700 mb-3">{scrapeMsg}</p>}
 
       {/* Buscador */}
       {records.length > 0 && (
@@ -290,11 +302,23 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
 
       {/* Lista */}
       {loading ? (
-        <div className="text-sm text-muted py-10 text-center">Cargando…</div>
+        <div className="border border-line rounded-lg overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <RowSkeleton key={i} columns={5} />
+          ))}
+        </div>
+      ) : loadErr ? (
+        <ErrorState message={loadErr} onRetry={() => load(type)} />
       ) : records.length === 0 ? (
-        <div className="text-sm text-muted py-10 text-center">Sin fuentes. Añade la primera arriba.</div>
+        <EmptyState
+          icon="➕"
+          title={`Aún no tienes ${def.label.toLowerCase()}`}
+          description="Agrega la primera fuente para que el scraper la incluya en la próxima corrida."
+          actionLabel="Agregar la primera"
+          onAction={() => keyInputRef.current?.focus()}
+        />
       ) : shown.length === 0 ? (
-        <div className="text-sm text-muted py-10 text-center">Nada coincide con “{filter}”.</div>
+        <EmptyState icon="🔍" title={`Nada coincide con “${filter}”`} description="Prueba con otro término." />
       ) : (
         <div className="border border-line rounded-lg overflow-hidden">
           <table className="w-full text-sm">

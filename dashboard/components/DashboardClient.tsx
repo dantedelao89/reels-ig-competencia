@@ -11,6 +11,11 @@ import TableView from './TableView';
 import DetailModal from './DetailModal';
 import SourcesManager from './SourcesManager';
 import AdsView from './AdsView';
+import { useToast } from './ui/Toast';
+import { CardGridSkeleton } from './ui/Skeleton';
+import EmptyState from './ui/EmptyState';
+import ErrorState from './ui/ErrorState';
+import AsyncButton from './ui/AsyncButton';
 
 interface Facets {
   creadores: { value: string; count: number }[];
@@ -27,6 +32,7 @@ interface Stats {
 const PAGE_SIZE = 40;
 
 export default function DashboardClient() {
+  const toast = useToast();
   const [stats, setStats] = useState<Stats | null>(null);
   const [platform, setPlatform] = useState('all');
   const [estado, setEstado] = useState('');
@@ -46,6 +52,8 @@ export default function DashboardClient() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false); // primera respuesta OK (para skeleton inicial)
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<ContentItem | null>(null);
@@ -66,10 +74,9 @@ export default function DashboardClient() {
     if (mode === 'ads') refreshAdsStats();
   }, [mode, refreshAdsStats]);
 
-  // Agregar contenido ad-hoc pegando una URL de Instagram (reel/post/carrusel).
+  // Agregar contenido ad-hoc pegando una URL de Instagram/YouTube. El feedback va por toast.
   const [igUrl, setIgUrl] = useState('');
   const [addingUrl, setAddingUrl] = useState(false);
-  const [addUrlMsg, setAddUrlMsg] = useState('');
 
   const refreshStats = useCallback(() => {
     fetch('/api/stats', { cache: 'no-store' })
@@ -112,12 +119,19 @@ export default function DashboardClient() {
         if (date.desde) params.set('desde', date.desde);
         if (date.hasta) params.set('hasta', date.hasta);
       }
-      const res = await fetch(`/api/content?${params}`, { cache: 'no-store' });
-      const data = await res.json();
-      setLoading(false);
-      if (data.error) return;
-      setTotal(data.total);
-      setItems((prev) => (replace ? data.items : [...prev, ...data.items]));
+      if (replace) setLoadError(null);
+      try {
+        const res = await fetch(`/api/content?${params}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || `Error ${res.status}`);
+        setTotal(data.total);
+        setItems((prev) => (replace ? data.items : [...prev, ...data.items]));
+        setLoaded(true);
+      } catch (e: any) {
+        if (replace) setLoadError(e?.message || 'No se pudo cargar');
+      } finally {
+        setLoading(false);
+      }
     },
     [platform, estado, debouncedQ, sort, dir, creadores, proyectos, origen, date]
   );
@@ -141,14 +155,20 @@ export default function DashboardClient() {
 
   async function setEstadoFor(target: ContentItem[], nuevo: Estado) {
     if (target.length === 0) return;
-    await fetch('/api/items', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        items: target.map((t) => ({ id: t.id, platform: t.platform })),
-        estado: nuevo,
-      }),
-    });
+    try {
+      const res = await fetch('/api/items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: target.map((t) => ({ id: t.id, platform: t.platform })),
+          estado: nuevo,
+        }),
+      });
+      if (!res.ok) throw new Error('No se pudo actualizar');
+      toast.success(target.length > 1 ? `${target.length} actualizados` : 'Estado actualizado');
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo actualizar');
+    }
     clearSel();
     setDetail(null);
     refreshStats();
@@ -160,14 +180,20 @@ export default function DashboardClient() {
     target: ContentItem,
     fields: { mi_guion: string; mi_notas: string; mi_link: string }
   ) {
-    await fetch('/api/items', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: [{ id: target.id, platform: target.platform }], ...fields }),
-    });
-    const patch = { miGuion: fields.mi_guion, miNotas: fields.mi_notas, miLink: fields.mi_link };
-    setItems((prev) => prev.map((it) => (it.id === target.id ? { ...it, ...patch } : it)));
-    setDetail((d) => (d && d.id === target.id ? { ...d, ...patch } : d));
+    try {
+      const res = await fetch('/api/items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [{ id: target.id, platform: target.platform }], ...fields }),
+      });
+      if (!res.ok) throw new Error('No se pudo guardar');
+      const patch = { miGuion: fields.mi_guion, miNotas: fields.mi_notas, miLink: fields.mi_link };
+      setItems((prev) => prev.map((it) => (it.id === target.id ? { ...it, ...patch } : it)));
+      setDetail((d) => (d && d.id === target.id ? { ...d, ...patch } : d));
+      toast.success('Guardado');
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo guardar');
+    }
   }
 
   async function addByUrl() {
@@ -176,11 +202,10 @@ export default function DashboardClient() {
     const isYt = /youtu\.?be/i.test(u);
     const isIg = /instagram\.com/i.test(u);
     if (!isYt && !isIg) {
-      setAddUrlMsg('Pega una URL de Instagram o YouTube');
+      toast.error('Pega una URL de Instagram o YouTube');
       return;
     }
     setAddingUrl(true);
-    setAddUrlMsg('');
     try {
       const res = await fetch(isYt ? '/api/scrape-yt-url' : '/api/scrape-ig-url', {
         method: 'POST',
@@ -191,16 +216,16 @@ export default function DashboardClient() {
       if (!res.ok || data.ok === false) throw new Error(data.error || 'Error al agregar');
       if (data.inserted > 0) {
         const quien = data.creador || data.canal;
-        setAddUrlMsg(`✓ Agregado${quien ? ` (${quien})` : ''}`);
+        toast.success(`Agregado${quien ? ` (${quien})` : ''}`);
         setIgUrl('');
         refreshStats();
         setPage(1);
         fetchPage(1, true);
       } else {
-        setAddUrlMsg(data.message || 'Ya estaba en la base');
+        toast.info(data.message || 'Ya estaba en la base');
       }
     } catch (e: any) {
-      setAddUrlMsg('Error: ' + e.message);
+      toast.error(e.message || 'No se pudo agregar');
     } finally {
       setAddingUrl(false);
     }
@@ -280,22 +305,14 @@ export default function DashboardClient() {
           <span className="text-xs font-medium text-gray-600 shrink-0">＋ Agregar por URL:</span>
           <input
             value={igUrl}
-            onChange={(e) => {
-              setIgUrl(e.target.value);
-              setAddUrlMsg('');
-            }}
+            onChange={(e) => setIgUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addByUrl()}
             placeholder="URL de Instagram (reel/post/carrusel) o de YouTube (video)"
             className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
           />
-          <button
-            onClick={addByUrl}
-            disabled={!igUrl.trim() || addingUrl}
-            className="h-9 px-4 text-sm rounded-lg bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {addingUrl ? 'Agregando…' : 'Agregar'}
-          </button>
-          {addUrlMsg && <span className="text-xs text-muted whitespace-nowrap">{addUrlMsg}</span>}
+          <AsyncButton onClick={addByUrl} disabled={!igUrl.trim()} loading={addingUrl} loadingLabel="Agregando…">
+            Agregar
+          </AsyncButton>
         </div>
 
         {selected.size > 0 && (
@@ -323,31 +340,41 @@ export default function DashboardClient() {
           </div>
         )}
 
-        {view === 'grid' ? (
-          <ContentGrid items={items} selected={selected} onToggle={toggle} onOpen={setDetail} />
+        {loadError && items.length === 0 ? (
+          <ErrorState message={loadError} onRetry={() => fetchPage(1, true)} />
+        ) : !loaded ? (
+          <CardGridSkeleton count={12} variant="content" />
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon="🔍"
+            title="Sin resultados"
+            description="No hay contenido que coincida con estos filtros. Prueba limpiarlos, o agrega contenido con la barra de arriba / desde Fuentes."
+          />
         ) : (
-          <TableView items={items} selected={selected} onToggle={toggle} onOpen={setDetail} />
-        )}
+          <>
+            {view === 'grid' ? (
+              <ContentGrid items={items} selected={selected} onToggle={toggle} onOpen={setDetail} />
+            ) : (
+              <TableView items={items} selected={selected} onToggle={toggle} onOpen={setDetail} />
+            )}
 
-        {items.length === 0 && !loading && (
-          <div className="text-center text-muted text-sm py-16">Sin resultados.</div>
+            <div className="flex justify-center py-6">
+              {more && (
+                <button
+                  onClick={() => {
+                    const next = page + 1;
+                    setPage(next);
+                    fetchPage(next, false);
+                  }}
+                  disabled={loading}
+                  className="h-10 px-5 text-sm rounded-lg border border-line bg-white disabled:opacity-60"
+                >
+                  {loading ? 'Cargando…' : 'Cargar más'}
+                </button>
+              )}
+            </div>
+          </>
         )}
-
-        <div className="flex justify-center py-6">
-          {more && (
-            <button
-              onClick={() => {
-                const next = page + 1;
-                setPage(next);
-                fetchPage(next, false);
-              }}
-              disabled={loading}
-              className="h-10 px-5 text-sm rounded-lg border border-line bg-white disabled:opacity-60"
-            >
-              {loading ? 'Cargando…' : 'Cargar más'}
-            </button>
-          )}
-        </div>
         </div>
       </main>
 

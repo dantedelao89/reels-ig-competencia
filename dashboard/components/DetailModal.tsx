@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { ContentItem, Estado } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
 import { fmtNum, fmtDateShort, toParagraphs } from '@/lib/format';
+import { useToast } from './ui/Toast';
+import ProgressBar from './ui/ProgressBar';
+import Spinner from './ui/Spinner';
 
 interface Props {
   item: ContentItem;
@@ -14,6 +17,7 @@ interface Props {
 }
 
 export default function DetailModal({ item, onClose, onEstado, onSaveProduction, onUploaded }: Props) {
+  const toast = useToast();
   const [tab, setTab] = useState<'detalle' | 'miversion'>('detalle');
 
   const [guion, setGuion] = useState(item.miGuion || '');
@@ -21,16 +25,14 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [link, setLink] = useState(item.miLink || '');
   const [videoUrl, setVideoUrl] = useState(item.miVideoUrl || '');
   const [saving, setSaving] = useState(false);
-  const [savedMsg, setSavedMsg] = useState('');
   const [uploading, setUploading] = useState(false);
-  const [uploadErr, setUploadErr] = useState('');
+  const [uploadPct, setUploadPct] = useState<number | null>(null); // % de subida (medible vía XHR)
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [transcripcion, setTranscripcion] = useState(item.transcripcion || '');
   const [hashtags, setHashtags] = useState('');
   const [loadingTr, setLoadingTr] = useState(!item.transcripcion);
   const [transcribing, setTranscribing] = useState(false);
-  const [transcribeErr, setTranscribeErr] = useState('');
 
   // Variantes A/B (solo YouTube): portadas/títulos distintos que YouTube sirve para el mismo video.
   const [variantes, setVariantes] = useState<any[]>([]);
@@ -41,7 +43,6 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   // Traducción a español de la transcripción (manual, modelo barato de OpenRouter).
   const [traduccion, setTraduccion] = useState('');
   const [translating, setTranslating] = useState(false);
-  const [translateErr, setTranslateErr] = useState('');
   const [showTranslation, setShowTranslation] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -53,7 +54,6 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     setVarMsg('');
     setTraduccion('');
     setShowTranslation(false);
-    setTranslateErr('');
     fetch(`/api/item?platform=${item.platform}&id=${item.id}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
@@ -76,40 +76,51 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
 
   async function save() {
     setSaving(true);
-    setSavedMsg('');
     await onSaveProduction(item, { mi_guion: guion, mi_notas: notas, mi_link: link });
     setSaving(false);
-    setSavedMsg('Guardado');
-    setTimeout(() => setSavedMsg(''), 2000);
   }
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    setUploadErr('');
+    setUploadPct(0);
     const fd = new FormData();
     fd.append('file', file);
     fd.append('id', item.id);
     fd.append('platform', item.platform);
     fd.append('externalId', item.externalId);
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al subir');
+      // XHR (no fetch) para tener progreso real de subida.
+      const data = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload');
+        xhr.upload.onprogress = (ev) => {
+          if (ev.lengthComputable) setUploadPct(Math.round((ev.loaded / ev.total) * 100));
+        };
+        xhr.onload = () => {
+          let body: any = {};
+          try { body = JSON.parse(xhr.responseText); } catch {}
+          if (xhr.status >= 200 && xhr.status < 300) resolve(body);
+          else reject(new Error(body.error || `Error ${xhr.status}`));
+        };
+        xhr.onerror = () => reject(new Error('Fallo de red al subir'));
+        xhr.send(fd);
+      });
       setVideoUrl(data.url);
       onUploaded();
+      toast.success('Video subido');
     } catch (err: any) {
-      setUploadErr(err.message);
+      toast.error(err.message || 'No se pudo subir');
     } finally {
       setUploading(false);
+      setUploadPct(null);
       if (fileRef.current) fileRef.current.value = '';
     }
   }
 
   async function transcribe() {
     setTranscribing(true);
-    setTranscribeErr('');
     try {
       const res = await fetch('/api/transcribe', {
         method: 'POST',
@@ -120,8 +131,9 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       if (!res.ok || !data.ok) throw new Error(data.error || 'Falló la transcripción');
       setTranscripcion(data.text);
       onUploaded();
+      toast.success('Transcripción lista');
     } catch (err: any) {
-      setTranscribeErr(err.message);
+      toast.error(err.message || 'Falló la transcripción');
     } finally {
       setTranscribing(false);
     }
@@ -129,7 +141,6 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
 
   async function translate() {
     setTranslating(true);
-    setTranslateErr('');
     try {
       const res = await fetch('/api/translate', {
         method: 'POST',
@@ -141,7 +152,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       setTraduccion(data.text);
       setShowTranslation(true);
     } catch (err: any) {
-      setTranslateErr(err.message);
+      toast.error(err.message || 'Falló la traducción');
     } finally {
       setTranslating(false);
     }
@@ -162,7 +173,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       if (Array.isArray(data.variantes)) setVariantes(data.variantes);
       setVarMsg(data.message || (data.added ? '¡Nueva variante!' : 'No encontré nuevas'));
     } catch (err: any) {
-      setVarMsg('Error: ' + err.message);
+      toast.error(err.message || 'No se pudo buscar variantes');
     } finally {
       setSearchingVar(false);
     }
@@ -398,8 +409,6 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 ) : (
                   <div className="text-sm text-muted text-center py-10">Sin transcripción.</div>
                 )}
-                {transcribeErr && <p className="text-xs text-red-600 mt-3">{transcribeErr}</p>}
-                {translateErr && <p className="text-xs text-red-600 mt-3">Traducción: {translateErr}</p>}
               </div>
             </div>
           </div>
@@ -424,17 +433,22 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                       <button onClick={() => fileRef.current?.click()} className="text-xs text-muted hover:text-gray-700">Reemplazar</button>
                     </div>
                   </div>
+                ) : uploading ? (
+                  <div className="w-full border border-line rounded-md py-5 px-4 text-center">
+                    <div className="text-xs text-muted mb-2 flex items-center justify-center gap-1.5">
+                      <Spinner size={13} /> Subiendo… {uploadPct != null ? `${uploadPct}%` : ''}
+                    </div>
+                    <ProgressBar value={uploadPct} />
+                  </div>
                 ) : (
                   <button
                     onClick={() => fileRef.current?.click()}
-                    disabled={uploading}
-                    className="w-full border border-dashed border-line rounded-md py-5 text-center text-muted hover:bg-gray-50 disabled:opacity-60"
+                    className="w-full border border-dashed border-line rounded-md py-5 text-center text-muted hover:bg-gray-50"
                   >
                     <div className="text-lg">↑</div>
-                    <div className="text-xs mt-1">{uploading ? 'Subiendo…' : 'Subir mi video (R2)'}</div>
+                    <div className="text-xs mt-1">Subir mi video (R2)</div>
                   </button>
                 )}
-                {uploadErr && <p className="text-xs text-red-600 mt-1">{uploadErr}</p>}
                 <input ref={fileRef} type="file" accept="video/*" onChange={onPickFile} className="hidden" />
               </div>
               <div>
@@ -455,8 +469,8 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
               className="w-full h-9 text-sm border border-line rounded-md px-2 mb-4 outline-none focus:border-accent"
             />
             <div className="flex items-center justify-end gap-3">
-              {savedMsg && <span className="text-xs text-green-600">{savedMsg}</span>}
-              <button onClick={save} disabled={saving} className="h-9 px-4 text-sm rounded-md bg-ink text-white disabled:opacity-60">
+              <button onClick={save} disabled={saving} className="inline-flex items-center gap-1.5 h-9 px-4 text-sm rounded-md bg-ink text-white disabled:opacity-60">
+                {saving && <Spinner size={14} />}
                 {saving ? 'Guardando…' : 'Guardar'}
               </button>
             </div>
