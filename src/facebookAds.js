@@ -21,6 +21,28 @@ async function resolvePageId(url) {
   return pid;
 }
 
+// Resuelve el page_id de un link de post/anuncio compartido (ej. facebook.com/share/p/…,
+// permalink.php?...&id=..., o cualquier URL de facebook.com/instagram.com que redirija ahí) SIN
+// gastar en el actor: Facebook expone el id numérico de la página dueña en la URL final tras seguir
+// la redirección. Devuelve null si no lo encuentra (ej. página con solo vanity name, sin id visible).
+export async function resolveAdvertiserPageIdFromUrl(url) {
+  const clean = (url || '').trim();
+  const direct = clean.match(/[?&]id=(\d{6,})/) || clean.match(/facebook\.com\/(\d{6,})(?:[/?]|$)/);
+  if (direct) return direct[1];
+  try {
+    const res = await fetch(clean, {
+      redirect: 'follow',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36' },
+    });
+    const finalUrl = res.url || '';
+    const m = finalUrl.match(/[?&]id=(\d{6,})/) || finalUrl.match(/facebook\.com\/(\d{6,})(?:[/?]|$)/);
+    return m ? m[1] : null;
+  } catch (e) {
+    console.error(`[ads url] no se pudo seguir la redirección de ${clean}: ${e.message}`);
+    return null;
+  }
+}
+
 // Normaliza un item de bovi al shape interno (item.snapshot.*, adArchiveID, etc.) + campos nuevos.
 function normalizeBovi(b, inputUrl) {
   const videos = Array.isArray(b.snapshot_videos) ? b.snapshot_videos.filter(Boolean) : [];
@@ -69,7 +91,25 @@ function collapseByCollation(items) {
   return [...byColl.values(), ...out];
 }
 
-// Scrapea un anunciante. Devuelve items normalizados y ya deduplicados por collation_id.
+// Scrapea un anunciante ya con su page_id resuelto (evita gastar en resolvePageId si ya se conoce,
+// ej. cuando el page_id salió gratis de resolveAdvertiserPageIdFromUrl). Devuelve items normalizados
+// y ya deduplicados por collation_id.
+export async function scrapeFacebookAdsByPageId({ pageId, resultsLimit, inputUrl }) {
+  const items = await runActorItems(config.adsActor, {
+    pageIds: [pageId],
+    countries: config.adsCountries,
+    activeStatus: config.adsActiveStatus,
+    maxResults: resultsLimit || config.adsMaxResults,
+    proxyConfiguration: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] },
+  });
+  const normalized = (items || [])
+    .filter((it) => it && it.ad_archive_id && !it.error)
+    .map((b) => normalizeBovi(b, inputUrl || `https://www.facebook.com/profile.php?id=${pageId}`));
+  return collapseByCollation(normalized);
+}
+
+// Scrapea un anunciante por su URL de página (resuelve el page_id vía el actor clásico).
+// Devuelve items normalizados y ya deduplicados por collation_id.
 export async function scrapeFacebookAds({ url, resultsLimit }) {
   const pageId = await resolvePageId(url);
   if (!pageId) throw new Error(`No se pudo resolver el page_id de ${url}`);

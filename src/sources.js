@@ -163,6 +163,19 @@ export async function updateAdvertiserLastRun(recordId, isoDate) {
   if (error) throw new Error(error.message);
 }
 
+// Da de alta un anunciante nuevo como fuente activa (lo dispara el scrape manual por URL de un
+// post/anuncio cuando la página todavía no era una fuente nuestra). Sin Proyecto: se asigna después.
+export async function createAdvertiser(url) {
+  const c = await getClient();
+  const { data, error } = await c
+    .from(config.fbAdvertisersTable)
+    .insert({ url, activo: true })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { recordId: data.id, url, marca: '', resultsLimit: null, lastRun: null, project: '' };
+}
+
 // Busca un anunciante por su URL (para el disparo manual de una sola página).
 export async function getAdvertiserByUrl(url) {
   const target = (url || '').trim();

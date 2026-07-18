@@ -6,7 +6,7 @@ import { config } from './config.js';
 import { runScrape, runScrapeInstagramCreator, runScrapeInstagramUrl } from './scrape.js';
 import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch, runScrapeYoutubeVideo } from './scrapeYoutube.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
-import { runScrapeAds } from './scrapeAds.js';
+import { runScrapeAds, runScrapeAdvertiserUrl } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
@@ -225,6 +225,26 @@ app.post('/scrape-ig-url', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape-ig-url:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Agrega/scrapea UN anunciante a partir de cualquier link de Facebook (post, anuncio compartido,
+// página), pegado en DISECTA. Protegido con el secreto.
+app.post('/scrape-ad-url', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const url = req.body?.url;
+  if (!url) return res.status(400).json({ ok: false, error: 'url requerida' });
+  try {
+    const result = await runScrapeAdvertiserUrl(url);
+    res.json(result);
+  } catch (err) {
+    console.error('Error en /scrape-ad-url:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
