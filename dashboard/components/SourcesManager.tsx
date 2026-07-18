@@ -142,7 +142,12 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
 
   const f = filter.trim().toLowerCase();
   const shown = f
-    ? records.filter((r) => r.key.toLowerCase().includes(f) || (r.proyecto || '').toLowerCase().includes(f))
+    ? records.filter(
+        (r) =>
+          r.key.toLowerCase().includes(f) ||
+          (r.name || '').toLowerCase().includes(f) ||
+          (r.proyecto || '').toLowerCase().includes(f)
+      )
     : records;
 
   useEffect(() => {
@@ -329,7 +334,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
             <thead>
               <tr className="bg-gray-50 text-muted text-xs">
                 <th className="text-left p-2 w-20">Activo</th>
-                <th className="text-left p-2">{def.keyLabel}</th>
+                <th className="text-left p-2">{type === 'fb_advertiser' ? 'Anunciante' : def.keyLabel}</th>
                 <th className="text-left p-2 w-44">Proyecto</th>
                 <th className="text-left p-2 w-24">{type === 'ig' ? 'Reels' : 'Videos'}</th>
                 <th className="text-left p-2 w-28">Última corrida</th>
@@ -349,7 +354,16 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                       {r.activo ? 'Activo' : 'Pausado'}
                     </button>
                   </td>
-                  <td className="p-2 font-medium break-all">{r.key}</td>
+                  <td className="p-2 font-medium break-all">
+                    {def.nameColumn && r.name ? (
+                      <>
+                        <div>{r.name}</div>
+                        <div className="text-[11px] text-muted font-normal break-all">{r.key}</div>
+                      </>
+                    ) : (
+                      r.key
+                    )}
+                  </td>
                   <td className="p-2">
                     <select
                       value={r.proyecto || ''}

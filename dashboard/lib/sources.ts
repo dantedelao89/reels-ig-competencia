@@ -10,6 +10,7 @@ export interface SourceDef {
   numColumn: string;
   keyLabel: string;
   keyPlaceholder: string;
+  nameColumn?: string; // columna con el nombre legible (ej. anunciantes: 'marca')
 }
 
 export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
@@ -44,6 +45,7 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
     numColumn: 'anuncios_por_corrida',
     keyLabel: 'URL de página de Facebook',
     keyPlaceholder: 'https://www.facebook.com/MARCA',
+    nameColumn: 'marca',
   },
 };
 
@@ -54,6 +56,7 @@ export const ALL_SOURCE_ORDER: SourceType[] = [...SOURCE_ORDER, ...ADS_SOURCE_OR
 export interface SourceRecord {
   id: string;
   key: string;
+  name: string | null; // nombre legible (anunciantes: marca); null si la fuente no lo tiene
   activo: boolean;
   proyecto: string | null;
   num: number | null;

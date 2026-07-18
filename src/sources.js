@@ -163,6 +163,17 @@ export async function updateAdvertiserLastRun(recordId, isoDate) {
   if (error) throw new Error(error.message);
 }
 
+// Guarda el nombre real del anunciante (page_name de la Ad Library) en la fuente, para que Fuentes
+// muestre "BenCorde" en vez de la URL cruda "profile.php?id=…". Se llama tras scrapear, con el nombre
+// del primer anuncio traído. No-op si no hay nombre.
+export async function setAdvertiserMarca(recordId, marca) {
+  const name = (marca || '').trim();
+  if (!name) return;
+  const c = await getClient();
+  const { error } = await c.from(config.fbAdvertisersTable).update({ marca: name }).eq('id', recordId);
+  if (error) throw new Error(error.message);
+}
+
 // Da de alta un anunciante nuevo como fuente activa (lo dispara el scrape manual por URL de un
 // post/anuncio cuando la página todavía no era una fuente nuestra). Sin Proyecto: se asigna después.
 export async function createAdvertiser(url) {

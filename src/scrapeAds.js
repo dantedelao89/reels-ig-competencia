@@ -2,7 +2,7 @@
 // Ad Library en una sola corrida batched, deduplica por Ad ID contra Supabase (destino primario,
 // con rehospedaje de creatividad a R2). Hereda Proyecto por anunciante.
 
-import { getActiveAdvertisers, getAdvertiserByUrl, updateAdvertiserLastRun, createAdvertiser } from './sources.js';
+import { getActiveAdvertisers, getAdvertiserByUrl, updateAdvertiserLastRun, createAdvertiser, setAdvertiserMarca } from './sources.js';
 import { scrapeFacebookAds, scrapeFacebookAdsByPageId, resolveAdvertiserPageIdFromUrl } from './facebookAds.js';
 import { scrapeFacebookPostByUrl, isSpecificContentLink } from './facebookPost.js';
 import { syncAds, syncSinglePostAsAd, getSyncedAdIds } from './supabase.js';
@@ -47,7 +47,11 @@ export async function runScrapeAds(opts = {}) {
         console.log(`[ADS supabase ${a.marca || a.url}] sincronizados=${r.synced} rehospedadas=${r.rehosted}`);
       }
       inserted += synced;
-      details.push({ anunciante: a.marca || a.url, scraped: items.length, inserted: synced });
+      // Rellena el nombre del anunciante en Fuentes si aún no lo tiene (para verlo y re-scrapearlo).
+      if (!a.marca && items[0]?.pageName) {
+        try { await setAdvertiserMarca(a.recordId, items[0].pageName); } catch (e) { console.error(`[ADS marca] ${e.message}`); }
+      }
+      details.push({ anunciante: a.marca || items[0]?.pageName || a.url, scraped: items.length, inserted: synced });
       console.log(`[ADS] ${a.marca || a.url} scrapeados=${items.length} nuevos=${synced}`);
     } catch (err) {
       console.error(`[ADS ${a.marca || a.url}] ERROR:`, err.message);
@@ -134,6 +138,10 @@ export async function runScrapeAdvertiserUrl(contentUrl) {
     const projectByUrl = new Map([[advertiserUrl, advertiser.project]]);
     const r = await syncAds(fresh, { scrapedAtIso: startedAt, projectByUrl });
     synced = r.synced;
+  }
+  // Rellena el nombre del anunciante en Fuentes si aún no lo tiene.
+  if (!advertiser.marca && items[0]?.pageName) {
+    try { await setAdvertiserMarca(advertiser.recordId, items[0].pageName); } catch (e) { console.error(`[ADS marca] ${e.message}`); }
   }
   try {
     await updateAdvertiserLastRun(advertiser.recordId, startedAt);

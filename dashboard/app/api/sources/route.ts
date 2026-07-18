@@ -13,6 +13,7 @@ function toRecord(type: SourceType, row: any) {
   return {
     id: row.id,
     key: (row[d.keyColumn] ?? '').toString(),
+    name: d.nameColumn ? (row[d.nameColumn] ?? null) : null,
     activo: row.activo === true,
     proyecto: row.proyecto ?? null,
     num: row[d.numColumn] ?? null,
