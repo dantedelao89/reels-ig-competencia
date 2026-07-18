@@ -382,7 +382,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
             className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
           />
         </div>
-        <AsyncButton onClick={add} disabled={!newKey.trim()} loading={adding} loadingLabel="Añadiendo…">
+        <AsyncButton onClick={add} loading={adding} loadingLabel="Añadiendo…">
           Añadir
         </AsyncButton>
       </div>
