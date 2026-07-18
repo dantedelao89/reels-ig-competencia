@@ -17,6 +17,7 @@ export interface AdItem {
   id: string;
   adId: string;
   anunciante: string | null;
+  paginaUrl: string | null;
   copy: string | null;
   titulo: string | null;
   cta: string | null;
@@ -382,12 +383,50 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
       </>
       )}
 
-      {detail && <AdDetail item={detail} onClose={() => setDetail(null)} onEstado={(e) => setEstadoFor([detail.id], e)} />}
+      {detail && (
+        <AdDetail
+          item={detail}
+          onClose={() => setDetail(null)}
+          onEstado={(e) => setEstadoFor([detail.id], e)}
+          onRescraped={() => {
+            onStatsChange();
+            setPage(1);
+            fetchPage(1, true);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => void; onEstado: (e: Estado) => void }) {
+function AdDetail({ item, onClose, onEstado, onRescraped }: { item: AdItem; onClose: () => void; onEstado: (e: Estado) => void; onRescraped: () => void }) {
+  const toast = useToast();
+  const activity = useActivity();
+  const [rescraping, setRescraping] = useState(false);
+
+  // Re-scrapea a este anunciante para traer sus anuncios nuevos (misma lógica del botón de Fuentes).
+  async function rescrape() {
+    if (!item.paginaUrl || rescraping) return;
+    setRescraping(true);
+    const doneAct = activity.begin(`Buscando anuncios nuevos: ${cleanAdText(item.anunciante, 'anunciante')}…`);
+    try {
+      const res = await fetch('/api/ads/rescrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paginaUrl: item.paginaUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'No se pudo re-scrapear');
+      toast.success(data.inserted > 0 ? `${data.inserted} anuncios nuevos` : 'Sin anuncios nuevos');
+      if (data.inserted > 0) onRescraped();
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo re-scrapear');
+    } finally {
+      setRescraping(false);
+      doneAct();
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/45 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden my-6" onClick={(e) => e.stopPropagation()}>
@@ -397,6 +436,11 @@ function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => vo
             <span className="text-xs text-muted shrink-0">{item.activo ? '● Activo' : 'Inactivo'} · {item.diasCorriendo ?? '—'}d</span>
           </div>
           <div className="flex items-center gap-2">
+            {item.paginaUrl && (
+              <AsyncButton onClick={rescrape} loading={rescraping} loadingLabel="Buscando…" variant="secondary">
+                🔄 Buscar anuncios nuevos
+              </AsyncButton>
+            )}
             <select value={item.estado} onChange={(e) => onEstado(e.target.value as Estado)} className="h-8 text-sm rounded-md border border-line px-2">
               {ESTADOS.map((e) => <option key={e.key} value={e.key}>{e.label}</option>)}
             </select>

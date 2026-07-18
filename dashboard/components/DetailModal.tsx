@@ -8,6 +8,7 @@ import { useToast } from './ui/Toast';
 import { useActivity } from './ui/Activity';
 import ProgressBar from './ui/ProgressBar';
 import Spinner from './ui/Spinner';
+import AsyncButton from './ui/AsyncButton';
 
 interface Props {
   item: ContentItem;
@@ -41,6 +42,9 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [videoId, setVideoId] = useState<string | null>(null);
   const [searchingVar, setSearchingVar] = useState(false);
   const [varMsg, setVarMsg] = useState('');
+
+  // Re-scrape de este creador para traer su contenido nuevo (solo IG: se scrapea por @usuario).
+  const [rescraping, setRescraping] = useState(false);
 
   // Traducción a español de la transcripción (manual, modelo barato de OpenRouter).
   const [traduccion, setTraduccion] = useState('');
@@ -164,6 +168,28 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     }
   }
 
+  async function rescrapeCreator() {
+    if (item.platform !== 'ig' || !item.creador || rescraping) return;
+    setRescraping(true);
+    const doneAct = activity.begin(`Buscando reels nuevos de @${item.creador}…`);
+    try {
+      const res = await fetch('/api/scrape-creator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.creador }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'No se pudo scrapear');
+      toast.success(data.inserted > 0 ? `${data.inserted} reels nuevos` : 'Sin reels nuevos');
+      if (data.inserted > 0) onUploaded();
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo scrapear');
+    } finally {
+      setRescraping(false);
+      doneAct();
+    }
+  }
+
   async function buscarVariantes() {
     if (!videoId) return;
     setSearchingVar(true);
@@ -259,6 +285,20 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                   </a>
                 )}
               </div>
+
+              {/* Re-scrape del creador (solo IG): trae sus reels nuevos sin salir del detalle. */}
+              {item.platform === 'ig' && item.creador && (
+                <AsyncButton
+                  onClick={rescrapeCreator}
+                  loading={rescraping}
+                  loadingLabel="Buscando…"
+                  variant="secondary"
+                  className="w-full mb-3"
+                  title={`Re-scrapear los reels de @${item.creador} y traer los nuevos`}
+                >
+                  🔄 Buscar reels nuevos de @{item.creador}
+                </AsyncButton>
+              )}
 
               <div className="divide-y divide-line border-y border-line">
                 {metaRow('Vistas', fmtNum(item.views))}
