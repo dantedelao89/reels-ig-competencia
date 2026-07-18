@@ -123,7 +123,9 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
       });
       const data = await res.json();
       if (!res.ok || data.ok === false) throw new Error(data.error || 'Error al agregar');
-      setAddUrlMsg(`✓ ${data.inserted} anuncios${data.anuncianteNuevo ? ' (anunciante nuevo)' : ''}`);
+      if (data.message && data.inserted === 0) setAddUrlMsg(data.message);
+      else if (data.unico) setAddUrlMsg(data.inserted > 0 ? '✓ Video agregado' : 'ℹ️ Ese video ya estaba');
+      else setAddUrlMsg(`✓ ${data.inserted} anuncios${data.anuncianteNuevo ? ' (anunciante nuevo)' : ''}`);
       setAdUrl('');
       onStatsChange();
       refreshFacets();

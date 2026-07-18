@@ -4,7 +4,8 @@
 
 import { getActiveAdvertisers, getAdvertiserByUrl, updateAdvertiserLastRun, createAdvertiser } from './sources.js';
 import { scrapeFacebookAds, scrapeFacebookAdsByPageId, resolveAdvertiserPageIdFromUrl } from './facebookAds.js';
-import { syncAds, getSyncedAdIds } from './supabase.js';
+import { scrapeFacebookPostByUrl, isSpecificContentLink } from './facebookPost.js';
+import { syncAds, syncSinglePostAsAd, getSyncedAdIds } from './supabase.js';
 
 // opts.onlyUrl: si se pasa, scrapea solo ese anunciante (disparo manual desde DISECTA).
 export async function runScrapeAds(opts = {}) {
@@ -62,14 +63,44 @@ export async function runScrapeAds(opts = {}) {
   return { ok: true, advertisers: advertisers.length, inserted, details };
 }
 
-// Agrega/scrapea UN anunciante a partir de CUALQUIER link de Facebook (post, anuncio compartido,
-// página, etc.), pegado en DISECTA. Sigue la redirección para sacar el page_id gratis (sin actor);
-// si la página todavía no es una fuente nuestra, la da de alta (sin proyecto, se asigna después).
+// Trae UN solo anuncio/video por su link directo de Facebook (share/p, reel, video, etc.). No trae
+// toda la página del anunciante. Es contenido orgánico del post (video + copy + métricas), sin la
+// metadata de Ad Library (activo/días corriendo/ganador). Se inserta en meta_ads con ad_id "fbpost_".
+export async function runScrapeSingleAdVideo(contentUrl) {
+  const startedAt = new Date().toISOString();
+  const clean = (contentUrl || '').trim();
+  let post;
+  try {
+    post = await scrapeFacebookPostByUrl(clean);
+  } catch (err) {
+    console.error(`[ADS single ${clean}] ERROR:`, err.message);
+    return { ok: false, error: err.message, inserted: 0 };
+  }
+  if (!post) {
+    return { ok: true, inserted: 0, message: 'No se pudo extraer ese contenido de Facebook' };
+  }
+  const { synced } = await syncSinglePostAsAd(post, { scrapedAtIso: startedAt });
+  console.log(`[ADS single] ${clean} postId=${post.postId} nuevo=${synced}`);
+  return {
+    ok: true,
+    inserted: synced,
+    scraped: 1,
+    anunciante: post.pageName || 'Facebook',
+    unico: true, // marca que fue un solo video, no un anunciante completo
+  };
+}
+
+// Agrega/scrapea a partir de CUALQUIER link de Facebook, pegado en DISECTA. Ramifica: si es un link
+// a UN contenido específico (post/video/reel) → trae solo ese video; si es un link de PÁGINA →
+// resuelve el anunciante y trae todos sus anuncios de la Ad Library (dándolo de alta si es nuevo).
 export async function runScrapeAdvertiserUrl(contentUrl) {
   const startedAt = new Date().toISOString();
   const clean = (contentUrl || '').trim();
-  if (!/facebook\.com/i.test(clean)) {
+  if (!/facebook\.com|fb\.watch/i.test(clean)) {
     return { ok: false, error: 'URL de Facebook inválida', inserted: 0 };
+  }
+  if (isSpecificContentLink(clean)) {
+    return runScrapeSingleAdVideo(clean);
   }
   const pageId = await resolveAdvertiserPageIdFromUrl(clean);
   if (!pageId) {

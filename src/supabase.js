@@ -217,6 +217,47 @@ export async function syncAds(items, ctx = {}) {
   return { synced, rehosted };
 }
 
+// Sincroniza UN post/video de Facebook (traído por link directo con premiumscraper) como una fila
+// de meta_ads. Es contenido ORGÁNICO del post, así que los campos de Ad Library (activo, días
+// corriendo, is_scaled, collation) quedan null. ad_id se prefija con "fbpost_" para no chocar con
+// los ad_archive_id reales. ctx: { scrapedAtIso, project }.
+export async function syncSinglePostAsAd(post, ctx = {}) {
+  if (!enabled) throw new Error('Supabase no está configurado (faltan SUPABASE_URL / SUPABASE_SERVICE_KEY)');
+  if (!post?.postId) return { synced: 0 };
+  const { scrapedAtIso, project } = ctx;
+  const adId = `fbpost_${post.postId}`;
+  let thumbnailUrl = null;
+  let videoUrl = null;
+  if (r2Enabled() && post.imageUrl) {
+    thumbnailUrl = await rehostImage(post.imageUrl, `thumbnails/ads/${adId}.jpg`);
+  }
+  if (r2Enabled() && post.videoHd) {
+    videoUrl = await rehostVideo(post.videoHd, `videos/ads/${adId}.mp4`);
+  }
+  const row = {
+    ad_id: adId,
+    anunciante: post.pageName || null,
+    pagina_url: post.pageUrl || null,
+    copy: post.message || null,
+    titulo: post.title || null,
+    cta: null,
+    link_destino: post.destino || null,
+    formato: post.videoHd ? 'Video' : 'Imagen',
+    plataformas: 'Facebook',
+    activo: null, // no viene de la Ad Library: no sabemos si sigue corriendo como anuncio
+    fecha_inicio: post.datePosted || null,
+    fecha_fin: null,
+    dias_corriendo: null,
+    thumbnail_original: post.imageUrl || null,
+    thumbnail_url: thumbnailUrl,
+    video_url: videoUrl || post.videoHd || null,
+    proyecto: project || null,
+    scrapeado_en: scrapedAtIso,
+  };
+  const synced = await upsert(config.adsMetaAdsTable, [row], 'ad_id');
+  return { synced, adId };
+}
+
 // ----------------------------- Instagram -----------------------------
 
 function reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl) {

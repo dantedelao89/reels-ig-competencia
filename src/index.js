@@ -411,8 +411,14 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
         await slackReply(responseUrl, `❌ Error: ${result.error}`);
         return;
       }
-      const msg = `✅ ${result.inserted} anuncios nuevos de ${result.anunciante}`;
-      await slackReply(responseUrl, result.anuncianteNuevo ? `${msg}\n🆕 Se agregó como fuente nueva a Fuentes.` : msg);
+      if (result.unico) {
+        await slackReply(responseUrl, result.inserted > 0
+          ? `✅ Video agregado de ${result.anunciante}`
+          : (result.message || 'ℹ️ Ese video ya estaba en la base'));
+      } else {
+        const msg = `✅ ${result.inserted} anuncios nuevos de ${result.anunciante}`;
+        await slackReply(responseUrl, result.anuncianteNuevo ? `${msg}\n🆕 Se agregó como fuente nueva a Fuentes.` : msg);
+      }
     } catch (err) {
       console.error('Error en /slack/scrape (ads):', err);
       await slackReply(responseUrl, `❌ Error: ${err.message}`);

@@ -118,6 +118,9 @@ export const config = {
   adsMaxResults: Number(process.env.ADS_MAX_RESULTS || 200),
   // Actor auxiliar solo para resolver el page_id real desde la URL del anunciante (onlyTotal, ~$0).
   adsPageIdResolver: process.env.ADS_PAGEID_RESOLVER || 'apify/facebook-ads-scraper',
+  // Actor para traer UN post/video/anuncio específico por su link directo (sin traer toda la
+  // página). Devuelve video_urls_hd + copy + métricas. ~$0.0036/post.
+  fbPostActor: process.env.FB_POST_ACTOR || 'premiumscraper/facebook-posts-scraper',
   // Cron de ads: diario a las 8am CDMX (separado del orgánico de las 9am).
   adsCronSchedule: process.env.ADS_CRON_SCHEDULE || '0 8 * * *',
   // Apaga SOLO el cron de ads (el scrape manual desde DISECTA sigue funcionando).

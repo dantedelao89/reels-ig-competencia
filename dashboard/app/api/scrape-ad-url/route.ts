@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
       inserted: data.inserted ?? 0,
       anunciante: data.anunciante ?? null,
       anuncianteNuevo: data.anuncianteNuevo ?? false,
+      unico: data.unico ?? false, // true = fue un solo video por link directo
+      message: data.message ?? null,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
