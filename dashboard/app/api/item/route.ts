@@ -9,11 +9,11 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const platform = sp.get('platform');
   const id = sp.get('id');
-  if (!id || (platform !== 'ig' && platform !== 'yt')) {
+  if (!id || (platform !== 'ig' && platform !== 'yt' && platform !== 'ad')) {
     return NextResponse.json({ error: 'platform e id requeridos' }, { status: 400 });
   }
-  const table = platform === 'ig' ? IG_TABLE : YT_TABLE;
-  const textCol = platform === 'ig' ? 'transcripcion' : 'subtitulos';
+  const table = platform === 'ig' ? IG_TABLE : platform === 'ad' ? 'meta_ads' : YT_TABLE;
+  const textCol = platform === 'yt' ? 'subtitulos' : 'transcripcion'; // ig y ad usan 'transcripcion'
   // Solo YouTube tiene variantes A/B y video_id (para el botón "buscar variantes").
   const extraCols = platform === 'yt' ? ', variantes, video_id' : '';
   try {

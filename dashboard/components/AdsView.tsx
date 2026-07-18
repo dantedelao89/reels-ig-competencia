@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ESTADOS, Estado } from '@/lib/types';
 import { ESTADO_STYLE } from '@/lib/estados';
-import { fmtDateShort } from '@/lib/format';
+import { fmtDateShort, toParagraphs } from '@/lib/format';
 import FacetDropdown from './FacetDropdown';
 import { useToast } from './ui/Toast';
 import { CardGridSkeleton } from './ui/Skeleton';
 import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
 import AsyncButton from './ui/AsyncButton';
+import Spinner from './ui/Spinner';
 
 export interface AdItem {
   id: string;
@@ -443,11 +444,131 @@ function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => vo
             <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Copy</div>
             <p className="text-sm text-gray-800 whitespace-pre-wrap mb-4">{cleanAdText(item.copy, '(sin copy)')}</p>
             {item.linkDestino && (
-              <a href={item.linkDestino} target="_blank" rel="noreferrer" className="inline-block text-sm text-accent break-all">{item.linkDestino} ↗</a>
+              <a href={item.linkDestino} target="_blank" rel="noreferrer" className="inline-block text-sm text-accent break-all mb-4">{item.linkDestino} ↗</a>
             )}
+
+            {/* Transcripción del video del anuncio (mismo flujo que Orgánico). */}
+            {item.videoUrl && <AdTranscription item={item} />}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Transcripción + traducción del video de un anuncio. Carga la existente al abrir; si no hay,
+// ofrece transcribir con IA (baja el audio del video en R2 y lo transcribe). Espejo de DetailModal.
+function AdTranscription({ item }: { item: AdItem }) {
+  const toast = useToast();
+  const [transcripcion, setTranscripcion] = useState('');
+  const [traduccion, setTraduccion] = useState('');
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [loadingTr, setLoadingTr] = useState(true);
+  const [transcribing, setTranscribing] = useState(false);
+  const [translating, setTranslating] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setLoadingTr(true);
+    setTranscripcion('');
+    setTraduccion('');
+    setShowTranslation(false);
+    fetch(`/api/item?platform=ad&id=${item.id}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || d.error) return;
+        if (d.transcripcion) setTranscripcion(d.transcripcion);
+        if (d.traduccion) { setTraduccion(d.traduccion); setShowTranslation(true); }
+      })
+      .catch(() => {})
+      .finally(() => alive && setLoadingTr(false));
+    return () => { alive = false; };
+  }, [item.id]);
+
+  async function transcribe() {
+    setTranscribing(true);
+    try {
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'ad', id: item.id, url: item.videoUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Falló la transcripción');
+      setTranscripcion(data.text);
+      toast.success('Transcripción lista');
+    } catch (e: any) {
+      toast.error(e.message || 'Falló la transcripción');
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
+  async function translate() {
+    setTranslating(true);
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'ad', id: item.id, text: transcripcion }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Falló la traducción');
+      setTraduccion(data.text);
+      setShowTranslation(true);
+    } catch (e: any) {
+      toast.error(e.message || 'Falló la traducción');
+    } finally {
+      setTranslating(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 border-t border-line pt-3">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <span className="text-[11px] uppercase tracking-wide text-muted">Transcripción</span>
+        <div className="flex items-center gap-3 text-xs">
+          {transcripcion && !transcribing && (
+            traduccion ? (
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setShowTranslation(false)} className={!showTranslation ? 'text-accent font-medium' : 'text-muted hover:text-gray-700'}>Original</button>
+                <span className="text-line">·</span>
+                <button onClick={() => setShowTranslation(true)} className={showTranslation ? 'text-accent font-medium' : 'text-muted hover:text-gray-700'}>Español</button>
+              </div>
+            ) : (
+              <button onClick={translate} disabled={translating} className="text-muted hover:text-accent disabled:opacity-50">
+                {translating ? 'Traduciendo…' : '🌐 Traducir'}
+              </button>
+            )
+          )}
+          {transcripcion && !transcribing && (
+            <button onClick={transcribe} className="text-muted hover:text-accent">↻ Re-transcribir</button>
+          )}
+        </div>
+      </div>
+
+      {transcribing ? (
+        <div className="flex flex-col items-center justify-center text-center py-8 text-muted">
+          <Spinner size={20} />
+          <div className="text-sm font-medium text-gray-700 mt-2">Transcribiendo con IA…</div>
+          <div className="text-xs mt-1">Baja el audio del video y lo transcribe. Tarda ~1–2 min.</div>
+        </div>
+      ) : transcripcion ? (
+        <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+          {toParagraphs(showTranslation && traduccion ? traduccion : transcripcion).map((p, i) => (
+            <p key={i} className="text-[13px] leading-relaxed text-gray-800">{p}</p>
+          ))}
+        </div>
+      ) : loadingTr ? (
+        <div className="text-xs text-muted py-4">Cargando…</div>
+      ) : (
+        <div className="text-center py-4">
+          <p className="text-xs text-muted mb-3">Este anuncio aún no tiene transcripción.</p>
+          <AsyncButton onClick={transcribe} loading={transcribing} loadingLabel="Transcribiendo…">
+            ✨ Transcribir con IA
+          </AsyncButton>
+        </div>
+      )}
     </div>
   );
 }

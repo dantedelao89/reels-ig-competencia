@@ -334,19 +334,25 @@ app.post('/transcribe', async (req, res) => {
     }
   }
   const { platform, id, url } = req.body || {};
-  if (platform !== 'yt' || !id || !url) {
-    return res.status(400).json({ ok: false, error: 'Faltan platform=yt, id y url válidos' });
+  if ((platform !== 'yt' && platform !== 'ad') || !id || !url) {
+    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|ad), id y url válidos' });
   }
   if (!config.enableTranscription) {
     return res.status(400).json({ ok: false, error: 'Transcripción deshabilitada (falta OPENROUTER_API_KEY)' });
   }
   try {
-    const audioUrl = await getYoutubeAudioUrl(url);
+    // YouTube: hay que bajar el audio con el actor. Ads: el video ya está en R2, se transcribe directo
+    // (transcribeAudio extrae el audio con ffmpeg si el mp4 es grande).
+    const audioUrl = platform === 'yt' ? await getYoutubeAudioUrl(url) : url;
     if (!audioUrl) throw new Error('No se obtuvo audio del video');
     const text = await transcribeAudio(audioUrl);
     if (!text) throw new Error('La transcripción quedó vacía');
-    if (supabaseEnabled()) await updateRowById('yt_videos', id, { subtitulos: text });
-    console.log(`[transcribe] yt ${id} → ${text.length} chars`);
+    if (supabaseEnabled()) {
+      const table = platform === 'ad' ? 'meta_ads' : 'yt_videos';
+      const column = platform === 'ad' ? 'transcripcion' : 'subtitulos';
+      await updateRowById(table, id, { [column]: text });
+    }
+    console.log(`[transcribe] ${platform} ${id} → ${text.length} chars`);
     res.json({ ok: true, text });
   } catch (err) {
     console.error(`[transcribe] error ${id}:`, err.message);
@@ -364,8 +370,8 @@ app.post('/translate', async (req, res) => {
     }
   }
   const { platform, id, text } = req.body || {};
-  if ((platform !== 'yt' && platform !== 'ig') || !id || !text) {
-    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|ig), id y text válidos' });
+  if ((platform !== 'yt' && platform !== 'ig' && platform !== 'ad') || !id || !text) {
+    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|ig|ad), id y text válidos' });
   }
   if (!config.enableTranscription) {
     return res.status(400).json({ ok: false, error: 'OpenRouter no configurado (falta OPENROUTER_API_KEY)' });
@@ -373,7 +379,7 @@ app.post('/translate', async (req, res) => {
   try {
     const translated = await translateToSpanish(text);
     if (!translated) throw new Error('La traducción quedó vacía');
-    const table = platform === 'yt' ? 'yt_videos' : 'ig_reels';
+    const table = platform === 'yt' ? 'yt_videos' : platform === 'ad' ? 'meta_ads' : 'ig_reels';
     if (supabaseEnabled()) await updateRowById(table, id, { traduccion: translated });
     console.log(`[translate] ${platform} ${id} → ${translated.length} chars`);
     res.json({ ok: true, text: translated });

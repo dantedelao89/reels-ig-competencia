@@ -12,14 +12,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Falta SCRAPER_URL / TRANSCRIBE_SECRET' }, { status: 500 });
   }
   const body = await req.json().catch(() => null);
-  if (!body?.id || body?.platform !== 'yt' || !body?.url) {
-    return NextResponse.json({ error: 'platform=yt, id y url requeridos' }, { status: 400 });
+  if (!body?.id || (body?.platform !== 'yt' && body?.platform !== 'ad') || !body?.url) {
+    return NextResponse.json({ error: 'platform (yt|ad), id y url requeridos' }, { status: 400 });
   }
   try {
     const res = await fetch(`${scraper.replace(/\/$/, '')}/transcribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-trigger-secret': secret },
-      body: JSON.stringify({ platform: 'yt', id: body.id, url: body.url }),
+      body: JSON.stringify({ platform: body.platform, id: body.id, url: body.url }),
       signal: AbortSignal.timeout(290_000),
     });
     const data = await res.json().catch(() => ({ error: 'respuesta inválida del scraper' }));
