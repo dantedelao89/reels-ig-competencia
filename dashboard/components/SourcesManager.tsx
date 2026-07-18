@@ -252,7 +252,17 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
 
   async function add() {
     const key = newKey.trim();
-    if (!key) return;
+    if (!key) {
+      // Antes retornaba en silencio ("le doy Añadir y no pasa nada"). El proyecto no se guarda solo:
+      // se crea junto con el anunciante, así que hace falta la URL.
+      toast.error(
+        type === 'fb_advertiser'
+          ? 'Pega la URL de la página de Facebook. El proyecto se guarda junto con el anunciante.'
+          : `Escribe ${def.keyLabel.toLowerCase()} para añadir la fuente.`
+      );
+      keyInputRef.current?.focus();
+      return;
+    }
     // Candado anti-duplicados en el cliente (feedback inmediato).
     const norm = normalizeKey(type, key);
     if (records.some((r) => normalizeKey(type, r.key) === norm)) {
