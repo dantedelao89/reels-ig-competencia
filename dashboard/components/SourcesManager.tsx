@@ -88,39 +88,51 @@ function RowProjectSelect({
     setDraft('');
     if (v && v !== value) onCommit(v);
   }
+  function cancel() {
+    setCreating(false);
+    setDraft('');
+  }
 
   if (creating) {
     return (
-      <div className="flex gap-1 items-center">
+      // <form> para que Enter confirme de forma nativa y fiable. También confirma al salir del campo.
+      <form
+        className="flex gap-1 items-center"
+        onSubmit={(e) => {
+          e.preventDefault();
+          commit();
+        }}
+      >
         <input
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') commit();
-            if (e.key === 'Escape') {
-              setCreating(false);
-              setDraft('');
-            }
+            if (e.key === 'Escape') cancel();
           }}
           onBlur={commit}
-          placeholder="Nuevo proyecto"
-          className="w-full h-7 px-1.5 text-xs border border-line rounded bg-white outline-none focus:border-accent"
+          placeholder="Escribe y guarda ✓"
+          className="w-full h-7 px-1.5 text-xs border border-accent rounded bg-white outline-none"
         />
         <button
-          type="button"
-          // preventDefault en mousedown para que el clic no dispare el onBlur (commit) antes de cancelar.
+          type="submit"
+          // preventDefault en mousedown evita que el onBlur (commit) se dispare antes del click.
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            setCreating(false);
-            setDraft('');
-          }}
+          className="h-7 px-2 text-xs rounded bg-accent text-white font-medium shrink-0"
+          title="Guardar proyecto"
+        >
+          ✓
+        </button>
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={cancel}
           className="h-7 px-1.5 text-xs border border-line rounded bg-white shrink-0"
           title="Cancelar"
         >
-          ↩
+          ✕
         </button>
-      </div>
+      </form>
     );
   }
 
