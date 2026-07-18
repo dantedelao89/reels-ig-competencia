@@ -21,27 +21,37 @@ async function resolvePageId(url) {
   return pid;
 }
 
-// Resuelve el page_id de un link de post/anuncio compartido (ej. facebook.com/share/p/…,
-// permalink.php?...&id=..., o cualquier URL de facebook.com/instagram.com que redirija ahí) SIN
-// gastar en el actor: Facebook expone el id numérico de la página dueña en la URL final tras seguir
-// la redirección. Devuelve null si no lo encuentra (ej. página con solo vanity name, sin id visible).
-export async function resolveAdvertiserPageIdFromUrl(url) {
-  const clean = (url || '').trim();
-  const direct = clean.match(/[?&]id=(\d{6,})/) || clean.match(/facebook\.com\/(\d{6,})(?:[/?]|$)/);
-  if (direct) return direct[1];
+// Intenta sacar el page_id de un link de post/anuncio compartido SIN gastar en el actor: Facebook
+// a veces expone el id numérico de la página dueña en la URL final tras seguir la redirección
+// (ej. facebook.com/share/p/… → permalink.php?...&id=...). Solo funciona si Facebook nos deja
+// seguir la redirección (desde Railway suele devolver 400 en vez de redirigir — ver fallback abajo).
+async function tryFreeRedirect(url) {
   try {
-    const res = await fetch(clean, {
+    const res = await fetch(url, {
       redirect: 'follow',
       headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36' },
     });
     const finalUrl = res.url || '';
     const m = finalUrl.match(/[?&]id=(\d{6,})/) || finalUrl.match(/facebook\.com\/(\d{6,})(?:[/?]|$)/);
-    console.log(`[ads url] resolución: status=${res.status} finalUrl=${finalUrl} match=${m ? m[1] : 'ninguno'}`);
     return m ? m[1] : null;
   } catch (e) {
-    console.error(`[ads url] no se pudo seguir la redirección de ${clean}: ${e.message}`);
+    console.error(`[ads url] no se pudo seguir la redirección de ${url}: ${e.message}`);
     return null;
   }
+}
+
+// Resuelve el page_id de CUALQUIER link de Facebook (post, anuncio compartido, página, etc.),
+// pegado en DISECTA. Primero intenta gratis (id ya visible en la URL, o vía redirección); si
+// Facebook bloquea la IP del servidor (devuelve 400 en vez de redirigir), cae al actor clásico
+// (con proxy residencial, casi gratis) que ya usa el resto del pipeline.
+export async function resolveAdvertiserPageIdFromUrl(url) {
+  const clean = (url || '').trim();
+  const direct = clean.match(/[?&]id=(\d{6,})/) || clean.match(/facebook\.com\/(\d{6,})(?:[/?]|$)/);
+  if (direct) return direct[1];
+  const free = await tryFreeRedirect(clean);
+  if (free) return free;
+  console.log(`[ads url] redirect gratis falló para ${clean}, cayendo al actor con proxy`);
+  return resolvePageId(clean);
 }
 
 // Normaliza un item de bovi al shape interno (item.snapshot.*, adArchiveID, etc.) + campos nuevos.
