@@ -36,6 +36,7 @@ export async function resolveAdvertiserPageIdFromUrl(url) {
     });
     const finalUrl = res.url || '';
     const m = finalUrl.match(/[?&]id=(\d{6,})/) || finalUrl.match(/facebook\.com\/(\d{6,})(?:[/?]|$)/);
+    console.log(`[ads url] resolución: status=${res.status} finalUrl=${finalUrl} match=${m ? m[1] : 'ninguno'}`);
     return m ? m[1] : null;
   } catch (e) {
     console.error(`[ads url] no se pudo seguir la redirección de ${clean}: ${e.message}`);
