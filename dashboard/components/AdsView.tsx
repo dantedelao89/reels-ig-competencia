@@ -34,6 +34,14 @@ export interface AdItem {
 const PAGE_SIZE = 40;
 const clamp2 = { display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' };
 
+// Texto de anuncios dinámicos (catálogo) a veces trae el merge-tag sin rellenar (ej. "{{product.brand}}")
+// cuando Meta no lo resolvió fuera de su contexto original. Mostramos un fallback en vez del placeholder roto.
+function cleanAdText(text: string | null, fallback: string): string {
+  const t = (text || '').trim();
+  if (!t || /^\{\{.*\}\}$/.test(t)) return fallback;
+  return t;
+}
+
 export default function AdsView() {
   const [stats, setStats] = useState<{ total: number; activos: number; porEstado: Record<string, number> } | null>(null);
   const [facets, setFacets] = useState<{ anunciantes: any[]; proyectos: any[] } | null>(null);
@@ -46,6 +54,8 @@ export default function AdsView() {
   const [sort, setSort] = useState('dias_corriendo');
   const [dir, setDir] = useState('desc');
   const [view, setView] = useState<'grid' | 'table'>('grid');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [scrapeOpen, setScrapeOpen] = useState(false);
 
   const [items, setItems] = useState<AdItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -158,31 +168,9 @@ export default function AdsView() {
             {stats ? `${stats.total} anuncios · ${stats.activos} activos` : '…'}
           </p>
         </div>
-        {/* Traer anuncios nuevos de un anunciante individual (solo inserta los que no tenemos). */}
-        <div className="flex items-center gap-2 p-1.5 rounded-lg border border-line bg-gray-50">
-          <span className="text-xs font-medium text-gray-600 pl-1">⚡ Traer nuevos de:</span>
-          <select
-            value={scrapeUrl}
-            onChange={(e) => { setScrapeUrl(e.target.value); setScrapeMsg(''); }}
-            className="h-8 text-sm rounded-md border border-line bg-white px-2 max-w-[180px]"
-          >
-            <option value="">— Anunciante —</option>
-            {advList.map((a) => (
-              <option key={a.url} value={a.url}>{a.name} ({a.adCount})</option>
-            ))}
-          </select>
-          <button
-            onClick={scrapeAdvertiser}
-            disabled={!scrapeUrl || scraping}
-            className="h-8 px-3 text-xs rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {scraping ? 'Scrapeando…' : 'Scrapear'}
-          </button>
-          {scrapeMsg && <span className="text-xs text-muted whitespace-nowrap">{scrapeMsg}</span>}
-        </div>
       </div>
 
-      {/* estado pills */}
+      {/* estado pills: SOLO el pipeline de curación (Activo/Inactivo vive en Filtros, es otra cosa). */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {estadoRows.map((r) => (
           <button
@@ -197,26 +185,101 @@ export default function AdsView() {
         ))}
       </div>
 
-      {/* filtros */}
+      {/* toolbar: buscador siempre visible + Filtros (agrupa anunciante/proyecto/activo/orden) + Scrapear + vista */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <FacetDropdown label="Anunciante" options={facets?.anunciantes || []} selected={anunciantes} onChange={setAnunciantes} />
-        <FacetDropdown label="Proyecto" options={facets?.proyectos || []} selected={proyectos} onChange={setProyectos} />
-        <div className="flex items-center bg-gray-100 rounded-md p-0.5 text-xs">
-          {[['', 'Todos'], ['true', 'Activos'], ['false', 'Inactivos']].map(([v, l]) => (
-            <button key={v} onClick={() => setActivo(v)} className={`px-2.5 h-7 rounded ${activo === v ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>
-              {l}
-            </button>
-          ))}
-        </div>
         <div className="relative flex-1 min-w-[180px]">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en copy…" className="w-full h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent" />
         </div>
-        <select value={`${sort}:${dir}`} onChange={(e) => { const [s, d] = e.target.value.split(':'); setSort(s); setDir(d); }} className="h-9 text-sm rounded-md border border-line bg-white px-2">
-          <option value="dias_corriendo:desc">Más días corriendo</option>
-          <option value="fecha_inicio:desc">Más recientes</option>
-          <option value="fecha_inicio:asc">Más antiguos</option>
-          <option value="scrapeado_en:desc">Recién scrapeados</option>
-        </select>
+
+        <div className="relative">
+          {(() => {
+            const activeFilters = anunciantes.length + proyectos.length + (activo ? 1 : 0);
+            return (
+              <button
+                onClick={() => setFiltersOpen((o) => !o)}
+                className={`h-9 px-3 text-sm rounded-lg border inline-flex items-center gap-1.5 ${
+                  activeFilters > 0 ? 'border-accent bg-accent-soft text-accent' : 'border-line bg-white text-gray-700'
+                }`}
+              >
+                Filtros {activeFilters > 0 && <span className="font-medium">· {activeFilters}</span>} <span className="text-[10px]">▾</span>
+              </button>
+            );
+          })()}
+          {filtersOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setFiltersOpen(false)} />
+              <div className="absolute right-0 z-30 mt-1 w-80 bg-white border border-line rounded-xl shadow-lg p-3 space-y-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Anunciante</div>
+                  <FacetDropdown label="Anunciante" options={facets?.anunciantes || []} selected={anunciantes} onChange={setAnunciantes} />
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Proyecto</div>
+                  <FacetDropdown label="Proyecto" options={facets?.proyectos || []} selected={proyectos} onChange={setProyectos} />
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Estado en Meta</div>
+                  <div className="flex items-center bg-gray-100 rounded-md p-0.5 text-xs w-fit">
+                    {[['', 'Todos'], ['true', 'Activos'], ['false', 'Inactivos']].map(([v, l]) => (
+                      <button key={v} onClick={() => setActivo(v)} className={`px-2.5 h-7 rounded ${activo === v ? 'bg-white font-medium shadow-sm' : 'text-muted'}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Ordenar por</div>
+                  <select
+                    value={`${sort}:${dir}`}
+                    onChange={(e) => { const [s, d] = e.target.value.split(':'); setSort(s); setDir(d); }}
+                    className="w-full h-9 text-sm rounded-md border border-line bg-white px-2"
+                  >
+                    <option value="dias_corriendo:desc">Más días corriendo</option>
+                    <option value="fecha_inicio:desc">Más recientes</option>
+                    <option value="fecha_inicio:asc">Más antiguos</option>
+                    <option value="scrapeado_en:desc">Recién scrapeados</option>
+                  </select>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="relative">
+          <button
+            onClick={() => setScrapeOpen((o) => !o)}
+            className="h-9 px-3 text-sm rounded-lg border border-line bg-white text-gray-700 inline-flex items-center gap-1.5"
+          >
+            ⚡ Scrapear <span className="text-[10px]">▾</span>
+          </button>
+          {scrapeOpen && (
+            <>
+              <div className="fixed inset-0 z-20" onClick={() => setScrapeOpen(false)} />
+              <div className="absolute right-0 z-30 mt-1 w-72 bg-white border border-line rounded-xl shadow-lg p-3">
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Traer anuncios nuevos de:</div>
+                <select
+                  value={scrapeUrl}
+                  onChange={(e) => { setScrapeUrl(e.target.value); setScrapeMsg(''); }}
+                  className="w-full h-9 text-sm rounded-md border border-line bg-white px-2 mb-2"
+                >
+                  <option value="">— Anunciante —</option>
+                  {advList.map((a) => (
+                    <option key={a.url} value={a.url}>{a.name} ({a.adCount})</option>
+                  ))}
+                </select>
+                <button
+                  onClick={scrapeAdvertiser}
+                  disabled={!scrapeUrl || scraping}
+                  className="w-full h-9 text-sm rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {scraping ? 'Scrapeando…' : 'Scrapear'}
+                </button>
+                {scrapeMsg && <div className="text-xs text-muted mt-2">{scrapeMsg}</div>}
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="flex border border-line rounded-lg overflow-hidden bg-white">
           <button onClick={() => setView('grid')} className={`px-3 h-9 text-sm ${view === 'grid' ? 'bg-gray-100' : ''}`}>▦</button>
           <button onClick={() => setView('table')} className={`px-3 h-9 text-sm border-l border-line ${view === 'table' ? 'bg-gray-100' : ''}`}>▤</button>
@@ -255,22 +318,19 @@ export default function AdsView() {
                     )}
                     <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">{it.activo ? '● Activo' : 'Inactivo'}</span>
                     {it.diasCorriendo != null && (
-                      <span className="absolute bottom-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">{it.diasCorriendo}d</span>
+                      <span title={`${it.diasCorriendo} días corriendo`} className="absolute bottom-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">{it.diasCorriendo}d</span>
                     )}
                   </div>
                 </button>
                 <div className="p-2.5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${est.cls}`}>{est.label}</span>
-                    <span className="text-[11px] text-muted truncate ml-1">{it.anunciante}</span>
+                  <div className="flex items-center justify-between mb-1.5 gap-1">
+                    <span className="text-[13px] font-medium truncate">{cleanAdText(it.anunciante, 'Anunciante')}</span>
+                    <span className={`shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-full ${est.cls}`}>{est.label}</span>
                   </div>
-                  <button onClick={() => setDetail(it)} className="text-[13px] leading-snug text-left mb-2 hover:text-accent break-words w-full" style={clamp2}>
-                    {it.copy || it.titulo || '(sin copy)'}
+                  <button onClick={() => setDetail(it)} className="text-[13px] leading-snug text-left mb-2 hover:text-accent break-words w-full text-muted" style={clamp2}>
+                    {cleanAdText(it.copy || it.titulo, '(sin copy)')}
                   </button>
-                  <div className="flex items-center justify-between text-[11px] text-muted">
-                    {it.cta && <span className="px-1.5 py-0.5 rounded bg-gray-100">{it.cta}</span>}
-                    <span>{fmtDateShort(it.fechaInicio)}</span>
-                  </div>
+                  <div className="text-[11px] text-muted">{fmtDateShort(it.fechaInicio)}</div>
                 </div>
               </div>
             );
@@ -293,8 +353,8 @@ export default function AdsView() {
                   <tr key={it.id} className="border-t border-line hover:bg-gray-50">
                     <td className="p-2 text-center"><input type="checkbox" checked={selected.has(it.id)} onChange={() => toggle(it.id)} /></td>
                     <td className="p-2"><div className="w-9 h-9 rounded bg-gray-200 overflow-hidden">{it.thumbnail && (/* eslint-disable-next-line @next/next/no-img-element */ <img src={it.thumbnail} alt="" className="w-full h-full object-cover" />)}</div></td>
-                    <td className="p-2"><button onClick={() => setDetail(it)} className="block text-left hover:text-accent break-words" style={clamp2}>{it.copy || it.titulo || '(sin copy)'}</button></td>
-                    <td className="p-2 text-muted truncate">{it.anunciante}</td>
+                    <td className="p-2"><button onClick={() => setDetail(it)} className="block text-left hover:text-accent break-words" style={clamp2}>{cleanAdText(it.copy || it.titulo, '(sin copy)')}</button></td>
+                    <td className="p-2 text-muted truncate">{cleanAdText(it.anunciante, '—')}</td>
                     <td className="p-2 tabular-nums">{it.diasCorriendo ?? '—'}</td>
                     <td className="p-2">{it.activo ? '●' : '○'}</td>
                     <td className="p-2"><span className={`text-[10px] px-1.5 py-0.5 rounded ${est.cls}`}>{est.label}</span></td>
@@ -323,7 +383,7 @@ function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => vo
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden my-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-line">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-medium truncate">{item.anunciante}</span>
+            <span className="font-medium truncate">{cleanAdText(item.anunciante, 'Anunciante')}</span>
             <span className="text-xs text-muted shrink-0">{item.activo ? '● Activo' : 'Inactivo'} · {item.diasCorriendo ?? '—'}d</span>
           </div>
           <div className="flex items-center gap-2">
@@ -376,7 +436,7 @@ function AdDetail({ item, onClose, onEstado }: { item: AdItem; onClose: () => vo
           <div className="p-4">
             {item.cta && <span className="inline-block text-xs px-2 py-1 rounded bg-accent-soft text-accent mb-3">{item.cta}</span>}
             <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Copy</div>
-            <p className="text-sm text-gray-800 whitespace-pre-wrap mb-4">{item.copy || '(sin copy)'}</p>
+            <p className="text-sm text-gray-800 whitespace-pre-wrap mb-4">{cleanAdText(item.copy, '(sin copy)')}</p>
             {item.linkDestino && (
               <a href={item.linkDestino} target="_blank" rel="noreferrer" className="inline-block text-sm text-accent break-all">{item.linkDestino} ↗</a>
             )}
