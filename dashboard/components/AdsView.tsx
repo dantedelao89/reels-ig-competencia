@@ -55,7 +55,8 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
   const [activo, setActivo] = useState(''); // '', 'true', 'false'
   const [q, setQ] = useState('');
   const [dq, setDq] = useState('');
-  const [sort, setSort] = useState('dias_corriendo');
+  // Default: recién scrapeados primero → lo que acabas de scrapear aparece arriba.
+  const [sort, setSort] = useState('scrapeado_en');
   const [dir, setDir] = useState('desc');
   const [view, setView] = useState<'grid' | 'table'>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -208,23 +209,22 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
                     ))}
                   </div>
                 </div>
-                <div>
-                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Ordenar por</div>
-                  <select
-                    value={`${sort}:${dir}`}
-                    onChange={(e) => { const [s, d] = e.target.value.split(':'); setSort(s); setDir(d); }}
-                    className="w-full h-9 text-sm rounded-md border border-line bg-white px-2"
-                  >
-                    <option value="dias_corriendo:desc">Más días corriendo</option>
-                    <option value="fecha_inicio:desc">Más recientes</option>
-                    <option value="fecha_inicio:asc">Más antiguos</option>
-                    <option value="scrapeado_en:desc">Recién scrapeados</option>
-                  </select>
-                </div>
               </div>
             </>
           )}
         </div>
+
+        {/* Orden visible (separado de Filtros: ordenar ≠ filtrar). Default = Recién scrapeados. */}
+        <select
+          value={`${sort}:${dir}`}
+          onChange={(e) => { const [s, d] = e.target.value.split(':'); setSort(s); setDir(d); }}
+          className="h-9 text-sm rounded-lg border border-line bg-white px-2 text-gray-700"
+        >
+          <option value="scrapeado_en:desc">Recién scrapeados</option>
+          <option value="fecha_inicio:desc">Más recientes</option>
+          <option value="fecha_inicio:asc">Más antiguos</option>
+          <option value="dias_corriendo:desc">Más días corriendo</option>
+        </select>
 
         <div className="flex border border-line rounded-lg overflow-hidden bg-white">
           <button onClick={() => setView('grid')} className={`px-3 h-9 text-sm ${view === 'grid' ? 'bg-gray-100' : ''}`}>▦</button>

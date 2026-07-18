@@ -1,6 +1,12 @@
-// Trae UN post/video/anuncio específico de Facebook por su link directo (share/p, share/r,
-// share/v, /videos/, /reel/, /watch, fb.watch, permalink) usando premiumscraper/facebook-posts-scraper.
-// Devuelve el video HD + copy + métricas de ESE contenido, sin traer toda la página del anunciante.
+// Trae UN post/video/anuncio específico de Facebook por su link directo (share/p, share/r, share/v,
+// /videos/, /reel/, /watch, fb.watch, permalink), sin traer toda la página del anunciante.
+//
+// Cadena de 2 actores (los links cortos/compartidos no los acepta el scraper de media directamente,
+// y desde Railway no se puede seguir la redirección — Facebook devuelve 400):
+//   1. clappi resuelve CUALQUIER link → realId (id del post) + page id (del autor) + copy + thumbnail.
+//   2. Con eso se arma la URL canónica facebook.com/<pageId>/posts/<realId> y premiumscraper trae
+//      el video HD (o las imágenes si es post de imagen) + copy completo.
+//
 // Nota: son datos ORGÁNICOS del post (no de la Ad Library), así que no hay días-corriendo / ganador.
 
 import { config } from './config.js';
@@ -23,34 +29,71 @@ function first(arr) {
   return Array.isArray(arr) && arr.length ? arr[0] : null;
 }
 
-// Normaliza el item de premiumscraper a un shape simple que consume syncSinglePostAsAd.
-function normalize(p) {
-  const videoHd = first(p.video_urls_hd) || first(p.video_urls_sd) || null;
-  return {
-    postId: (p.post_id || p.id || '').toString() || null,
-    pageName: p.profile_name || null,
-    pageUrl: p.profile_url || null,
-    message: p.message || p.message_text || null,
-    title: p.title || p.seo_title || null,
-    videoHd,
-    imageUrl: p.primary_image_url || first(p.image_urls) || null,
-    destino: p.primary_attachment_target_url || first(p.attachment_target_urls) || null,
-    views: p.video_view_count_total ?? null,
-    reactions: p.reaction_count_total ?? null,
-    comments: p.comment_count_total ?? null,
-    shares: p.share_count_total ?? null,
-    permalink: p.permalink_url || p.url || null,
-    datePosted: p.creation_time ? new Date(p.creation_time * 1000).toISOString() : (p.date_posted || null),
-  };
+// El id numérico de la página dueña, desde authorId o desde la authorUrl (.../people/Nombre/<id>/).
+function pageIdOf(resolved) {
+  if (resolved.authorId && /^\d{6,}$/.test(String(resolved.authorId))) return String(resolved.authorId);
+  const m = (resolved.authorUrl || '').match(/(\d{6,})\/?$/) || (resolved.authorUrl || '').match(/(\d{6,})/);
+  return m ? m[1] : null;
+}
+
+// Paso 1: clappi resuelve el link. Devuelve el item crudo o null.
+async function resolveLink(url) {
+  const items = await runActorItems(config.fbResolverActor, {
+    postUrls: [url],
+    proxyConfiguration: { useApifyProxy: true },
+  });
+  return (items || []).find((it) => it && (it.realId || it.shortcode)) || null;
+}
+
+// Paso 2: premiumscraper con la URL canónica trae el media completo (video HD / imágenes). Null si falla.
+async function fetchMedia(pageId, realId) {
+  const canonical = `https://www.facebook.com/${pageId}/posts/${realId}`;
+  const items = await runActorItems(config.fbPostActor, {
+    facebook_urls: [{ url: canonical }],
+    include_individual_posts: true,
+    posts_count: 1,
+  });
+  return (items || []).find((it) => it && (it.post_id || it.id)) || null;
+}
+
+function textOf(v) {
+  if (!v) return null;
+  if (typeof v === 'string') return v;
+  return v.text || null; // premiumscraper devuelve message como { text, __typename }
 }
 
 // Scrapea un solo contenido por URL. Devuelve el objeto normalizado o null si no se pudo extraer.
 export async function scrapeFacebookPostByUrl(url) {
-  const items = await runActorItems(config.fbPostActor, {
-    facebook_urls: [url],
-    include_individual_posts: true,
-    posts_count: 1,
-  });
-  const p = (items || []).find((it) => it && !it.error && (it.post_id || it.id));
-  return p ? normalize(p) : null;
+  const resolved = await resolveLink(url);
+  if (!resolved) return null;
+  const realId = (resolved.realId || '').toString() || null;
+  const pageId = pageIdOf(resolved);
+
+  // Media completa (video HD) vía premiumscraper si tenemos con qué armar la canónica.
+  let media = null;
+  if (realId && pageId) {
+    try {
+      media = await fetchMedia(pageId, realId);
+    } catch (e) {
+      console.error(`[fb post] premiumscraper falló para ${pageId}/${realId}: ${e.message}`);
+    }
+  }
+
+  const videoHd = media ? (first(media.video_urls_hd) || first(media.video_urls_sd)) : null;
+  const imageUrl = (media && (media.primary_image_url || first(media.image_urls))) || resolved.thumbnailUrl || null;
+
+  return {
+    postId: realId || (resolved.shortcode || '').toString() || null,
+    pageId,
+    pageName: resolved.authorName || media?.profile_name || null,
+    pageUrl: resolved.authorUrl || media?.profile_url || (pageId ? `https://www.facebook.com/profile.php?id=${pageId}` : null),
+    message: resolved.caption || textOf(media?.message) || null,
+    title: media?.title || media?.seo_title || null,
+    videoHd,
+    imageUrl,
+    destino: media?.primary_attachment_target_url || first(media?.attachment_target_urls) || null,
+    views: resolved.views ?? media?.video_view_count_total ?? null,
+    permalink: resolved.url || media?.permalink_url || url,
+    datePosted: resolved.datePosted || null,
+  };
 }
