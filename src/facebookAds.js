@@ -6,17 +6,96 @@
 import { config } from './config.js';
 import { runActorItems } from './apifyRun.js';
 
+// Normaliza un nombre/handle para comparar: sin acentos, minúsculas, solo alfanuméricos.
+// "Diosmos Mkt" y "DiosmosMkt" → "diosmosmkt" (así el handle de la URL casa con el page_name).
+function normalizeName(s) {
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// Extrae el handle (nombre de usuario) de una URL de página de Facebook. Devuelve null si la URL
+// no es un handle de página (numérica, profile.php, ads/library, share, etc.).
+function extractHandle(url) {
+  try {
+    const u = new URL((url || '').trim());
+    const seg = u.pathname.split('/').filter(Boolean)[0] || '';
+    const reserved = new Set(['profile.php', 'ads', 'share', 'people', 'pages', 'permalink.php', 'story.php', 'watch', 'reel', 'groups']);
+    if (!seg || /^\d+$/.test(seg) || reserved.has(seg.toLowerCase())) return null;
+    return decodeURIComponent(seg);
+  } catch {
+    return null;
+  }
+}
+
+// Convierte un handle en un término de búsqueda que la Ad Library sepa emparejar: separadores a
+// espacios y corte de camelCase. "DiosmosMkt" → "Diosmos Mkt"; "empleados.io" → "empleados io".
+function handleToSearchTerm(handle) {
+  return (handle || '')
+    .replace(/[._-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Resuelve el page_id de un handle vía bovi por búsqueda (proxy residencial, confiable desde el
+// servidor). Empareja el resultado por nombre normalizado; así evita traer el anunciante equivocado.
+// Es el fallback cuando el resolver clásico (apify/facebook-ads-scraper) devuelve "empty/private data".
+async function resolvePageIdViaSearch(handle) {
+  const term = handleToSearchTerm(handle);
+  if (!term) return null;
+  const target = normalizeName(handle);
+  try {
+    const items = await runActorItems(config.adsActor, {
+      searchTerms: [term],
+      countries: config.adsCountries,
+      activeStatus: 'all',
+      maxResults: 30,
+      proxyConfiguration: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] },
+    });
+    const byId = new Map();
+    for (const it of items || []) {
+      if (it && it.page_id) byId.set(String(it.page_id), it.page_name || '');
+    }
+    // 1) coincidencia exacta por nombre normalizado (handle == page_name sin espacios/acentos).
+    for (const [id, name] of byId) {
+      if (normalizeName(name) === target) return id;
+    }
+    // 2) si la búsqueda devolvió UNA sola página, es casi seguro la correcta.
+    if (byId.size === 1) return [...byId.keys()][0];
+    console.log(`[ads resolve] búsqueda "${term}" no coincidió con "${handle}" (${byId.size} páginas)`);
+    return null;
+  } catch (e) {
+    console.error(`[ads resolve] fallo búsqueda de "${handle}": ${e.message}`);
+    return null;
+  }
+}
+
 // La URL del anunciante (ej. facebook.com/61553980501732/) NO contiene el page_id real. Lo resolvemos
-// con el actor clásico en modo onlyTotal (casi gratis) y lo cacheamos por proceso.
+// con el actor clásico en modo onlyTotal (casi gratis); si falla (Facebook a veces bloquea el handle
+// con "empty/private data"), caemos a resolver por búsqueda en bovi. Se cachea por proceso.
 const pageIdCache = new Map();
 async function resolvePageId(url) {
   if (pageIdCache.has(url)) return pageIdCache.get(url);
-  const items = await runActorItems(config.adsPageIdResolver, {
-    startUrls: [{ url }],
-    onlyTotal: true,
-  });
-  const r = (items || [])[0] || {};
-  const pid = r.pageInfo?.page?.id || null;
+  let pid = null;
+  try {
+    const items = await runActorItems(config.adsPageIdResolver, {
+      startUrls: [{ url }],
+      onlyTotal: true,
+    });
+    pid = (items || [])[0]?.pageInfo?.page?.id || null;
+  } catch (e) {
+    console.error(`[ads resolve] resolver clásico falló para ${url}: ${e.message}`);
+  }
+  if (!pid) {
+    const handle = extractHandle(url);
+    if (handle) {
+      console.log(`[ads resolve] resolver clásico sin page_id para ${url}, probando búsqueda por handle "${handle}"`);
+      pid = await resolvePageIdViaSearch(handle);
+    }
+  }
   pageIdCache.set(url, pid);
   return pid;
 }
