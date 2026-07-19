@@ -36,6 +36,12 @@ function Thumb({ item }: { item: ContentItem }) {
           {item.duracion}
         </span>
       )}
+      {item.imagenes && item.imagenes.length > 1 && (
+        // Distintivo de carrusel: número de diapositivas.
+        <span className="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white inline-flex items-center gap-1">
+          <span aria-hidden="true">▦</span> {item.imagenes.length}
+        </span>
+      )}
     </div>
   );
 }

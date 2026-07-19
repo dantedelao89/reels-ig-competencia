@@ -46,6 +46,11 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   // Re-scrape de este creador para traer su contenido nuevo (solo IG: se scrapea por @usuario).
   const [rescraping, setRescraping] = useState(false);
 
+  // Carrusel (posts tipo Sidecar): diapositiva actualmente mostrada.
+  const esCarrusel = Array.isArray(item.imagenes) && item.imagenes.length > 1;
+  const [slide, setSlide] = useState(0);
+  useEffect(() => setSlide(0), [item.id]);
+
   // Traducción a español de la transcripción (manual, modelo barato de OpenRouter).
   const [traduccion, setTraduccion] = useState('');
   const [translating, setTranslating] = useState(false);
@@ -268,11 +273,51 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
               <div
                 className={`relative w-full ${item.platform === 'ig' ? 'pt-[133%]' : 'pt-[56%]'} bg-gray-200 rounded-lg overflow-hidden mb-3`}
               >
-                {item.thumbnail && (
+                {(esCarrusel ? item.imagenes![slide] : item.thumbnail) && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  <img
+                    src={esCarrusel ? item.imagenes![slide] : item.thumbnail!}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                )}
+                {esCarrusel && (
+                  <>
+                    <button
+                      onClick={() => setSlide((s) => (s - 1 + item.imagenes!.length) % item.imagenes!.length)}
+                      className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-black/70"
+                      aria-label="Anterior"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      onClick={() => setSlide((s) => (s + 1) % item.imagenes!.length)}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-black/70"
+                      aria-label="Siguiente"
+                    >
+                      ›
+                    </button>
+                    <span className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">
+                      {slide + 1}/{item.imagenes!.length}
+                    </span>
+                  </>
                 )}
               </div>
+              {esCarrusel && (
+                // Tira de miniaturas para saltar a cualquier diapositiva.
+                <div className="flex gap-1 overflow-x-auto mb-3 pb-1">
+                  {item.imagenes!.map((src, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSlide(i)}
+                      className={`shrink-0 w-10 h-10 rounded overflow-hidden border ${i === slide ? 'border-accent ring-1 ring-accent' : 'border-line'}`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-1.5 mb-3">
                 {item.thumbnail && (
                   <a href={item.thumbnail} download className="text-center text-xs h-8 leading-8 rounded-md border border-line bg-white hover:bg-gray-100">

@@ -260,11 +260,22 @@ export async function syncSinglePostAsAd(post, ctx = {}) {
 
 // ----------------------------- Instagram -----------------------------
 
-function reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl) {
+// Extrae las URLs de imagen de cada diapositiva de un carrusel (type=Sidecar). Prefiere childPosts
+// (cada slide, incluyendo el poster de slides de video); cae a images[] (solo imágenes).
+function carouselImageUrls(item) {
+  if (Array.isArray(item.childPosts) && item.childPosts.length) {
+    return item.childPosts.map((c) => c && c.displayUrl).filter(Boolean);
+  }
+  if (Array.isArray(item.images) && item.images.length) return item.images.filter(Boolean);
+  return [];
+}
+
+function reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl, imagenes) {
   const music = item.musicInfo
     ? [item.musicInfo.song_name, item.musicInfo.artist_name].filter(Boolean).join(' — ')
     : '';
   return {
+    imagenes: imagenes && imagenes.length ? imagenes : null,
     shortcode: item.shortCode,
     creador: item.ownerUsername || null,
     url: item.url || null,
@@ -306,7 +317,23 @@ export async function syncReels(items, ctx = {}) {
       thumbnailUrl = await rehostImage(item.displayUrl, `thumbnails/ig/${item.shortCode}.jpg`);
       if (thumbnailUrl) rehosted++;
     }
-    rows.push(reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl));
+    // Carrusel (Sidecar): rehospeda TODAS las diapositivas a R2 (las URLs de IG caducan). Solo si
+    // hay más de 1 slide; un post de imagen única se cubre con thumbnail.
+    let imagenes = null;
+    const slides = carouselImageUrls(item);
+    if (slides.length > 1) {
+      if (r2Enabled()) {
+        imagenes = [];
+        for (let i = 0; i < slides.length; i++) {
+          const u = await rehostImage(slides[i], `carousels/ig/${item.shortCode}_${i}.jpg`);
+          if (u) rehosted++;
+          imagenes.push(u || slides[i]); // si falla el rehost, guarda la URL original
+        }
+      } else {
+        imagenes = slides;
+      }
+    }
+    rows.push(reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl, imagenes));
   }
   const data = await upsertReturning(config.igReelsTable, rows, 'shortcode', 'id, shortcode');
   const idsByShortcode = new Map(data.map((r) => [r.shortcode, r.id]));

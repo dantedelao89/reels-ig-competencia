@@ -25,6 +25,8 @@ export interface ContentItem {
   comentarios: number | null;
   duracion: string | null;
   thumbnail: string | null; // thumbnail_url (R2) || thumbnail_original
+  tipo: string | null; // 'Image' | 'Video' | 'Sidecar' (carrusel) | null
+  imagenes: string[] | null; // carrusel: todas las diapositivas (R2); null si no es carrusel
   proyecto: string | null;
   estado: Estado;
   transcripcion: string | null;
