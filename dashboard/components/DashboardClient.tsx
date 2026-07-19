@@ -40,7 +40,7 @@ export default function DashboardClient() {
   const [estado, setEstado] = useState('');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
-  const [sort, setSort] = useState('fecha_publicacion');
+  const [sort, setSort] = useState('scrapeado_en');
   const [dir, setDir] = useState('desc');
   const [view, setView] = useState<'grid' | 'table'>('grid');
 
