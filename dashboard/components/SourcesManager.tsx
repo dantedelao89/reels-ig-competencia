@@ -10,149 +10,41 @@ import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
 import AsyncButton from './ui/AsyncButton';
 
-// Desplegable de proyecto: lista los existentes + opción de escribir uno nuevo.
-function ProjectSelect({
-  value,
-  onChange,
-  projects,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  projects: string[];
-}) {
-  const [mode, setMode] = useState<'list' | 'new'>(value && !projects.includes(value) ? 'new' : 'list');
-  if (mode === 'new') {
-    return (
-      <div className="flex gap-1">
-        <input
-          value={value}
-          autoFocus
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Nuevo proyecto"
-          className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
-        />
-        <button
-          type="button"
-          onClick={() => {
-            setMode('list');
-            onChange('');
-          }}
-          className="h-9 px-2 text-xs border border-line rounded-md bg-white"
-          title="Elegir existente"
-        >
-          ↩
-        </button>
-      </div>
-    );
-  }
-  return (
-    <select
-      value={value}
-      onChange={(e) => {
-        if (e.target.value === '__new__') {
-          setMode('new');
-          onChange('');
-        } else onChange(e.target.value);
-      }}
-      className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
-    >
-      <option value="">— Sin proyecto —</option>
-      {projects.map((p) => (
-        <option key={p} value={p}>
-          {p}
-        </option>
-      ))}
-      <option value="__new__">+ Nuevo proyecto…</option>
-    </select>
-  );
-}
-
-// Selector de proyecto para una fila existente: permite elegir un proyecto o crear uno nuevo
-// (escribiéndolo). Confirma con Enter o al perder el foco; Escape cancela. onCommit hace el PATCH.
+// Editor de proyecto de una fila: un combobox donde se escribe libremente (proyecto nuevo) o se
+// elige de las sugerencias (datalist compartido). Guarda al salir del campo o con Enter; Escape
+// revierte. Así crear un proyecto es solo "escribir", sin menús que se transforman.
 function RowProjectSelect({
   value,
-  projects,
   onCommit,
 }: {
   value: string | null;
-  projects: string[];
   onCommit: (v: string) => void;
 }) {
-  const [creating, setCreating] = useState(false);
-  const [draft, setDraft] = useState('');
-  const opts = value && !projects.includes(value) ? [value, ...projects] : projects;
+  const [draft, setDraft] = useState(value || '');
+  // Sincroniza si el valor cambia desde fuera (ej. tras guardar o recargar la lista).
+  useEffect(() => setDraft(value || ''), [value]);
 
   function commit() {
     const v = draft.trim();
-    setCreating(false);
-    setDraft('');
-    if (v && v !== value) onCommit(v);
-  }
-  function cancel() {
-    setCreating(false);
-    setDraft('');
-  }
-
-  if (creating) {
-    return (
-      // <form> para que Enter confirme de forma nativa y fiable. También confirma al salir del campo.
-      <form
-        className="flex gap-1 items-center"
-        onSubmit={(e) => {
-          e.preventDefault();
-          commit();
-        }}
-      >
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') cancel();
-          }}
-          onBlur={commit}
-          placeholder="Escribe y guarda ✓"
-          className="w-full h-7 px-1.5 text-xs border border-accent rounded bg-white outline-none"
-        />
-        <button
-          type="submit"
-          // preventDefault en mousedown evita que el onBlur (commit) se dispare antes del click.
-          onMouseDown={(e) => e.preventDefault()}
-          className="h-7 px-2 text-xs rounded bg-accent text-white font-medium shrink-0"
-          title="Guardar proyecto"
-        >
-          ✓
-        </button>
-        <button
-          type="button"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={cancel}
-          className="h-7 px-1.5 text-xs border border-line rounded bg-white shrink-0"
-          title="Cancelar"
-        >
-          ✕
-        </button>
-      </form>
-    );
+    if (v !== (value || '')) onCommit(v);
   }
 
   return (
-    <select
-      value={value || ''}
-      onChange={(e) => {
-        if (e.target.value === '__new__') setCreating(true);
-        else onCommit(e.target.value);
+    <input
+      value={draft}
+      list="disecta-project-options"
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        if (e.key === 'Escape') {
+          setDraft(value || '');
+          e.currentTarget.blur();
+        }
       }}
+      placeholder="—"
       className="w-full h-8 px-1.5 text-xs border border-transparent hover:border-line focus:border-accent rounded outline-none bg-transparent"
-    >
-      <option value="">—</option>
-      {opts.map((p) => (
-        <option key={p} value={p}>
-          {p}
-        </option>
-      ))}
-      <option value="__new__">+ Nuevo proyecto…</option>
-    </select>
+    />
   );
 }
 
@@ -371,7 +263,20 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
         </div>
         <div className="w-44">
           <label className="text-xs text-muted block mb-1">Proyecto</label>
-          <ProjectSelect value={newProyecto} onChange={setNewProyecto} projects={projects} />
+          {/* Combobox: se escribe libremente un proyecto nuevo, o se elige uno existente de las
+              sugerencias (datalist). Sin el paso frágil de "+ Nuevo proyecto…". */}
+          <input
+            value={newProyecto}
+            onChange={(e) => setNewProyecto(e.target.value)}
+            list="disecta-project-options"
+            placeholder="Elige o escribe uno"
+            className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
+          />
+          <datalist id="disecta-project-options">
+            {projects.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
         </div>
         <div className="w-28">
           <label className="text-xs text-muted block mb-1">{type === 'ig' ? 'Reels' : 'Videos'}/corrida</label>
@@ -461,11 +366,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     )}
                   </td>
                   <td className="p-2">
-                    <RowProjectSelect
-                      value={r.proyecto}
-                      projects={projects}
-                      onCommit={(v) => patch(r.id, { proyecto: v })}
-                    />
+                    <RowProjectSelect value={r.proyecto} onCommit={(v) => patch(r.id, { proyecto: v })} />
                   </td>
                   <td className="p-2">
                     <input
