@@ -187,6 +187,71 @@ export async function createAdvertiser(url) {
   return { recordId: data.id, url, marca: '', resultsLimit: null, lastRun: null, project: '' };
 }
 
+// Clave de identidad de una página de Facebook a partir de su URL: id numérico (profile.php?id=,
+// /people/<nombre>/<id>, /<id>) o, si no hay, el handle. Sirve para reconocer al MISMO anunciante
+// aunque esté guardado con otro formato de URL, y así no duplicar la fuente.
+function pageKeyFromUrl(url) {
+  const s = url || '';
+  const num =
+    s.match(/[?&]id=(\d{6,})/) ||
+    s.match(/facebook\.com\/people\/[^/]+\/(\d{6,})/i) ||
+    s.match(/facebook\.com\/(\d{6,})(?:[/?]|$)/i);
+  if (num) return num[1];
+  const handle = s.match(/facebook\.com\/([^/?#]+)/i);
+  return handle ? handle[1].toLowerCase() : null;
+}
+
+// Da de alta al anunciante dueño de un contenido si todavía no es fuente nuestra. Reconoce al
+// anunciante por page_id/handle (no por string exacto de URL) para no crear duplicados, y guarda
+// su nombre real. Devuelve { advertiser, creado }.
+export async function findOrCreateAdvertiserByPage({ pageId, pageUrl, pageName }) {
+  const canonical = pageId ? `https://www.facebook.com/profile.php?id=${pageId}` : (pageUrl || '').trim();
+  if (!canonical) return { advertiser: null, creado: false };
+  const wanted = pageKeyFromUrl(canonical) || pageKeyFromUrl(pageUrl || '');
+
+  const c = await getClient();
+  const { data, error } = await c.from(config.fbAdvertisersTable).select('*');
+  if (error) throw new Error(error.message);
+
+  const existing = (data || []).find((r) => {
+    const k = pageKeyFromUrl(r.url || '');
+    return k && wanted && k === wanted;
+  });
+
+  if (existing) {
+    // Ya era fuente: solo completa el nombre si le faltaba.
+    if (!existing.marca && pageName) {
+      try {
+        await setAdvertiserMarca(existing.id, pageName);
+      } catch (e) {
+        console.error(`[ads fuente] no se pudo guardar la marca: ${e.message}`);
+      }
+    }
+    return {
+      advertiser: {
+        recordId: existing.id,
+        url: existing.url,
+        marca: existing.marca || pageName || '',
+        resultsLimit: existing.anuncios_por_corrida ?? null,
+        lastRun: existing.ultima_corrida,
+        project: existing.proyecto || '',
+      },
+      creado: false,
+    };
+  }
+
+  const { data: row, error: insErr } = await c
+    .from(config.fbAdvertisersTable)
+    .insert({ url: canonical, marca: pageName || null, activo: true })
+    .select()
+    .single();
+  if (insErr) throw new Error(insErr.message);
+  return {
+    advertiser: { recordId: row.id, url: canonical, marca: pageName || '', resultsLimit: null, lastRun: null, project: '' },
+    creado: true,
+  };
+}
+
 // Busca un anunciante por su URL (para el disparo manual de una sola página).
 export async function getAdvertiserByUrl(url) {
   const target = (url || '').trim();

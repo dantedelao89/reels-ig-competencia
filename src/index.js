@@ -413,9 +413,13 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
         return;
       }
       if (result.unico) {
-        await slackReply(responseUrl, result.inserted > 0
+        const base = result.inserted > 0
           ? `✅ Video agregado de ${result.anunciante}`
-          : (result.message || 'ℹ️ Ese video ya estaba en la base'));
+          : (result.message || 'ℹ️ Ese video ya estaba en la base');
+        await slackReply(
+          responseUrl,
+          result.anuncianteNuevo ? `${base}\n🆕 ${result.anunciante} se agregó como fuente nueva a Fuentes.` : base
+        );
       } else {
         const msg = `✅ ${result.inserted} anuncios nuevos de ${result.anunciante}`;
         await slackReply(responseUrl, result.anuncianteNuevo ? `${msg}\n🆕 Se agregó como fuente nueva a Fuentes.` : msg);

@@ -146,7 +146,9 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
       let msg: string;
       if (data.message && data.inserted === 0) msg = data.message;
       else if (data.unico) msg = data.inserted > 0 ? 'Video agregado' : 'Ese video ya estaba en la base';
-      else msg = `${data.inserted} anuncios nuevos${data.anuncianteNuevo ? ' (anunciante nuevo)' : ''}`;
+      else msg = `${data.inserted} anuncios nuevos`;
+      // El alta del anunciante como fuente aplica tanto al link de página como al de un solo anuncio.
+      if (data.anuncianteNuevo) msg += ' · 🆕 anunciante agregado a Fuentes';
       toast.success(msg);
       setAdUrl('');
       onStatsChange();

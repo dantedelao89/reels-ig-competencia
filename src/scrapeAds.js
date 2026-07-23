@@ -2,7 +2,14 @@
 // Ad Library en una sola corrida batched, deduplica por Ad ID contra Supabase (destino primario,
 // con rehospedaje de creatividad a R2). Hereda Proyecto por anunciante.
 
-import { getActiveAdvertisers, getAdvertiserByUrl, updateAdvertiserLastRun, createAdvertiser, setAdvertiserMarca } from './sources.js';
+import {
+  getActiveAdvertisers,
+  getAdvertiserByUrl,
+  updateAdvertiserLastRun,
+  createAdvertiser,
+  setAdvertiserMarca,
+  findOrCreateAdvertiserByPage,
+} from './sources.js';
 import { scrapeFacebookAds, scrapeFacebookAdsByPageId, resolveAdvertiserPageIdFromUrl } from './facebookAds.js';
 import { scrapeFacebookPostByUrl, isSpecificContentLink } from './facebookPost.js';
 import { syncAds, syncSinglePostAsAd, getSyncedAdIds } from './supabase.js';
@@ -84,12 +91,29 @@ export async function runScrapeSingleAdVideo(contentUrl) {
     return { ok: true, inserted: 0, message: 'No se pudo extraer ese contenido de Facebook' };
   }
   const { synced } = await syncSinglePostAsAd(post, { scrapedAtIso: startedAt });
+
+  // Si el dueño del anuncio todavía no era fuente nuestra, lo damos de alta en Fuentes → Anunciantes
+  // (mismo comportamiento que el orgánico con creadores/canales). Así queda listo para re-scrapearlo.
+  let anuncianteNuevo = false;
+  try {
+    const { creado } = await findOrCreateAdvertiserByPage({
+      pageId: post.pageId,
+      pageUrl: post.pageUrl,
+      pageName: post.pageName,
+    });
+    anuncianteNuevo = creado;
+    if (creado) console.log(`[ADS single] anunciante nuevo agregado a Fuentes: ${post.pageName || post.pageId}`);
+  } catch (e) {
+    console.error(`[ADS single] no se pudo dar de alta al anunciante: ${e.message}`);
+  }
+
   console.log(`[ADS single] ${clean} postId=${post.postId} nuevo=${synced}`);
   return {
     ok: true,
     inserted: synced,
     scraped: 1,
     anunciante: post.pageName || 'Facebook',
+    anuncianteNuevo,
     unico: true, // marca que fue un solo video, no un anunciante completo
   };
 }
