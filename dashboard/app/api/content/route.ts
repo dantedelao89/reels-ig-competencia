@@ -97,8 +97,19 @@ export async function GET(req: NextRequest) {
   const YT_COLS =
     'id,video_id,titulo,canal,canal_url,url,fecha_publicacion,views,duracion,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 
+  // Columna real por la que ordenar EN LA BASE. Clave: Supabase corta en 1000 filas por request,
+  // así que sin ORDER BY las filas que llegan son arbitrarias y lo recién scrapeado se queda fuera
+  // (bug: las últimas altas no aparecían al superar 1000 filas). Ordenando en la base garantizamos
+  // que lleguen las filas correctas para el orden pedido. 'engagement' no es columna → cae a recencia.
+  const dbOrderCol =
+    sort === 'views' ? 'views' : sort === 'fecha_publicacion' ? 'fecha_publicacion' : 'scrapeado_en';
+
   async function fetchTable(table: string, creadorCol: string, cols: string): Promise<any[]> {
-    let query = supabase.from(table).select(cols).limit(CAP);
+    let query = supabase
+      .from(table)
+      .select(cols)
+      .order(dbOrderCol, { ascending: dir === 'asc', nullsFirst: false })
+      .limit(CAP);
     if (estado) query = query.eq('estado', estado);
     if (creadores.length) query = query.in(creadorCol, creadores);
     if (proyectos.length) query = query.in('proyecto', proyectos);
