@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ESTADOS, Estado } from '@/lib/types';
 import { ESTADO_STYLE } from '@/lib/estados';
 import { fmtDateShort, toParagraphs } from '@/lib/format';
@@ -122,6 +122,27 @@ export default function AdsView({ estado, stats, onStatsChange }: AdsViewProps) 
     setPage(1);
     fetchPage(1, true);
   }, [fetchPage]);
+
+  // Auto-refresco al volver a la pestaña: aparece lo scrapeado desde Slack/otra vista sin recargar.
+  const lastFocusFetch = useRef(0);
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastFocusFetch.current < 4000) return;
+      lastFocusFetch.current = now;
+      onStatsChange();
+      refreshFacets();
+      setPage(1);
+      fetchPage(1, true);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [fetchPage, refreshFacets, onStatsChange]);
 
   const toggle = (id: string) =>
     setSelected((p) => {

@@ -171,6 +171,28 @@ export default function DashboardClient() {
     fetchPage(1, true);
   }, [fetchPage]);
 
+  // Auto-refresco al volver a la pestaña: si scrapeaste desde Slack (u otro lado) y regresas al
+  // dashboard, se recarga la primera página + stats para que aparezca lo nuevo sin recargar a mano.
+  // Throttle de 4s para no refetchear en cada alt-tab rápido.
+  const lastFocusFetch = useRef(0);
+  useEffect(() => {
+    const onFocus = () => {
+      if (document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastFocusFetch.current < 4000) return;
+      lastFocusFetch.current = now;
+      refreshStats();
+      setPage(1);
+      fetchPage(1, true);
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [fetchPage, refreshStats]);
+
   const toggle = (id: string) =>
     setSelected((prev) => {
       const n = new Set(prev);
