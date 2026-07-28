@@ -4,6 +4,27 @@
 import { config } from './config.js';
 import { runActorItems } from './apifyRun.js';
 
+// Extrae el ID (11 chars) de cualquier forma de URL de YouTube: watch?v=, youtu.be/, /shorts/,
+// /live/, /embed/. Devuelve null si no encuentra un ID.
+export function youtubeVideoId(url) {
+  const s = url || '';
+  const m =
+    s.match(/[?&]v=([A-Za-z0-9_-]{11})/) ||
+    s.match(/youtu\.be\/([A-Za-z0-9_-]{11})/i) ||
+    s.match(/\/shorts\/([A-Za-z0-9_-]{11})/i) ||
+    s.match(/\/live\/([A-Za-z0-9_-]{11})/i) ||
+    s.match(/\/embed\/([A-Za-z0-9_-]{11})/i);
+  return m ? m[1] : null;
+}
+
+// Normaliza a la URL canónica limpia. Clave: si el link trae parámetros extra (ej. &pp=…%3D%3D que
+// YouTube añade al copiar), el actor a veces rechaza la URL como inválida y no scrapea nada. Un
+// Short (/shorts/<id>) es el mismo video vía watch?v=<id>, así que también se normaliza.
+export function canonicalYoutubeUrl(url) {
+  const id = youtubeVideoId(url);
+  return id ? `https://www.youtube.com/watch?v=${id}` : (url || '').trim();
+}
+
 const subtitleOpts = {
   downloadSubtitles: config.youtubeDownloadSubtitles,
   subtitlesFormat: 'plaintext',
@@ -43,10 +64,13 @@ export async function scrapeChannels({ urls, maxResults, maxShorts, onlyNewerTha
 
 // Trae los videos de una lista de URLs (para backfill de subtítulos de videos ya guardados).
 export async function scrapeVideosByUrls(urls) {
+  // Normaliza cada URL a watch?v=<id> limpia (evita el rechazo del actor por params extra y
+  // trata los Shorts como video normal).
+  const clean = urls.map(canonicalYoutubeUrl).filter(Boolean);
   const input = {
-    startUrls: urls.map((u) => ({ url: u })),
-    maxResults: urls.length,
-    maxResultsShorts: 0,
+    startUrls: clean.map((u) => ({ url: u })),
+    maxResults: clean.length,
+    maxResultsShorts: clean.length, // no descartar un Short pasado directamente
     maxResultStreams: 0,
     downloadSubtitles: true,
     subtitlesFormat: 'plaintext',
