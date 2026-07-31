@@ -140,7 +140,6 @@ export async function runScrapeYoutubeVideo(videoUrl) {
   if (!/youtu\.?be/i.test(url)) {
     return { ok: false, error: 'URL de YouTube inválida', inserted: 0 };
   }
-  const existing = await getExistingVideoIds();
   let items;
   try {
     items = await scrapeVideosByUrls([url]);
@@ -178,11 +177,13 @@ export async function runScrapeYoutubeVideo(videoUrl) {
       console.error(`[YT url] no se pudo dar de alta al canal ${it.channelUrl}: ${e.message}`);
     }
   }
-  const inserted = await ingestVideos(items, existing, startedAt, (it2) => ({
+  // Set vacío = sin dedup: el re-scrape manual de UN video SIEMPRE hace upsert, así que si ya existía
+  // se ACTUALIZA (recupera subtítulos que antes quedaron cortados, refresca métricas, etc.).
+  const inserted = await ingestVideos(items, new Set(), startedAt, (it2) => ({
     project: projByHandle.get((it2.channelUsername || '').toLowerCase()),
     origin: it2.channelUrl || url,
   }));
-  console.log(`[YT url] ${url} videoId=${it.id} nuevo=${inserted}`);
+  console.log(`[YT url] ${url} videoId=${it.id} actualizado/nuevo=${inserted}`);
   return {
     ok: true,
     inserted,
