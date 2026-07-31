@@ -19,6 +19,9 @@ export async function getClient() {
   const { createClient } = await import('@supabase/supabase-js');
   client = createClient(config.supabaseUrl, config.supabaseServiceKey, {
     auth: { persistSession: false },
+    // Esquema por defecto de la BD. En el proyecto Pro las tablas viven en 'disecta' (aislado del
+    // otro sistema en 'public'). Default 'public' para no romper hasta que se setee SUPABASE_SCHEMA.
+    db: { schema: process.env.SUPABASE_SCHEMA || 'public' },
   });
   return client;
 }
