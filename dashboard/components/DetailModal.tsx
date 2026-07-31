@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { ContentItem, Estado } from '@/lib/types';
+import type { ContentItem, Estado, CarouselSlide } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
 import { fmtNum, fmtDateShort, toParagraphs } from '@/lib/format';
 import { useToast } from './ui/Toast';
@@ -46,8 +46,12 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   // Re-scrape de este creador para traer su contenido nuevo (solo IG: se scrapea por @usuario).
   const [rescraping, setRescraping] = useState(false);
 
-  // Carrusel (posts tipo Sidecar): diapositiva actualmente mostrada.
-  const esCarrusel = Array.isArray(item.imagenes) && item.imagenes.length > 1;
+  // Carrusel (posts tipo Sidecar): normaliza cada diapositiva. Soporta el formato viejo (string =
+  // imagen) y el nuevo ({ tipo, url, poster }). Así los slides de video se ven y descargan como video.
+  const slides: CarouselSlide[] = Array.isArray(item.imagenes)
+    ? item.imagenes.map((x) => (typeof x === 'string' ? { tipo: 'image' as const, url: x } : x))
+    : [];
+  const esCarrusel = slides.length > 1;
   const [slide, setSlide] = useState(0);
   useEffect(() => setSlide(0), [item.id]);
 
@@ -197,24 +201,24 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     }
   }
 
-  // Descarga todas las diapositivas del carrusel, numeradas en orden (carrusel_<creador>_01.jpg, _02…).
-  // El cero a la izquierda hace que el explorador de archivos las liste en el orden correcto.
+  // Descarga todas las diapositivas del carrusel, numeradas en orden. Cada slide con su extensión:
+  // video → .mp4, imagen → .jpg. El cero a la izquierda mantiene el orden en el explorador.
   function downloadCarousel() {
-    const imgs = item.imagenes || [];
-    if (!imgs.length || dlCarousel) return;
+    if (!slides.length || dlCarousel) return;
     setDlCarousel(true);
-    const width = String(imgs.length).length; // 9→1, 10→2 dígitos
+    const width = String(slides.length).length;
     const base = (item.creador || 'carrusel').replace(/[^\w.-]/g, '_');
-    imgs.forEach((url, i) => {
+    slides.forEach((s, i) => {
       // Descargas escalonadas: el navegador bloquea varias descargas simultáneas.
       setTimeout(() => {
         const n = String(i + 1).padStart(width, '0');
+        const ext = s.tipo === 'video' ? 'mp4' : 'jpg';
         const a = document.createElement('a');
-        a.href = `/api/download?url=${encodeURIComponent(url)}&name=carrusel_${base}_${n}.jpg`;
+        a.href = `/api/download?url=${encodeURIComponent(s.url)}&name=carrusel_${base}_${n}.${ext}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        if (i === imgs.length - 1) setTimeout(() => setDlCarousel(false), 500);
+        if (i === slides.length - 1) setTimeout(() => setDlCarousel(false), 500);
       }, i * 400);
     });
   }
@@ -309,48 +313,65 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
               <div
                 className={`relative w-full ${item.platform === 'ig' ? 'pt-[133%]' : 'pt-[56%]'} bg-gray-200 rounded-lg overflow-hidden mb-3`}
               >
-                {(esCarrusel ? item.imagenes![slide] : item.thumbnail) && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={esCarrusel ? item.imagenes![slide] : item.thumbnail!}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
+                {esCarrusel ? (
+                  slides[slide].tipo === 'video' ? (
+                    <video
+                      key={slides[slide].url}
+                      src={slides[slide].url}
+                      poster={slides[slide].poster || undefined}
+                      controls
+                      playsInline
+                      className="absolute inset-0 w-full h-full object-contain bg-black"
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={slides[slide].url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  )
+                ) : (
+                  item.thumbnail && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                  )
                 )}
                 {esCarrusel && (
                   <>
                     <button
-                      onClick={() => setSlide((s) => (s - 1 + item.imagenes!.length) % item.imagenes!.length)}
+                      onClick={() => setSlide((s) => (s - 1 + slides.length) % slides.length)}
                       className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-black/70"
                       aria-label="Anterior"
                     >
                       ‹
                     </button>
                     <button
-                      onClick={() => setSlide((s) => (s + 1) % item.imagenes!.length)}
+                      onClick={() => setSlide((s) => (s + 1) % slides.length)}
                       className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/55 text-white flex items-center justify-center hover:bg-black/70"
                       aria-label="Siguiente"
                     >
                       ›
                     </button>
                     <span className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">
-                      {slide + 1}/{item.imagenes!.length}
+                      {slide + 1}/{slides.length}
                     </span>
                   </>
                 )}
               </div>
               {esCarrusel && (
                 <>
-                  {/* Tira de miniaturas para saltar a cualquier diapositiva. */}
+                  {/* Tira de miniaturas para saltar a cualquier diapositiva (video muestra su portada + ▶). */}
                   <div className="flex gap-1 overflow-x-auto mb-2 pb-1">
-                    {item.imagenes!.map((src, i) => (
+                    {slides.map((s, i) => (
                       <button
                         key={i}
                         onClick={() => setSlide(i)}
-                        className={`relative shrink-0 w-10 h-10 rounded overflow-hidden border ${i === slide ? 'border-accent ring-1 ring-accent' : 'border-line'}`}
+                        className={`relative shrink-0 w-10 h-10 rounded overflow-hidden border ${i === slide ? 'border-accent ring-1 ring-accent' : 'border-line'} bg-gray-200`}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={src} alt="" className="w-full h-full object-cover" />
+                        {(s.tipo === 'video' ? s.poster : s.url) && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={(s.tipo === 'video' ? s.poster : s.url) || undefined} alt="" className="w-full h-full object-cover" />
+                        )}
+                        {s.tipo === 'video' && (
+                          <span className="absolute inset-0 flex items-center justify-center text-white text-[11px] drop-shadow">▶</span>
+                        )}
                         <span className="absolute bottom-0 right-0 text-[9px] leading-none px-0.5 bg-black/60 text-white rounded-tl">{i + 1}</span>
                       </button>
                     ))}
@@ -360,9 +381,15 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                     onClick={downloadCarousel}
                     disabled={dlCarousel}
                     className="w-full mb-3 h-9 text-xs rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-60"
-                    title="Descargar todas las imágenes del carrusel, numeradas en orden"
+                    title="Descargar todas las diapositivas (video o imagen) numeradas en orden"
                   >
-                    {dlCarousel ? 'Descargando…' : `⬇️ Descargar carrusel (${item.imagenes!.length} imágenes, numeradas)`}
+                    {dlCarousel
+                      ? 'Descargando…'
+                      : (() => {
+                          const nv = slides.filter((s) => s.tipo === 'video').length;
+                          const detalle = nv > 0 ? `${slides.length} archivos · ${nv} video${nv > 1 ? 's' : ''}` : `${slides.length} imágenes`;
+                          return `⬇️ Descargar carrusel (${detalle}, numerados)`;
+                        })()}
                   </button>
                 </>
               )}

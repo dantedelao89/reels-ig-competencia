@@ -11,6 +11,13 @@ export const ESTADOS: { key: Estado; label: string }[] = [
   { key: 'descartado', label: 'Descartado' },
 ];
 
+// Una diapositiva de carrusel (formato nuevo). Puede ser video o imagen.
+export interface CarouselSlide {
+  tipo: 'video' | 'image';
+  url: string;
+  poster?: string | null;
+}
+
 // Forma normalizada que consume el frontend (une ig_reels y yt_videos).
 export interface ContentItem {
   id: string;
@@ -26,7 +33,9 @@ export interface ContentItem {
   duracion: string | null;
   thumbnail: string | null; // thumbnail_url (R2) || thumbnail_original
   tipo: string | null; // 'Image' | 'Video' | 'Sidecar' (carrusel) | null
-  imagenes: string[] | null; // carrusel: todas las diapositivas (R2); null si no es carrusel
+  // Carrusel: diapositivas (R2). Formato nuevo: { tipo:'video'|'image', url, poster? }.
+  // Formato viejo (carruseles ya guardados): string (URL de imagen). El front normaliza ambos.
+  imagenes: (string | CarouselSlide)[] | null;
   proyecto: string | null;
   estado: Estado;
   transcripcion: string | null;

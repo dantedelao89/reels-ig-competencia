@@ -104,7 +104,6 @@ export async function runScrapeInstagramUrl(url) {
   if (!/instagram\.com/i.test(clean)) {
     return { ok: false, error: 'URL de Instagram inválida', inserted: 0 };
   }
-  const existing = await getExistingShortcodes();
   let items;
   try {
     items = await scrapeInstagramUrl(clean);
@@ -144,8 +143,10 @@ export async function runScrapeInstagramUrl(url) {
       }
     }
   }
-  const { inserted, transcribed, transcriptionByShort } = await ingestReels(items, existing, startedAt, projectByUser);
-  console.log(`[IG url] ${clean} shortCode=${it.shortCode} nuevo=${inserted} transcrito=${transcribed}`);
+  // Set vacío = sin dedup: el re-scrape manual de UNA URL SIEMPRE hace upsert, así se ACTUALIZA lo
+  // que ya existía (p. ej. recuperar los videos de un carrusel que antes se guardaron solo como imagen).
+  const { inserted, transcribed, transcriptionByShort } = await ingestReels(items, new Set(), startedAt, projectByUser);
+  console.log(`[IG url] ${clean} shortCode=${it.shortCode} actualizado/nuevo=${inserted} transcrito=${transcribed}`);
   return {
     ok: true,
     inserted,

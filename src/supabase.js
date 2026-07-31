@@ -263,13 +263,23 @@ export async function syncSinglePostAsAd(post, ctx = {}) {
 
 // ----------------------------- Instagram -----------------------------
 
-// Extrae las URLs de imagen de cada diapositiva de un carrusel (type=Sidecar). Prefiere childPosts
-// (cada slide, incluyendo el poster de slides de video); cae a images[] (solo imágenes).
-function carouselImageUrls(item) {
+// Diapositivas de un carrusel (type=Sidecar). Cada slide puede ser VIDEO o IMAGEN: si el childPost
+// es Video devolvemos su mp4 (src) + su portada (poster); si es Imagen, solo la imagen. Antes solo
+// tomábamos la portada de todos, perdiendo los videos.
+function carouselSlides(item) {
   if (Array.isArray(item.childPosts) && item.childPosts.length) {
-    return item.childPosts.map((c) => c && c.displayUrl).filter(Boolean);
+    return item.childPosts
+      .map((c) => {
+        if (!c) return null;
+        if (c.type === 'Video' && c.videoUrl) return { tipo: 'video', src: c.videoUrl, poster: c.displayUrl || null };
+        if (c.displayUrl) return { tipo: 'image', src: c.displayUrl, poster: null };
+        return null;
+      })
+      .filter(Boolean);
   }
-  if (Array.isArray(item.images) && item.images.length) return item.images.filter(Boolean);
+  if (Array.isArray(item.images) && item.images.length) {
+    return item.images.filter(Boolean).map((u) => ({ tipo: 'image', src: u, poster: null }));
+  }
   return [];
 }
 
@@ -320,20 +330,35 @@ export async function syncReels(items, ctx = {}) {
       thumbnailUrl = await rehostImage(item.displayUrl, `thumbnails/ig/${item.shortCode}.jpg`);
       if (thumbnailUrl) rehosted++;
     }
-    // Carrusel (Sidecar): rehospeda TODAS las diapositivas a R2 (las URLs de IG caducan). Solo si
-    // hay más de 1 slide; un post de imagen única se cubre con thumbnail.
+    // Carrusel (Sidecar): rehospeda TODAS las diapositivas a R2 (las URLs de IG caducan). Cada slide
+    // se guarda como objeto { tipo:'video'|'image', url, poster }. Video → mp4; imagen → jpg. Solo si
+    // hay más de 1 slide (un post de imagen/video única se cubre con thumbnail/video_url).
     let imagenes = null;
-    const slides = carouselImageUrls(item);
+    const slides = carouselSlides(item);
     if (slides.length > 1) {
-      if (r2Enabled()) {
-        imagenes = [];
-        for (let i = 0; i < slides.length; i++) {
-          const u = await rehostImage(slides[i], `carousels/ig/${item.shortCode}_${i}.jpg`);
-          if (u) rehosted++;
-          imagenes.push(u || slides[i]); // si falla el rehost, guarda la URL original
+      imagenes = [];
+      for (let i = 0; i < slides.length; i++) {
+        const s = slides[i];
+        if (s.tipo === 'video') {
+          let url = s.src;
+          let poster = s.poster || null;
+          if (r2Enabled()) {
+            const v = await rehostVideo(s.src, `carousels/ig/${item.shortCode}_${i}.mp4`);
+            if (v) { url = v; rehosted++; }
+            if (s.poster) {
+              const p = await rehostImage(s.poster, `carousels/ig/${item.shortCode}_${i}_poster.jpg`);
+              if (p) { poster = p; rehosted++; }
+            }
+          }
+          imagenes.push({ tipo: 'video', url, poster });
+        } else {
+          let url = s.src;
+          if (r2Enabled()) {
+            const u = await rehostImage(s.src, `carousels/ig/${item.shortCode}_${i}.jpg`);
+            if (u) { url = u; rehosted++; }
+          }
+          imagenes.push({ tipo: 'image', url });
         }
-      } else {
-        imagenes = slides;
       }
     }
     rows.push(reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl, imagenes));
