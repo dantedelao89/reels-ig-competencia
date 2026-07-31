@@ -15,7 +15,10 @@ import { scrapeSearches, scrapeChannels, scrapeVideosByUrls } from './youtubeApi
 import { syncVideos, getExistingVideoIds } from './supabase.js';
 
 // El actor devuelve `subtitles` a veces como objeto y a veces como array de pistas.
-const MAX_SUBTITLE_CHARS = 95000;
+// Tope de seguridad muy alto: cubre incluso un directo de ~12 h. Antes era 95k por el límite de
+// Airtable (campo de texto largo ~100k); ya migrado a Supabase (text sin límite práctico), así que
+// se sube para no cortar transcripciones de videos largos.
+const MAX_SUBTITLE_CHARS = 1_000_000;
 
 export function extractSubtitles(subs) {
   if (!subs) return '';

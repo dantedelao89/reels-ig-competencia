@@ -538,6 +538,19 @@ function AdTranscription({ item }: { item: AdItem }) {
   const [loadingTr, setLoadingTr] = useState(true);
   const [transcribing, setTranscribing] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function copyTranscript() {
+    const texto = (showTranslation && traduccion ? traduccion : transcripcion) || '';
+    if (!texto) return;
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error('No se pudo copiar');
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -604,6 +617,11 @@ function AdTranscription({ item }: { item: AdItem }) {
       <div className="flex items-center justify-between mb-2 gap-2">
         <span className="text-[11px] uppercase tracking-wide text-muted">Transcripción</span>
         <div className="flex items-center gap-3 text-xs">
+          {transcripcion && !transcribing && (
+            <button onClick={copyTranscript} className="text-muted hover:text-accent" title="Copiar la transcripción">
+              {copied ? '✓ Copiado' : '📋 Copiar'}
+            </button>
+          )}
           {transcripcion && !transcribing && (
             traduccion ? (
               <div className="flex items-center gap-1.5">

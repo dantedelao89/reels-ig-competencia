@@ -56,6 +56,8 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [translating, setTranslating] = useState(false);
   const [showTranslation, setShowTranslation] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [dlCarousel, setDlCarousel] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -195,6 +197,40 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     }
   }
 
+  // Descarga todas las diapositivas del carrusel, numeradas en orden (carrusel_<creador>_01.jpg, _02…).
+  // El cero a la izquierda hace que el explorador de archivos las liste en el orden correcto.
+  function downloadCarousel() {
+    const imgs = item.imagenes || [];
+    if (!imgs.length || dlCarousel) return;
+    setDlCarousel(true);
+    const width = String(imgs.length).length; // 9→1, 10→2 dígitos
+    const base = (item.creador || 'carrusel').replace(/[^\w.-]/g, '_');
+    imgs.forEach((url, i) => {
+      // Descargas escalonadas: el navegador bloquea varias descargas simultáneas.
+      setTimeout(() => {
+        const n = String(i + 1).padStart(width, '0');
+        const a = document.createElement('a');
+        a.href = `/api/download?url=${encodeURIComponent(url)}&name=carrusel_${base}_${n}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        if (i === imgs.length - 1) setTimeout(() => setDlCarousel(false), 500);
+      }, i * 400);
+    });
+  }
+
+  async function copyTranscript() {
+    const texto = (showTranslation && traduccion ? traduccion : transcripcion) || '';
+    if (!texto) return;
+    try {
+      await navigator.clipboard.writeText(texto);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      toast.error('No se pudo copiar');
+    }
+  }
+
   async function buscarVariantes() {
     if (!videoId) return;
     setSearchingVar(true);
@@ -304,19 +340,31 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 )}
               </div>
               {esCarrusel && (
-                // Tira de miniaturas para saltar a cualquier diapositiva.
-                <div className="flex gap-1 overflow-x-auto mb-3 pb-1">
-                  {item.imagenes!.map((src, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setSlide(i)}
-                      className={`shrink-0 w-10 h-10 rounded overflow-hidden border ${i === slide ? 'border-accent ring-1 ring-accent' : 'border-line'}`}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={src} alt="" className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
+                <>
+                  {/* Tira de miniaturas para saltar a cualquier diapositiva. */}
+                  <div className="flex gap-1 overflow-x-auto mb-2 pb-1">
+                    {item.imagenes!.map((src, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setSlide(i)}
+                        className={`relative shrink-0 w-10 h-10 rounded overflow-hidden border ${i === slide ? 'border-accent ring-1 ring-accent' : 'border-line'}`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt="" className="w-full h-full object-cover" />
+                        <span className="absolute bottom-0 right-0 text-[9px] leading-none px-0.5 bg-black/60 text-white rounded-tl">{i + 1}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {/* Descarga TODAS las diapositivas de una, numeradas en orden (01, 02, …). */}
+                  <button
+                    onClick={downloadCarousel}
+                    disabled={dlCarousel}
+                    className="w-full mb-3 h-9 text-xs rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-60"
+                    title="Descargar todas las imágenes del carrusel, numeradas en orden"
+                  >
+                    {dlCarousel ? 'Descargando…' : `⬇️ Descargar carrusel (${item.imagenes!.length} imágenes, numeradas)`}
+                  </button>
+                </>
               )}
               <div className="grid grid-cols-2 gap-1.5 mb-3">
                 {item.thumbnail && (
@@ -414,6 +462,15 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                   {item.platform === 'ig' ? 'Transcripción' : 'Transcripción / Subtítulos'}
                 </span>
                 <div className="flex items-center gap-3">
+                  {transcripcion && !transcribing && (
+                    <button
+                      onClick={copyTranscript}
+                      className="text-xs text-muted hover:text-accent"
+                      title="Copiar la transcripción completa al portapapeles"
+                    >
+                      {copied ? '✓ Copiado' : '📋 Copiar'}
+                    </button>
+                  )}
                   {transcripcion && !transcribing && (
                     traduccion ? (
                       <div className="flex items-center gap-1.5 text-xs">
