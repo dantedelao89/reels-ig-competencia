@@ -63,6 +63,14 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [copied, setCopied] = useState(false);
   const [dlCarousel, setDlCarousel] = useState(false);
 
+  // Recurso que regaló el creador (URL o archivo subido). Opcional; visible al abrir el detalle.
+  const [recursoUrl, setRecursoUrl] = useState<string | null>(null);
+  const [recursoNombre, setRecursoNombre] = useState<string | null>(null);
+  const [recursoInput, setRecursoInput] = useState('');
+  const [savingRec, setSavingRec] = useState(false);
+  const [uploadingRec, setUploadingRec] = useState(false);
+  const recFileRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     let alive = true;
     setLoadingTr(true);
@@ -71,6 +79,9 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     setVarMsg('');
     setTraduccion('');
     setShowTranslation(false);
+    setRecursoUrl(null);
+    setRecursoNombre(null);
+    setRecursoInput('');
     fetch(`/api/item?platform=${item.platform}&id=${item.id}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d) => {
@@ -79,6 +90,8 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
         if (d.hashtags) setHashtags(d.hashtags);
         if (Array.isArray(d.variantes)) setVariantes(d.variantes);
         if (d.videoId) setVideoId(d.videoId);
+        if (d.recursoUrl) setRecursoUrl(d.recursoUrl);
+        if (d.recursoNombre) setRecursoNombre(d.recursoNombre);
         if (d.traduccion) {
           setTraduccion(d.traduccion);
           setShowTranslation(true); // si ya hay traducción, mostrarla por defecto
@@ -95,6 +108,76 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     setSaving(true);
     await onSaveProduction(item, { mi_guion: guion, mi_notas: notas, mi_link: link });
     setSaving(false);
+  }
+
+  // Guarda/actualiza/quita el recurso del creador vía PATCH /api/items.
+  async function patchRecurso(url: string | null, nombre: string | null) {
+    const res = await fetch('/api/items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: [{ id: item.id, platform: item.platform }],
+        recurso_url: url,
+        recurso_nombre: nombre,
+      }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo guardar');
+  }
+
+  async function saveRecursoUrl() {
+    const u = recursoInput.trim();
+    if (!u || savingRec) return;
+    setSavingRec(true);
+    try {
+      // nombre: el dominio, como etiqueta rápida (ej. "drive.google.com").
+      let nombre: string | null = null;
+      try { nombre = new URL(u).hostname.replace(/^www\./, ''); } catch {}
+      await patchRecurso(u, nombre);
+      setRecursoUrl(u);
+      setRecursoNombre(nombre);
+      setRecursoInput('');
+      toast.success('Recurso guardado');
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo guardar');
+    } finally {
+      setSavingRec(false);
+    }
+  }
+
+  async function uploadRecurso(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingRec(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('id', item.id);
+      fd.append('platform', item.platform);
+      fd.append('externalId', item.externalId);
+      const res = await fetch('/api/upload-recurso', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'No se pudo subir');
+      setRecursoUrl(data.url);
+      setRecursoNombre(data.nombre);
+      toast.success('Recurso subido');
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo subir');
+    } finally {
+      setUploadingRec(false);
+      if (recFileRef.current) recFileRef.current.value = '';
+    }
+  }
+
+  async function removeRecurso() {
+    if (!confirm('¿Quitar el recurso del creador?')) return;
+    try {
+      await patchRecurso(null, null);
+      setRecursoUrl(null);
+      setRecursoNombre(null);
+      toast.success('Recurso quitado');
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo quitar');
+    }
   }
 
   async function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -436,6 +519,57 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                   <div className="text-xs text-accent break-words">{hashtags}</div>
                 </div>
               )}
+
+              {/* Recurso del creador (opcional): lo que regaló el creador — Drive/PDF/link. Se ve al abrir. */}
+              <div className="mt-4 rounded-lg border border-line bg-white p-2.5">
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">🎁 Recurso del creador</div>
+                {recursoUrl ? (
+                  <div className="flex items-center gap-1.5">
+                    <a
+                      href={recursoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+                      title={recursoNombre || recursoUrl}
+                    >
+                      <span aria-hidden="true">📎</span>
+                      <span className="truncate">{recursoNombre || 'Ver recurso'}</span>
+                      <span className="shrink-0">↗</span>
+                    </a>
+                    <button onClick={removeRecurso} className="shrink-0 text-muted hover:text-red-600 text-xs" title="Quitar recurso">
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex gap-1">
+                      <input
+                        value={recursoInput}
+                        onChange={(e) => setRecursoInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveRecursoUrl()}
+                        placeholder="Pega un link (Drive, PDF…)"
+                        className="flex-1 min-w-0 h-8 px-2 text-xs border border-line rounded-md bg-white outline-none focus:border-accent"
+                      />
+                      <button
+                        onClick={saveRecursoUrl}
+                        disabled={!recursoInput.trim() || savingRec}
+                        className="shrink-0 h-8 px-2.5 text-xs rounded-md bg-accent text-white font-medium disabled:opacity-50"
+                      >
+                        {savingRec ? '…' : 'Guardar'}
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-muted text-center">o</div>
+                    <button
+                      onClick={() => recFileRef.current?.click()}
+                      disabled={uploadingRec}
+                      className="w-full h-8 text-xs rounded-md border border-line bg-white hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      {uploadingRec ? 'Subiendo…' : '⬆️ Subir archivo (PDF, imagen…)'}
+                    </button>
+                    <input ref={recFileRef} type="file" onChange={uploadRecurso} className="hidden" />
+                  </div>
+                )}
+              </div>
 
               {item.platform === 'yt' && (
                 <div className="mt-4">

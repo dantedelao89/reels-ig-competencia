@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest) {
   if (!body?.items?.length) {
     return NextResponse.json({ error: 'items requerido' }, { status: 400 });
   }
-  const { estado, mi_guion, mi_notas, mi_link, mi_video_url } = body;
+  const { estado, mi_guion, mi_notas, mi_link, mi_video_url, recurso_url, recurso_nombre } = body;
   if (estado && !VALID.includes(estado)) {
     return NextResponse.json({ error: 'estado inválido' }, { status: 400 });
   }
@@ -27,6 +27,9 @@ export async function PATCH(req: NextRequest) {
   if (mi_notas !== undefined) patch.mi_notas = mi_notas;
   if (mi_link !== undefined) patch.mi_link = mi_link;
   if (mi_video_url !== undefined) patch.mi_video_url = mi_video_url;
+  // Recurso que regaló el creador (URL externa o archivo subido a R2). Opcional; null = quitar.
+  if (recurso_url !== undefined) patch.recurso_url = recurso_url || null;
+  if (recurso_nombre !== undefined) patch.recurso_nombre = recurso_nombre || null;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'nada que actualizar' }, { status: 400 });

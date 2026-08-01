@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   try {
     const { data, error } = await getSupabase()
       .from(table)
-      .select(`${textCol}, traduccion, hashtags, mi_guion, mi_notas, mi_link, mi_video_url${extraCols}`)
+      .select(`${textCol}, traduccion, hashtags, mi_guion, mi_notas, mi_link, mi_video_url, recurso_url, recurso_nombre${extraCols}`)
       .eq('id', id)
       .single();
     if (error) throw new Error(error.message);
@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
       miNotas: (data as any).mi_notas ?? null,
       miLink: (data as any).mi_link ?? null,
       miVideoUrl: (data as any).mi_video_url ?? null,
+      recursoUrl: (data as any).recurso_url ?? null,
+      recursoNombre: (data as any).recurso_nombre ?? null,
       variantes: (data as any).variantes ?? [],
       videoId: (data as any).video_id ?? null,
     });
