@@ -117,7 +117,8 @@ export async function POST(req: NextRequest) {
     }
     if (!files.length) return NextResponse.json({ error: 'no se pudo descargar ninguna diapositiva' }, { status: 502 });
     const zip = buildZip(files);
-    return new NextResponse(zip, {
+    // Buffer de Node no es BodyInit para la Web Response → lo pasamos como Uint8Array.
+    return new NextResponse(new Uint8Array(zip), {
       headers: {
         'Content-Type': 'application/zip',
         'Content-Disposition': `attachment; filename="${zipName}.zip"`,
