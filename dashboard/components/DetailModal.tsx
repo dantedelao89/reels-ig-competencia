@@ -284,26 +284,38 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     }
   }
 
-  // Descarga todas las diapositivas del carrusel, numeradas en orden. Cada slide con su extensión:
-  // video → .mp4, imagen → .jpg. El cero a la izquierda mantiene el orden en el explorador.
-  function downloadCarousel() {
+  // Descarga TODAS las diapositivas del carrusel en un solo .zip, numeradas en orden. Cada archivo
+  // con su extensión (video → .mp4, imagen → .jpg) y cero a la izquierda para que ordene bien.
+  async function downloadCarousel() {
     if (!slides.length || dlCarousel) return;
     setDlCarousel(true);
     const width = String(slides.length).length;
     const base = (item.creador || 'carrusel').replace(/[^\w.-]/g, '_');
-    slides.forEach((s, i) => {
-      // Descargas escalonadas: el navegador bloquea varias descargas simultáneas.
-      setTimeout(() => {
-        const n = String(i + 1).padStart(width, '0');
-        const ext = s.tipo === 'video' ? 'mp4' : 'jpg';
-        const a = document.createElement('a');
-        a.href = `/api/download?url=${encodeURIComponent(s.url)}&name=carrusel_${base}_${n}.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        if (i === slides.length - 1) setTimeout(() => setDlCarousel(false), 500);
-      }, i * 400);
-    });
+    const payload = slides.map((s, i) => ({
+      url: s.url,
+      name: `${String(i + 1).padStart(width, '0')}.${s.tipo === 'video' ? 'mp4' : 'jpg'}`,
+    }));
+    try {
+      const res = await fetch('/api/carousel-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slides: payload, zipName: `carrusel_${base}` }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo generar el zip');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `carrusel_${base}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo descargar');
+    } finally {
+      setDlCarousel(false);
+    }
   }
 
   async function copyTranscript() {
@@ -467,11 +479,11 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                     title="Descargar todas las diapositivas (video o imagen) numeradas en orden"
                   >
                     {dlCarousel
-                      ? 'Descargando…'
+                      ? 'Generando ZIP…'
                       : (() => {
                           const nv = slides.filter((s) => s.tipo === 'video').length;
                           const detalle = nv > 0 ? `${slides.length} archivos · ${nv} video${nv > 1 ? 's' : ''}` : `${slides.length} imágenes`;
-                          return `⬇️ Descargar carrusel (${detalle}, numerados)`;
+                          return `⬇️ Descargar carrusel .zip (${detalle}, numerados)`;
                         })()}
                   </button>
                 </>

@@ -511,11 +511,29 @@ function AdDetail({ item, onClose, onEstado, onRescraped }: { item: AdItem; onCl
             </div>
           </div>
           <div className="p-4">
-            {item.cta && <span className="inline-block text-xs px-2 py-1 rounded bg-accent-soft text-accent mb-3">{item.cta}</span>}
             <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Copy</div>
             <p className="text-sm text-gray-800 whitespace-pre-wrap mb-4">{cleanAdText(item.copy, '(sin copy)')}</p>
-            {item.linkDestino && (
-              <a href={item.linkDestino} target="_blank" rel="noreferrer" className="inline-block text-sm text-accent break-all mb-4">{item.linkDestino} ↗</a>
+
+            {/* Página de destino + CTA: sección clara. Solo si el anuncio los trae. */}
+            {(item.linkDestino || item.cta) && (
+              <div className="mb-4 rounded-lg border border-line bg-gray-50 p-2.5">
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">Página de destino</div>
+                {item.linkDestino ? (
+                  <a
+                    href={item.linkDestino}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-accent text-white text-sm font-medium hover:opacity-90 max-w-full"
+                    title={item.linkDestino}
+                  >
+                    {item.cta ? <span className="shrink-0">{item.cta}</span> : <span>Ir al destino</span>}
+                    <span className="shrink-0">↗</span>
+                  </a>
+                ) : (
+                  <span className="inline-block text-xs px-2 py-1 rounded bg-accent-soft text-accent">{item.cta}</span>
+                )}
+                {item.linkDestino && <div className="text-[11px] text-muted break-all mt-1.5">{item.linkDestino}</div>}
+              </div>
             )}
 
             {/* Transcripción del video del anuncio (mismo flujo que Orgánico). */}
