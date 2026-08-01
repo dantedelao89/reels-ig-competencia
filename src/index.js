@@ -393,25 +393,47 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
   const parts = text.split(/\s+/).filter(Boolean);
   const contentUrl = parts[0];
   const recursoUrl = parts[1];
-  if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl)) {
+  const responseUrl = req.body?.response_url;
+  const isYt = /youtu\.?be/i.test(contentUrl || '');
+  const isIg = /instagram\.com/i.test(contentUrl || '');
+  if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl) || (!isYt && !isIg)) {
     return res.json({
       response_type: 'ephemeral',
-      text: 'Uso: `/recurso <url del contenido> <url del recurso>`\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`',
+      text: 'Uso: `/recurso <url del contenido> <url del recurso>`\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`\n(Contenido: Instagram o YouTube.)',
     });
   }
-  try {
-    const r = await attachRecursoByUrl(contentUrl, recursoUrl);
-    if (!r.ok) {
-      return res.json({ response_type: 'ephemeral', text: `❌ ${r.error}` });
+
+  // ACK inmediato (Slack exige respuesta en 3s). El trabajo real (scrapear si hace falta + ligar)
+  // sigue en segundo plano y el resultado llega por response_url.
+  res.json({ response_type: 'in_channel', text: `🔄 Procesando recurso para ${contentUrl}…` });
+
+  (async () => {
+    try {
+      // 1) intenta ligar directo (si el contenido ya está en la base).
+      let r = await attachRecursoByUrl(contentUrl, recursoUrl);
+      // 2) si no existía, lo scrapea primero y reintenta ligar (todo en un paso).
+      if (!r.ok && r.notFound) {
+        await slackReply(responseUrl, '📥 Ese contenido no estaba; lo scrapeo primero…');
+        const scr = isYt ? await runScrapeYoutubeVideo(contentUrl) : await runScrapeInstagramUrl(contentUrl);
+        if (scr.ok === false) {
+          await slackReply(responseUrl, `❌ No se pudo scrapear el contenido: ${scr.error}`);
+          return;
+        }
+        r = await attachRecursoByUrl(contentUrl, recursoUrl);
+      }
+      if (!r.ok) {
+        await slackReply(responseUrl, `❌ ${r.error}`);
+        return;
+      }
+      await slackReply(
+        responseUrl,
+        `✅ Recurso ligado${r.quien ? ` a ${r.plataforma === 'ig' ? '@' : ''}${r.quien}` : ''} — ya aparece en DISECTA al abrir el contenido.`
+      );
+    } catch (err) {
+      console.error('Error en /slack/recurso:', err);
+      await slackReply(responseUrl, `❌ Error: ${err.message}`);
     }
-    return res.json({
-      response_type: 'in_channel',
-      text: `✅ Recurso ligado${r.quien ? ` a ${r.plataforma === 'ig' ? '@' : ''}${r.quien}` : ''} — ya aparece en DISECTA al abrir el contenido.`,
-    });
-  } catch (err) {
-    console.error('Error en /slack/recurso:', err);
-    return res.json({ response_type: 'ephemeral', text: `❌ Error: ${err.message}` });
-  }
+  })();
 });
 
 // Slash command de Slack: /scrape <url de Instagram o YouTube>. Responde rápido (ACK) y el

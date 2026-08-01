@@ -163,7 +163,7 @@ export async function attachRecursoByUrl(contentUrl, recursoUrl) {
     .select(quienCol);
   if (error) throw new Error(error.message);
   if (!data || data.length === 0) {
-    return { ok: false, error: 'No encontré ese contenido en la base. Primero haz /scrape de esa URL.' };
+    return { ok: false, notFound: true, plataforma: table === config.igReelsTable ? 'ig' : 'yt', error: 'No encontré ese contenido en la base.' };
   }
   return { ok: true, plataforma: table === config.igReelsTable ? 'ig' : 'yt', quien: data[0][quienCol] || null };
 }
