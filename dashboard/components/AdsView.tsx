@@ -450,6 +450,91 @@ function AdDetail({ item, onClose, onEstado, onRescraped }: { item: AdItem; onCl
     }
   }
 
+  // Recurso del creador/anunciante (URL o archivo subido). Opcional; se ve al abrir el anuncio.
+  const [recursoUrl, setRecursoUrl] = useState<string | null>(null);
+  const [recursoNombre, setRecursoNombre] = useState<string | null>(null);
+  const [recursoInput, setRecursoInput] = useState('');
+  const [savingRec, setSavingRec] = useState(false);
+  const [uploadingRec, setUploadingRec] = useState(false);
+  const recFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setRecursoUrl(null);
+    setRecursoNombre(null);
+    setRecursoInput('');
+    fetch(`/api/item?platform=ad&id=${item.id}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive || d.error) return;
+        if (d.recursoUrl) setRecursoUrl(d.recursoUrl);
+        if (d.recursoNombre) setRecursoNombre(d.recursoNombre);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [item.id]);
+
+  async function patchRecurso(url: string | null, nombre: string | null) {
+    const res = await fetch('/api/items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [{ id: item.id, platform: 'ad' }], recurso_url: url, recurso_nombre: nombre }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo guardar');
+  }
+  async function saveRecursoUrl() {
+    const u = recursoInput.trim();
+    if (!u || savingRec) return;
+    setSavingRec(true);
+    try {
+      let nombre: string | null = null;
+      try { nombre = new URL(u).hostname.replace(/^www\./, ''); } catch {}
+      await patchRecurso(u, nombre);
+      setRecursoUrl(u);
+      setRecursoNombre(nombre);
+      setRecursoInput('');
+      toast.success('Recurso guardado');
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo guardar');
+    } finally {
+      setSavingRec(false);
+    }
+  }
+  async function uploadRecurso(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingRec(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('id', item.id);
+      fd.append('platform', 'ad');
+      fd.append('externalId', item.adId);
+      const res = await fetch('/api/upload-recurso', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok || data.ok === false) throw new Error(data.error || 'No se pudo subir');
+      setRecursoUrl(data.url);
+      setRecursoNombre(data.nombre);
+      toast.success('Recurso subido');
+    } catch (err: any) {
+      toast.error(err.message || 'No se pudo subir');
+    } finally {
+      setUploadingRec(false);
+      if (recFileRef.current) recFileRef.current.value = '';
+    }
+  }
+  async function removeRecurso() {
+    if (!confirm('¿Quitar el recurso?')) return;
+    try {
+      await patchRecurso(null, null);
+      setRecursoUrl(null);
+      setRecursoNombre(null);
+      toast.success('Recurso quitado');
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo quitar');
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/45 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white w-full max-w-3xl rounded-2xl overflow-hidden my-6" onClick={(e) => e.stopPropagation()}>
@@ -508,6 +593,47 @@ function AdDetail({ item, onClose, onEstado, onRescraped }: { item: AdItem; onCl
               <div>Inicio: {fmtDateShort(item.fechaInicio)}</div>
               <div>Fin: {item.activo ? '(en curso)' : fmtDateShort(item.fechaFin)}</div>
               {item.proyecto && <div>Proyecto: {item.proyecto}</div>}
+            </div>
+
+            {/* Recurso del creador (opcional): pega una URL o sube un archivo (PDF/imagen…). */}
+            <div className="mt-4 rounded-lg border border-line bg-white p-2.5">
+              <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">🎁 Recurso del creador</div>
+              {recursoUrl ? (
+                <div className="flex items-center gap-1.5">
+                  <a
+                    href={recursoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 min-w-0 inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+                    title={recursoNombre || recursoUrl}
+                  >
+                    <span aria-hidden="true">📎</span>
+                    <span className="truncate">{recursoNombre || 'Ver recurso'}</span>
+                    <span className="shrink-0">↗</span>
+                  </a>
+                  <button onClick={removeRecurso} className="shrink-0 text-muted hover:text-red-600 text-xs" title="Quitar recurso">✕</button>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex gap-1">
+                    <input
+                      value={recursoInput}
+                      onChange={(e) => setRecursoInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && saveRecursoUrl()}
+                      placeholder="Pega un link (Drive, PDF…)"
+                      className="flex-1 min-w-0 h-8 px-2 text-xs border border-line rounded-md bg-white outline-none focus:border-accent"
+                    />
+                    <button onClick={saveRecursoUrl} disabled={!recursoInput.trim() || savingRec} className="shrink-0 h-8 px-2.5 text-xs rounded-md bg-accent text-white font-medium disabled:opacity-50">
+                      {savingRec ? '…' : 'Guardar'}
+                    </button>
+                  </div>
+                  <div className="text-[11px] text-muted text-center">o</div>
+                  <button onClick={() => recFileRef.current?.click()} disabled={uploadingRec} className="w-full h-8 text-xs rounded-md border border-line bg-white hover:bg-gray-50 disabled:opacity-60">
+                    {uploadingRec ? 'Subiendo…' : '⬆️ Subir archivo (PDF, imagen…)'}
+                  </button>
+                  <input ref={recFileRef} type="file" onChange={uploadRecurso} className="hidden" />
+                </div>
+              )}
             </div>
           </div>
           <div className="p-4">
