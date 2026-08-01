@@ -118,6 +118,56 @@ export async function getRowByField(table, field, value, select = '*') {
   return data;
 }
 
+// Extrae el video_id de una URL de YouTube (watch?v=, youtu.be, shorts, live, embed).
+function youtubeIdFromUrl(u) {
+  const m =
+    u.match(/[?&]v=([\w-]{6,})/) ||
+    u.match(/youtu\.be\/([\w-]{6,})/i) ||
+    u.match(/\/(?:shorts|live|embed)\/([\w-]{6,})/i);
+  return m ? m[1] : null;
+}
+
+// Liga el "recurso del creador" (URL) a un contenido YA scrapeado, ubicándolo por su URL original.
+// Soporta Instagram (por shortcode) y YouTube (por video_id). Devuelve { ok, plataforma, quien } o
+// { ok:false, error }. El nombre del recurso = el dominio del link (etiqueta rápida).
+export async function attachRecursoByUrl(contentUrl, recursoUrl) {
+  if (!enabled) return { ok: false, error: 'Supabase no configurado' };
+  const url = (contentUrl || '').trim();
+  let table, col, id;
+  const ig = url.match(/instagram\.com\/(?:p|reel|reels|tv)\/([^/?#]+)/i);
+  if (ig) {
+    table = config.igReelsTable;
+    col = 'shortcode';
+    id = ig[1];
+  } else {
+    const yt = youtubeIdFromUrl(url);
+    if (yt) {
+      table = config.ytVideosTable;
+      col = 'video_id';
+      id = yt;
+    }
+  }
+  if (!table) return { ok: false, error: 'URL no reconocida (usa un link de Instagram o YouTube).' };
+
+  let nombre = null;
+  try {
+    nombre = new URL(recursoUrl).hostname.replace(/^www\./, '');
+  } catch {}
+
+  const quienCol = table === config.igReelsTable ? 'creador' : 'canal';
+  const c = await getClient();
+  const { data, error } = await c
+    .from(table)
+    .update({ recurso_url: recursoUrl, recurso_nombre: nombre })
+    .eq(col, id)
+    .select(quienCol);
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'No encontré ese contenido en la base. Primero haz /scrape de esa URL.' };
+  }
+  return { ok: true, plataforma: table === config.igReelsTable ? 'ig' : 'yt', quien: data[0][quienCol] || null };
+}
+
 // IDs de anuncios ya presentes en Supabase (meta_ads). Dedup primario del pipeline de ads.
 export async function getSyncedAdIds() {
   if (!enabled) return new Set();

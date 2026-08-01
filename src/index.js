@@ -14,7 +14,7 @@ import { verifySlackSignature, slackReply } from './slack.js';
 import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
-import { updateRowById, getRowByField, supabaseEnabled } from './supabase.js';
+import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
 import { toParagraphs, looksSpanish, chunkParagraphs } from './format.js';
 
 const app = express();
@@ -381,6 +381,36 @@ app.post('/translate', async (req, res) => {
   } catch (err) {
     console.error(`[translate] error ${id}:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Slash command de Slack: /recurso <url del contenido> <url del recurso>. Liga el recurso que
+// regaló el creador (Drive/PDF/link) a un contenido YA scrapeado, ubicándolo por su URL. Se refleja
+// en DISECTA al abrir el item (📎 Recurso del creador). Op es rápida (solo DB) → respuesta directa.
+app.post('/slack/recurso', slackFormParser, async (req, res) => {
+  if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
+  const text = (req.body?.text || '').trim();
+  const parts = text.split(/\s+/).filter(Boolean);
+  const contentUrl = parts[0];
+  const recursoUrl = parts[1];
+  if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl)) {
+    return res.json({
+      response_type: 'ephemeral',
+      text: 'Uso: `/recurso <url del contenido> <url del recurso>`\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`',
+    });
+  }
+  try {
+    const r = await attachRecursoByUrl(contentUrl, recursoUrl);
+    if (!r.ok) {
+      return res.json({ response_type: 'ephemeral', text: `❌ ${r.error}` });
+    }
+    return res.json({
+      response_type: 'in_channel',
+      text: `✅ Recurso ligado${r.quien ? ` a ${r.plataforma === 'ig' ? '@' : ''}${r.quien}` : ''} — ya aparece en DISECTA al abrir el contenido.`,
+    });
+  } catch (err) {
+    console.error('Error en /slack/recurso:', err);
+    return res.json({ response_type: 'ephemeral', text: `❌ Error: ${err.message}` });
   }
 });
 
