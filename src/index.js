@@ -391,15 +391,16 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
   if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
   const text = (req.body?.text || '').trim();
   const parts = text.split(/\s+/).filter(Boolean);
-  const contentUrl = parts[0];
-  const recursoUrl = parts[1];
+  // Orden libre: el que sea link de Instagram/YouTube es el CONTENIDO; el otro link es el RECURSO.
+  const contentUrl = parts.find((p) => /youtu\.?be|instagram\.com/i.test(p));
+  const recursoUrl = parts.find((p) => p !== contentUrl && /^https?:\/\//i.test(p));
   const responseUrl = req.body?.response_url;
   const isYt = /youtu\.?be/i.test(contentUrl || '');
   const isIg = /instagram\.com/i.test(contentUrl || '');
   if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl) || (!isYt && !isIg)) {
     return res.json({
       response_type: 'ephemeral',
-      text: 'Uso: `/recurso <url del contenido> <url del recurso>`\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`\n(Contenido: Instagram o YouTube.)',
+      text: 'Uso: `/recurso <url de Instagram/YouTube> <url del recurso>` (en cualquier orden).\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`\n(Uno de los dos links debe ser de Instagram o YouTube.)',
     });
   }
 
