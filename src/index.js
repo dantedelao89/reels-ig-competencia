@@ -15,6 +15,7 @@ import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
+import { buildRegenPlan } from './regenPlan.js';
 import { toParagraphs, looksSpanish, chunkParagraphs } from './format.js';
 
 const app = express();
@@ -380,6 +381,47 @@ app.post('/translate', async (req, res) => {
     res.json({ ok: true, text: translated });
   } catch (err) {
     console.error(`[translate] error ${id}:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Regenerador de carruseles ---
+
+// Arma el plan por slide (visión → clasificación + traducción + referencia + prompt) y lo guarda
+// en ig_reels.regen para revisarlo en DISECTA. Corre inline (~20-60s, una llamada de visión).
+app.post('/regen/plan', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const { shortcode } = req.body || {};
+  if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
+  try {
+    const result = await buildRegenPlan(String(shortcode).trim());
+    if (!result.ok) return res.status(400).json(result);
+    console.log(`[regen] plan de ${shortcode}: ${result.plan.length} slides (~$${result.costoEstimado})`);
+    res.json(result);
+  } catch (err) {
+    console.error(`[regen] error en plan ${shortcode}:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Estado del regenerador de un carrusel (para depurar por curl; la UI lee Supabase directo).
+app.get('/regen/status', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) return res.status(401).json({ ok: false, error: 'No autorizado' });
+  }
+  const shortcode = (req.query.shortcode || '').toString().trim();
+  if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
+  try {
+    const row = await getRowByField(config.igReelsTable, 'shortcode', shortcode, 'regen, regen_estado, regen_actualizado');
+    if (!row) return res.status(404).json({ ok: false, error: 'No existe' });
+    res.json({ ok: true, ...row });
+  } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });

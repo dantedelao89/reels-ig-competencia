@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
   const table = platform === 'ig' ? IG_TABLE : platform === 'ad' ? 'meta_ads' : YT_TABLE;
   const textCol = platform === 'yt' ? 'subtitulos' : 'transcripcion'; // ig y ad usan 'transcripcion'
   // Solo YouTube tiene variantes A/B y video_id (para el botón "buscar variantes").
-  const extraCols = platform === 'yt' ? ', variantes, video_id' : '';
+  // Solo IG tiene el regenerador de carruseles (regen / regen_estado).
+  const extraCols = platform === 'yt' ? ', variantes, video_id' : platform === 'ig' ? ', regen, regen_estado' : '';
   try {
     const { data, error } = await getSupabase()
       .from(table)
@@ -35,6 +36,8 @@ export async function GET(req: NextRequest) {
       recursoNombre: (data as any).recurso_nombre ?? null,
       variantes: (data as any).variantes ?? [],
       videoId: (data as any).video_id ?? null,
+      regen: (data as any).regen ?? null,
+      regenEstado: (data as any).regen_estado ?? null,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

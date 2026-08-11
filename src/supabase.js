@@ -118,6 +118,53 @@ export async function getRowByField(table, field, value, select = '*') {
   return data;
 }
 
+// --- Regenerador de carruseles ---
+
+// Referencias activas de la biblioteca del regenerador (anclas de branding + fotos CTA).
+export async function getRegenRefs() {
+  if (!enabled) return [];
+  const c = await getClient();
+  const { data, error } = await c
+    .from('regen_refs')
+    .select('id, tipo, nombre, url, notas')
+    .eq('activo', true)
+    .order('creado_en');
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+// Patch atómico de UN slide dentro de ig_reels.regen (RPC en Postgres: merge dentro de un solo
+// UPDATE). Lo usan el job de generación y la UI; así nunca se pisan entre sí el array completo.
+export async function regenPatchSlide(shortcode, idx, patch) {
+  if (!enabled) return;
+  const c = await getClient();
+  const { error } = await c.rpc('regen_patch_slide', {
+    p_shortcode: shortcode,
+    p_idx: idx,
+    p_patch: patch,
+  });
+  if (error) throw new Error(error.message);
+}
+
+// Guarda el plan completo (o cambia el estado global) del regenerador para un carrusel.
+// Con guard=true solo escribe si NO está 'generando' (o el job lleva >15 min muerto);
+// devuelve false si el guard lo bloqueó.
+export async function setRegen(shortcode, fields, { guard = false } = {}) {
+  if (!enabled) return false;
+  const c = await getClient();
+  let q = c
+    .from(config.igReelsTable)
+    .update({ ...fields, regen_actualizado: new Date().toISOString() })
+    .eq('shortcode', shortcode);
+  if (guard) {
+    const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    q = q.or(`regen_estado.is.null,regen_estado.neq.generando,regen_actualizado.lt.${cutoff}`);
+  }
+  const { data, error } = await q.select('shortcode');
+  if (error) throw new Error(error.message);
+  return (data || []).length > 0;
+}
+
 // Extrae el video_id de una URL de YouTube (watch?v=, youtu.be, shorts, live, embed).
 function youtubeIdFromUrl(u) {
   const m =

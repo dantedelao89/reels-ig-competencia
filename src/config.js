@@ -68,6 +68,14 @@ export const config = {
   transcribeChunkThresholdBytes: Number(process.env.TRANSCRIBE_CHUNK_THRESHOLD_BYTES || 15 * 1024 * 1024), // 15 MB
   transcribeChunkSeconds: Number(process.env.TRANSCRIBE_CHUNK_SECONDS || 600), // 10 min por trozo
 
+  // --- Regenerador de carruseles (Wavespeed + visión vía OpenRouter) ---
+  // Se activa solo si hay WAVESPEED_API_KEY. La generación es bajo demanda desde DISECTA.
+  wavespeedApiKey: process.env.WAVESPEED_API_KEY || '',
+  // Modelo de visión que clasifica los slides y propone el plan (barato, multimodal).
+  regenVisionModel: process.env.REGEN_VISION_MODEL || 'google/gemini-2.5-flash',
+  // Cuántos slides se generan en paralelo (cada uno tarda 3-6 min en gpt-image-2).
+  regenConcurrency: Number(process.env.REGEN_CONCURRENCY || 3),
+
   // Telegram (opcional): disparo manual desde el bot. Se activa solo si hay token.
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramAllowedChatIds: (process.env.TELEGRAM_ALLOWED_CHAT_IDS || '')
