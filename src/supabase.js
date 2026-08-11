@@ -146,9 +146,12 @@ export async function regenPatchSlide(shortcode, idx, patch) {
   if (error) throw new Error(error.message);
 }
 
+// Estados en los que hay un job trabajando: el guard los bloquea a todos.
+const OCUPADOS = ['leyendo', 'escribiendo', 'generando', 'revisando'];
+
 // Guarda el plan completo (o cambia el estado global) del regenerador para un carrusel.
-// Con guard=true solo escribe si NO está 'generando' (o el job lleva >15 min muerto);
-// devuelve false si el guard lo bloqueó.
+// Con guard=true solo escribe si NO hay un job en curso (o el job lleva >15 min sin dar
+// señales, p.ej. porque Railway redesplegó a mitad); devuelve false si el guard lo bloqueó.
 export async function setRegen(shortcode, fields, { guard = false } = {}) {
   if (!enabled) return false;
   const c = await getClient();
@@ -158,11 +161,53 @@ export async function setRegen(shortcode, fields, { guard = false } = {}) {
     .eq('shortcode', shortcode);
   if (guard) {
     const cutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    q = q.or(`regen_estado.is.null,regen_estado.neq.generando,regen_actualizado.lt.${cutoff}`);
+    q = q.or(
+      `regen_estado.is.null,regen_estado.not.in.(${OCUPADOS.join(',')}),regen_actualizado.lt.${cutoff}`
+    );
   }
   const { data, error } = await q.select('shortcode');
   if (error) throw new Error(error.message);
   return (data || []).length > 0;
+}
+
+// Análisis + ganchos + gancho elegido + historial del carrusel (columna regen_meta).
+export async function setMeta(shortcode, meta) {
+  if (!enabled) return;
+  const c = await getClient();
+  const { error } = await c
+    .from(config.igReelsTable)
+    .update({ regen_meta: meta, regen_actualizado: new Date().toISOString() })
+    .eq('shortcode', shortcode);
+  if (error) throw new Error(error.message);
+}
+
+// Progreso visible del job (paso + mensaje + hechos/total). Es telemetría: sin guard, la
+// última escritura gana, y nunca lanza para no tumbar el job por un fallo de red.
+export async function setProgreso(shortcode, { paso, mensaje, hechos = null, total = null }) {
+  if (!enabled) return;
+  try {
+    const c = await getClient();
+    await c
+      .from(config.igReelsTable)
+      .update({ regen_progreso: { paso, mensaje, hechos, total, ts: new Date().toISOString() } })
+      .eq('shortcode', shortcode);
+  } catch (e) {
+    console.warn(`[regen ${shortcode}] no se pudo guardar el progreso: ${e.message}`);
+  }
+}
+
+// Variantes de CTA usadas en los últimos carruseles regenerados, para no repetir la foto.
+export async function getCtaVariantesRecientes(n = 3) {
+  if (!enabled) return [];
+  const c = await getClient();
+  const { data, error } = await c
+    .from(config.igReelsTable)
+    .select('regen_meta, regen_actualizado')
+    .not('regen_meta', 'is', null)
+    .order('regen_actualizado', { ascending: false })
+    .limit(n);
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => r.regen_meta?.ctaVariante).filter(Boolean);
 }
 
 // Extrae el video_id de una URL de YouTube (watch?v=, youtu.be, shorts, live, embed).

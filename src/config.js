@@ -71,10 +71,19 @@ export const config = {
   // --- Regenerador de carruseles (Wavespeed + visión vía OpenRouter) ---
   // Se activa solo si hay WAVESPEED_API_KEY. La generación es bajo demanda desde DISECTA.
   wavespeedApiKey: process.env.WAVESPEED_API_KEY || '',
-  // Modelo de visión que clasifica los slides y propone el plan (barato, multimodal).
+  // Modelo de visión: lee las láminas del carrusel ajeno y revisa las generadas (barato).
   regenVisionModel: process.env.REGEN_VISION_MODEL || 'google/gemini-2.5-flash',
+  // Modelo que escribe (titulares, guion, interpretación de instrucciones). Es env var a
+  // propósito: si el id no existe en OpenRouter, llm.js cae al de visión y lo avisa.
+  regenWriterModel: process.env.REGEN_WRITER_MODEL || 'anthropic/claude-sonnet-4.5',
   // Cuántos slides se generan en paralelo (cada uno tarda 3-6 min en gpt-image-2).
   regenConcurrency: Number(process.env.REGEN_CONCURRENCY || 3),
+  // Modelo que revisa cada lámina generada (visión, barato).
+  regenQaModel: process.env.REGEN_QA_MODEL || 'google/gemini-2.5-flash',
+  // Tope de reintentos por lámina cuando el auto-QA la rechaza (acota el costo).
+  regenQaMaxRetries: Number(process.env.REGEN_QA_MAX_RETRIES || 2),
+  // Tope de láminas por carrusel.
+  regenMaxLaminas: Number(process.env.REGEN_MAX_LAMINAS || 14),
 
   // Telegram (opcional): disparo manual desde el bot. Se activa solo si hay token.
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',

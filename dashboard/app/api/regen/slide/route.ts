@@ -5,7 +5,10 @@ export const dynamic = 'force-dynamic';
 
 // Campos del slide que la UI puede editar (notas, acción, referencia, textos). El estado/output
 // los maneja solo el job del scraper.
-const EDITABLE = ['accion', 'refId', 'textoNuevo', 'nota', 'prompt', 'tipoSlide'] as const;
+const EDITABLE = [
+  'accion', 'refId', 'rol', 'tipoSlide', 'textos', 'textoNuevo',
+  'foto', 'acento', 'chip', 'nota', 'prompt',
+] as const;
 
 // Edita UN slide del plan del regenerador vía la RPC regen_patch_slide (merge atómico en
 // Postgres): el job de fondo y la UI nunca se pisan el array completo.

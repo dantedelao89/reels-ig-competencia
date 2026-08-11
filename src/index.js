@@ -15,8 +15,9 @@ import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
-import { buildRegenPlan } from './regenPlan.js';
-import { startRegeneration } from './regenRun.js';
+import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
+import { startRegeneration, lanzarCarrusel } from './regenRun.js';
+import { interpretarInstruccion } from './regenInstruccion.js';
 import { toParagraphs, looksSpanish, chunkParagraphs } from './format.js';
 
 const app = express();
@@ -388,24 +389,124 @@ app.post('/translate', async (req, res) => {
 
 // --- Regenerador de carruseles ---
 
-// Arma el plan por slide (visión → clasificación + traducción + referencia + prompt) y lo guarda
-// en ig_reels.regen para revisarlo en DISECTA. Corre inline (~20-60s, una llamada de visión).
-app.post('/regen/plan', async (req, res) => {
-  if (config.triggerSecret) {
-    const provided = req.get('x-trigger-secret') || req.query.secret;
-    if (provided !== config.triggerSecret) {
-      return res.status(401).json({ ok: false, error: 'No autorizado' });
-    }
-  }
-  const { shortcode } = req.body || {};
+// Auth de los endpoints internos: mismo secreto que el resto del scraper.
+// Devuelve true si ya respondió 401 (el handler debe cortar).
+function requireSecret(req, res) {
+  if (!config.triggerSecret) return false;
+  const provided = req.get('x-trigger-secret') || req.query.secret;
+  if (provided === config.triggerSecret) return false;
+  res.status(401).json({ ok: false, error: 'No autorizado' });
+  return true;
+}
+
+// Lee el carrusel ajeno con visión (qué entrega, dolor, argumento, lámina por lámina) y propone
+// 5 titulares con fórmulas distintas. Corre inline (~30-60s). No gasta en imágenes.
+app.post('/regen/analizar', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { shortcode, brief } = req.body || {};
   if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
   try {
-    const result = await buildRegenPlan(String(shortcode).trim());
+    const result = await leerCarrusel(String(shortcode).trim(), { brief: brief?.trim() || null });
     if (!result.ok) return res.status(400).json(result);
-    console.log(`[regen] plan de ${shortcode}: ${result.plan.length} slides (~$${result.costoEstimado})`);
+    console.log(`[regen] leído ${shortcode}: ${result.numLaminas} láminas, ${result.ganchos.length} titulares`);
     res.json(result);
   } catch (err) {
-    console.error(`[regen] error en plan ${shortcode}:`, err.message);
+    console.error(`[regen] error al analizar ${shortcode}:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Otros 5 titulares distintos, reusando el análisis ya guardado (sin volver a mirar imágenes).
+app.post('/regen/ganchos', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { shortcode, brief, excluir } = req.body || {};
+  if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
+  try {
+    const result = await proponerGanchos(String(shortcode).trim(), {
+      brief: brief?.trim() || null,
+      excluir: Array.isArray(excluir) ? excluir : [],
+    });
+    if (!result.ok) return res.status(400).json(result);
+    res.json(result);
+  } catch (err) {
+    console.error(`[regen] error en ganchos ${shortcode}:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Con el titular ya elegido: escribe el guion completo y lanza la generación de todas las
+// láminas. Fire-and-forget (el trabajo dura 15-40 min); la UI sigue el avance por polling.
+// Con dry:true solo devuelve el guion, sin gastar en imágenes.
+app.post('/regen/lanzar', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { shortcode, ganchoId, titular, brief, dry } = req.body || {};
+  if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
+
+  try {
+    // El gancho llega por id (uno de los propuestos) o como titular escrito a mano.
+    let gancho = null;
+    if (titular?.trim()) {
+      gancho = { id: 'manual', formula: 'escrito por Dante', titular: titular.trim(), origen: 'manual' };
+    } else if (ganchoId) {
+      const row = await getRowByField(config.igReelsTable, 'shortcode', String(shortcode).trim(), 'regen_meta');
+      const g = (row?.regen_meta?.ganchos || []).find((x) => x.id === ganchoId);
+      if (!g) return res.status(400).json({ ok: false, error: 'Ese titular ya no está disponible; vuelve a analizar' });
+      gancho = { ...g, origen: 'ia' };
+    } else {
+      return res.status(400).json({ ok: false, error: 'Falta ganchoId o titular' });
+    }
+
+    const result = await lanzarCarrusel(String(shortcode).trim(), {
+      gancho,
+      brief: brief?.trim() || null,
+      dry: dry === true,
+    });
+    if (!result.ok) return res.status(result.status || 400).json({ ok: false, error: result.error });
+
+    if (result.dry) return res.json(result);
+
+    res.json({ ok: true, launched: result.launched, costoEstimado: result.costoEstimado, avisos: result.avisos });
+    console.log(`[regen] ${shortcode}: guion listo, generando ${result.launched} láminas (~$${result.costoEstimado})`);
+    (async () => {
+      try {
+        await result.run();
+      } catch (err) {
+        console.error(`[regen] job ${shortcode}:`, err.message);
+      }
+    })();
+  } catch (err) {
+    console.error(`[regen] error al lanzar ${shortcode}:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Instrucción en lenguaje natural sobre un carrusel ya generado. Interpreta, aplica los
+// cambios por lámina y regenera solo las afectadas.
+app.post('/regen/instruccion', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { shortcode, texto } = req.body || {};
+  if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
+
+  try {
+    const sc = String(shortcode).trim();
+    const interp = await interpretarInstruccion(sc, texto);
+    if (!interp.ok) return res.status(interp.status || 400).json({ ok: false, error: interp.error });
+    if (!interp.idxs.length) return res.json({ ok: true, mensaje: interp.mensaje, idxs: [] });
+
+    const result = await startRegeneration(sc, interp.idxs);
+    if (!result.ok) return res.status(result.status || 400).json({ ok: false, error: result.error });
+
+    res.json({ ok: true, mensaje: interp.mensaje, idxs: interp.idxs, launched: result.launched });
+    console.log(`[regen] ${sc}: instrucción "${texto}" → láminas ${interp.idxs.map((i) => i + 1).join(', ')}`);
+    (async () => {
+      try {
+        await result.run();
+      } catch (err) {
+        console.error(`[regen] job ${sc}:`, err.message);
+      }
+    })();
+  } catch (err) {
+    console.error(`[regen] error en instrucción ${shortcode}:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -414,12 +515,7 @@ app.post('/regen/plan', async (req, res) => {
 // Fire-and-forget: valida + marca 'generando' y responde ya; el job corre en background con
 // pool de concurrencia y persiste slide a slide (la UI hace polling del estado en Supabase).
 app.post('/regen/generate', async (req, res) => {
-  if (config.triggerSecret) {
-    const provided = req.get('x-trigger-secret') || req.query.secret;
-    if (provided !== config.triggerSecret) {
-      return res.status(401).json({ ok: false, error: 'No autorizado' });
-    }
-  }
+  if (requireSecret(req, res)) return;
   const { shortcode, indices } = req.body || {};
   if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
   try {
@@ -442,14 +538,11 @@ app.post('/regen/generate', async (req, res) => {
 
 // Estado del regenerador de un carrusel (para depurar por curl; la UI lee Supabase directo).
 app.get('/regen/status', async (req, res) => {
-  if (config.triggerSecret) {
-    const provided = req.get('x-trigger-secret') || req.query.secret;
-    if (provided !== config.triggerSecret) return res.status(401).json({ ok: false, error: 'No autorizado' });
-  }
+  if (requireSecret(req, res)) return;
   const shortcode = (req.query.shortcode || '').toString().trim();
   if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
   try {
-    const row = await getRowByField(config.igReelsTable, 'shortcode', shortcode, 'regen, regen_estado, regen_actualizado');
+    const row = await getRowByField(config.igReelsTable, 'shortcode', shortcode, 'regen, regen_estado, regen_actualizado, regen_meta, regen_progreso');
     if (!row) return res.status(404).json({ ok: false, error: 'No existe' });
     res.json({ ok: true, ...row });
   } catch (err) {
