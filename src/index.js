@@ -16,6 +16,7 @@ import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
 import { buildRegenPlan } from './regenPlan.js';
+import { startRegeneration } from './regenRun.js';
 import { toParagraphs, looksSpanish, chunkParagraphs } from './format.js';
 
 const app = express();
@@ -405,6 +406,36 @@ app.post('/regen/plan', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error(`[regen] error en plan ${shortcode}:`, err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Lanza la generación de slides (todos los pendientes, o indices concretos para re-tiros).
+// Fire-and-forget: valida + marca 'generando' y responde ya; el job corre en background con
+// pool de concurrencia y persiste slide a slide (la UI hace polling del estado en Supabase).
+app.post('/regen/generate', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const { shortcode, indices } = req.body || {};
+  if (!shortcode) return res.status(400).json({ ok: false, error: 'Falta shortcode' });
+  try {
+    const result = await startRegeneration(String(shortcode).trim(), indices);
+    if (!result.ok) return res.status(result.status || 400).json({ ok: false, error: result.error });
+    res.json({ ok: true, launched: result.launched });
+    console.log(`[regen] ${shortcode}: generando ${result.launched} slides`);
+    (async () => {
+      try {
+        await result.run();
+      } catch (err) {
+        console.error(`[regen] job ${shortcode}:`, err.message);
+      }
+    })();
+  } catch (err) {
+    console.error(`[regen] error en generate ${shortcode}:`, err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

@@ -9,6 +9,8 @@ import { useActivity } from './ui/Activity';
 import ProgressBar from './ui/ProgressBar';
 import Spinner from './ui/Spinner';
 import AsyncButton from './ui/AsyncButton';
+import RegenTab from './RegenTab';
+import RefsManager from './RefsManager';
 
 interface Props {
   item: ContentItem;
@@ -21,7 +23,8 @@ interface Props {
 export default function DetailModal({ item, onClose, onEstado, onSaveProduction, onUploaded }: Props) {
   const toast = useToast();
   const activity = useActivity();
-  const [tab, setTab] = useState<'detalle' | 'miversion'>('detalle');
+  const [tab, setTab] = useState<'detalle' | 'miversion' | 'regenerar'>('detalle');
+  const [showRefs, setShowRefs] = useState(false); // biblioteca de referencias del regenerador
 
   const [guion, setGuion] = useState(item.miGuion || '');
   const [notas, setNotas] = useState(item.miNotas || '');
@@ -388,7 +391,14 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
 
         {/* Tabs */}
         <div className="flex gap-1 px-4 pt-3 border-b border-line">
-          {([['detalle', 'Video y transcripción'], ['miversion', 'Mi versión']] as const).map(([k, lbl]) => (
+          {(
+            [
+              ['detalle', 'Video y transcripción'],
+              ['miversion', 'Mi versión'],
+              // Regenerador: solo carruseles de IG.
+              ...(esCarrusel && item.platform === 'ig' ? ([['regenerar', '🎨 Regenerar']] as const) : []),
+            ] as const
+          ).map(([k, lbl]) => (
             <button
               key={k}
               onClick={() => setTab(k)}
@@ -401,7 +411,12 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
           ))}
         </div>
 
-        {tab === 'detalle' ? (
+        {tab === 'regenerar' ? (
+          <>
+            <RegenTab item={item} slides={slides} onOpenRefs={() => setShowRefs(true)} />
+            {showRefs && <RefsManager onClose={() => setShowRefs(false)} />}
+          </>
+        ) : tab === 'detalle' ? (
           <div className="grid md:grid-cols-[260px_1fr]">
             {/* IZQUIERDA: datos del video */}
             <div className="p-4 border-r border-line bg-gray-50">

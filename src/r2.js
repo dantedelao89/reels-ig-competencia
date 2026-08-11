@@ -54,6 +54,23 @@ export async function rehostImage(sourceUrl, key) {
   }
 }
 
+// Sube un buffer ya en memoria a R2 bajo `key` (lo usa el regenerador para los slides generados).
+// Devuelve la URL pública o null si R2 está deshabilitado o falla (nunca lanza).
+export async function uploadBuffer(buffer, key, contentType = 'image/png') {
+  if (!enabled || !buffer?.length) return null;
+  try {
+    const { PutObjectCommand } = await import('@aws-sdk/client-s3');
+    const c = await getClient();
+    await c.send(
+      new PutObjectCommand({ Bucket: config.r2Bucket, Key: key, Body: buffer, ContentType: contentType })
+    );
+    return `${config.r2PublicBaseUrl.replace(/\/$/, '')}/${key}`;
+  } catch (e) {
+    console.error(`[R2 upload ${key}] ${e.message}`);
+    return null;
+  }
+}
+
 const MAX_VIDEO_BYTES = Number(process.env.R2_MAX_VIDEO_BYTES || 60 * 1024 * 1024); // 60 MB
 
 // Descarga un video remoto y lo sube a R2. Devuelve la URL pública permanente, o null si falla,
