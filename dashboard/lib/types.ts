@@ -36,6 +36,7 @@ export interface ContentItem {
   // Carrusel: diapositivas (R2). Formato nuevo: { tipo:'video'|'image', url, poster? }.
   // Formato viejo (carruseles ya guardados): string (URL de imagen). El front normaliza ambos.
   imagenes: (string | CarouselSlide)[] | null;
+  regenEstado?: string | null; // regenerador de carruseles: null | 'plan' | 'generando' | 'listo'
   proyecto: string | null;
   estado: Estado;
   transcripcion: string | null;

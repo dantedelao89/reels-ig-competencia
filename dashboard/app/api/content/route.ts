@@ -31,6 +31,7 @@ function igToItem(r: any): ContentItem {
     thumbnail: r.thumbnail_url || r.thumbnail_original,
     tipo: r.tipo ?? null,
     imagenes: Array.isArray(r.imagenes) ? r.imagenes : null,
+    regenEstado: r.regen_estado ?? null,
     proyecto: r.proyecto,
     estado: r.estado,
     transcripcion: r.transcripcion,
@@ -93,7 +94,7 @@ export async function GET(req: NextRequest) {
   // (transcripcion/subtitulos ~95k chars y search_tsv) → la transcripción se carga aparte
   // al abrir el detalle (/api/item). Esto baja el payload de ~700KB a decenas de KB.
   const IG_COLS =
-    'id,shortcode,creador,url,video_url,caption,fecha_publicacion,likes,comentarios,views,duracion_seg,tipo,imagenes,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+    'id,shortcode,creador,url,video_url,caption,fecha_publicacion,likes,comentarios,views,duracion_seg,tipo,imagenes,regen_estado,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
   const YT_COLS =
     'id,video_id,titulo,canal,canal_url,url,fecha_publicacion,views,duracion,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 

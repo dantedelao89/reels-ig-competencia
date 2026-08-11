@@ -42,6 +42,15 @@ function Thumb({ item }: { item: ContentItem }) {
           <span aria-hidden="true">▦</span> {item.imagenes.length}
         </span>
       )}
+      {item.regenEstado && (
+        // Estado del regenerador de carruseles: 🎨 plan listo / generando / regenerado.
+        <span
+          className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white"
+          title={item.regenEstado === 'listo' ? 'Carrusel regenerado' : item.regenEstado === 'generando' ? 'Regenerando…' : 'Plan de regeneración listo'}
+        >
+          🎨{item.regenEstado === 'listo' ? '✓' : item.regenEstado === 'generando' ? '…' : ''}
+        </span>
+      )}
     </div>
   );
 }
