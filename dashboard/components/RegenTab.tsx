@@ -120,6 +120,8 @@ export default function RegenTab({
       setPlan(d.plan);
       setEstado('plan');
       toast.success(`Plan listo: ${d.plan.length} slides (~$${d.costoEstimado} USD al generar)`);
+      // Lotes que la visión no pudo clasificar: esos slides quedaron en blanco pero editables.
+      (d.avisos || []).forEach((a: string) => toast.error(a));
     } catch (e: any) {
       toast.error(e.message || 'No se pudo analizar');
     } finally {

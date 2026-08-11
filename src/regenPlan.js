@@ -13,10 +13,16 @@ function normalizeSlides(imagenes) {
   return imagenes.map((x) => (typeof x === 'string' ? { tipo: 'image', url: x } : x));
 }
 
-// Llama al modelo de visión con las imágenes por URL y devuelve el JSON parseado.
-async function classifySlides(imageSlides) {
-  const content = [{ type: 'text', text: buildVisionPrompt(imageSlides.length) }];
-  for (const s of imageSlides) {
+// La visión se pide en lotes pequeños: una salida corta por llamada es mucho menos propensa a
+// llegar truncada (pasa de forma no-determinista), y si un lote se rompe no se pierde el resto
+// del carrusel. Cada lote se reintenta antes de rendirse.
+const VISION_BATCH = 6;
+const VISION_TRIES = 3;
+
+// Una llamada de visión sobre un lote de slides. Devuelve el array crudo del modelo.
+async function visionBatch(slides) {
+  const content = [{ type: 'text', text: buildVisionPrompt(slides.length) }];
+  for (const s of slides) {
     content.push({ type: 'image_url', image_url: { url: s.url } });
   }
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -39,12 +45,55 @@ async function classifySlides(imageSlides) {
     throw new Error(`OpenRouter ${res.status}: ${detail.slice(0, 200)}`);
   }
   const json = await res.json();
-  let text = (json.choices?.[0]?.message?.content || '').trim();
+  const choice = json.choices?.[0];
+  let text = (choice?.message?.content || '').trim();
+  if (!text) throw new Error('la visión devolvió una respuesta vacía');
   // Defensa por si el modelo envuelve el JSON en fences.
   text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  const parsed = JSON.parse(text);
-  if (!Array.isArray(parsed.slides)) throw new Error('La visión no devolvió slides[]');
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    const motivo = choice?.finish_reason === 'length' ? 'se quedó sin tokens' : 'llegó cortada';
+    throw new Error(`la respuesta ${motivo} (${e.message})`);
+  }
+  if (!Array.isArray(parsed.slides)) throw new Error('la visión no devolvió slides[]');
   return parsed.slides;
+}
+
+// Clasifica todos los slides de imagen. Devuelve un Map por idx original + los avisos de los
+// lotes que no se pudieron clasificar (esos slides quedan con valores por defecto, editables).
+async function classifySlides(imageSlides) {
+  const byIdx = new Map();
+  const avisos = [];
+
+  for (let from = 0; from < imageSlides.length; from += VISION_BATCH) {
+    const batch = imageSlides.slice(from, from + VISION_BATCH);
+    let out = null;
+    let ultimoError = '';
+    for (let intento = 1; intento <= VISION_TRIES; intento++) {
+      try {
+        out = await visionBatch(batch);
+        break;
+      } catch (e) {
+        ultimoError = e.message;
+        console.warn(`[regen] visión lote ${from}-${from + batch.length - 1} intento ${intento}: ${e.message}`);
+        if (intento < VISION_TRIES) await new Promise((r) => setTimeout(r, 2000 * intento));
+      }
+    }
+    if (!out) {
+      const nums = batch.map((s) => s.idx + 1).join(', ');
+      avisos.push(`No se pudieron analizar los slides ${nums} (${ultimoError}). Quedaron en blanco: edítalos a mano o re-analiza.`);
+      continue;
+    }
+    // El modelo numera dentro del lote; se mapea por posición (su "idx" solo se usa si cuadra).
+    out.forEach((c, i) => {
+      const original = batch[Number.isInteger(c.idx) && batch[c.idx] ? c.idx : i];
+      if (original) byIdx.set(original.idx, c);
+    });
+  }
+
+  return { byIdx, avisos };
 }
 
 // Elige la referencia para un tipo de slide. Para CTA rota entre las fotos de Dante según el idx
@@ -95,14 +144,13 @@ export async function buildRegenPlan(shortcode) {
     .map((s, idx) => ({ ...s, idx }))
     .filter((s) => s.tipo !== 'video');
 
-  const byIdx = new Map();
+  let byIdx = new Map();
+  let avisos = [];
   if (imageSlides.length) {
-    const classified = await classifySlides(imageSlides);
-    // La visión recibe los slides SIN los videos: su "idx" es la posición en imageSlides.
-    classified.forEach((c, i) => {
-      const original = imageSlides[Number.isInteger(c.idx) && imageSlides[c.idx] ? c.idx : i];
-      if (original) byIdx.set(original.idx, c);
-    });
+    ({ byIdx, avisos } = await classifySlides(imageSlides));
+    if (!byIdx.size) {
+      return { ok: false, error: `La visión falló en todos los slides: ${avisos[0] || 'sin detalle'}` };
+    }
   }
 
   const plan = slides.map((s, idx) => {
@@ -153,5 +201,5 @@ export async function buildRegenPlan(shortcode) {
   const saved = await setRegen(shortcode, { regen: plan, regen_estado: 'plan' }, { guard: true });
   if (!saved) return { ok: false, error: 'No se pudo guardar el plan (¿se está generando?)' };
 
-  return { ok: true, shortcode, plan, costoEstimado: estimateCost(plan) };
+  return { ok: true, shortcode, plan, costoEstimado: estimateCost(plan), avisos };
 }
