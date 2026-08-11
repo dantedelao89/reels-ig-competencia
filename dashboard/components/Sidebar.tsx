@@ -11,9 +11,10 @@ interface Props {
   onSection: (s: 'contenido' | 'fuentes') => void;
   mode: 'organico' | 'ads';
   onMode: (m: 'organico' | 'ads') => void;
+  onOpenRefs: () => void;
 }
 
-export default function Sidebar({ stats, estado, onEstado, section, onSection, mode, onMode }: Props) {
+export default function Sidebar({ stats, estado, onEstado, section, onSection, mode, onMode, onOpenRefs }: Props) {
   const rows: { key: string; label: string; count: number | undefined }[] = [
     { key: '', label: 'Todo', count: stats?.total },
     ...ESTADOS.map((e) => ({ key: e.key, label: e.label, count: stats?.porEstado?.[e.key] })),
@@ -92,6 +93,12 @@ export default function Sidebar({ stats, estado, onEstado, section, onSection, m
           }`}
         >
           <span aria-hidden="true">⊕</span> Fuentes
+        </button>
+        <button
+          onClick={onOpenRefs}
+          className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors hover:bg-gray-50 text-gray-700"
+        >
+          <span aria-hidden="true">🎨</span> Referencias
         </button>
       </nav>
 

@@ -11,6 +11,7 @@ import TableView from './TableView';
 import DetailModal from './DetailModal';
 import SourcesManager from './SourcesManager';
 import AdsView from './AdsView';
+import RefsManager from './RefsManager';
 import { useToast } from './ui/Toast';
 import { useActivity } from './ui/Activity';
 import { CardGridSkeleton } from './ui/Skeleton';
@@ -61,6 +62,7 @@ export default function DashboardClient() {
   const [detail, setDetail] = useState<ContentItem | null>(null);
   const [section, setSection] = useState<'contenido' | 'fuentes'>('contenido');
   const [mode, setMode] = useState<'organico' | 'ads'>('organico');
+  const [showRefs, setShowRefs] = useState(false); // modal de referencias del regenerador
   // hydrated = ya restauramos la navegación guardada. Hasta entonces no persistimos, para no pisar
   // lo guardado con los valores por defecto en el primer render.
   const [hydrated, setHydrated] = useState(false);
@@ -310,7 +312,10 @@ export default function DashboardClient() {
           setMode(m);
           setSection('contenido'); // al cambiar de Orgánico/Ads, aterriza en la galería
         }}
+        onOpenRefs={() => setShowRefs(true)}
       />
+
+      {showRefs && <RefsManager onClose={() => setShowRefs(false)} />}
 
       <main className="flex-1 min-w-0 px-4 md:px-6 py-5">
         {section === 'fuentes' && <SourcesManager mode={mode} />}
