@@ -609,6 +609,7 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
   if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
 
   const text = (req.body?.text || '').trim();
+  console.log(`[slack /scrape] recibido: "${text}"`);
   const responseUrl = req.body?.response_url;
   const isYt = /youtu\.?be/i.test(text);
   const isIg = /instagram\.com/i.test(text);
