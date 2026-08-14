@@ -33,13 +33,39 @@ async function getClient() {
   return client;
 }
 
+// Descarga con reintentos. El CDN de Meta corta conexiones de forma intermitente ("fetch
+// failed" a nivel de red) y rechaza peticiones sin User-Agent; sin reintentar, un solo
+// tropiezo dejaba el item con la URL efímera de Instagram, que caduca en horas y lo rompe
+// para siempre (miniaturas grises y el zip fallando).
+const UA =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+
+async function descargar(sourceUrl, { tries = 3, timeoutMs = 45000 } = {}) {
+  let ultimo;
+  for (let intento = 1; intento <= tries; intento++) {
+    try {
+      const res = await fetch(sourceUrl, {
+        headers: { 'User-Agent': UA, Accept: 'image/*,video/*,*/*' },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) throw new Error(`descarga ${res.status}`);
+      return res;
+    } catch (e) {
+      ultimo = e;
+      // Un 404/410 no se arregla reintentando: la URL ya murió.
+      if (/descarga 4(04|10)/.test(e.message)) break;
+      if (intento < tries) await new Promise((r) => setTimeout(r, 1500 * intento));
+    }
+  }
+  throw ultimo;
+}
+
 // Descarga una imagen remota y la sube a R2 bajo `key`. Devuelve la URL pública permanente,
 // o null si R2 está deshabilitado o algo falla (nunca lanza: el sync no debe romperse por esto).
 export async function rehostImage(sourceUrl, key) {
   if (!enabled || !sourceUrl) return null;
   try {
-    const res = await fetch(sourceUrl);
-    if (!res.ok) throw new Error(`descarga ${res.status}`);
+    const res = await descargar(sourceUrl);
     const body = Buffer.from(await res.arrayBuffer());
     const contentType = res.headers.get('content-type') || 'image/jpeg';
     const { PutObjectCommand } = await import('@aws-sdk/client-s3');
@@ -78,8 +104,7 @@ const MAX_VIDEO_BYTES = Number(process.env.R2_MAX_VIDEO_BYTES || 60 * 1024 * 102
 export async function rehostVideo(sourceUrl, key) {
   if (!enabled || !sourceUrl) return null;
   try {
-    const res = await fetch(sourceUrl);
-    if (!res.ok) throw new Error(`descarga ${res.status}`);
+    const res = await descargar(sourceUrl, { timeoutMs: 120000 });
     const len = Number(res.headers.get('content-length') || 0);
     if (len && len > MAX_VIDEO_BYTES) throw new Error(`video de ${len} bytes excede el límite`);
     const body = Buffer.from(await res.arrayBuffer());
