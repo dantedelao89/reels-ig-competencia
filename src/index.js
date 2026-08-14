@@ -15,6 +15,7 @@ import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
+import { runScrapeInstagramStories } from './scrapeStories.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
 import { interpretarInstruccion } from './regenInstruccion.js';
@@ -387,8 +388,6 @@ app.post('/translate', async (req, res) => {
   }
 });
 
-// --- Regenerador de carruseles ---
-
 // Auth de los endpoints internos: mismo secreto que el resto del scraper.
 // Devuelve true si ya respondió 401 (el handler debe cortar).
 function requireSecret(req, res) {
@@ -398,6 +397,26 @@ function requireSecret(req, res) {
   res.status(401).json({ ok: false, error: 'No autorizado' });
   return true;
 }
+
+// --- Historias de Instagram ---
+
+// Captura manual de la bandeja de 24h de UN creador y la archiva. Inline: el actor tarda ~30s y el
+// rehost a R2 otros 15-45s, muy por debajo del techo de 290s del proxy, y así el botón devuelve el
+// dato real ("13 nuevas") en vez de un "ya empezó".
+app.post('/scrape-stories', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ ok: false, error: 'Falta url (@usuario)' });
+  try {
+    const result = await runScrapeInstagramStories(String(url).trim());
+    res.json(result);
+  } catch (err) {
+    console.error('[historias] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Regenerador de carruseles ---
 
 // Lee el carrusel ajeno con visión (qué entrega, dolor, argumento, lámina por lámina) y propone
 // 5 titulares con fórmulas distintas. Corre inline (~30-60s). No gasta en imágenes.

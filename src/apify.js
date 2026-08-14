@@ -17,6 +17,24 @@ export async function scrapeCreators({ usernames, resultsLimit, onlyPostsNewerTh
   return items.filter((it) => it && it.shortCode && !it.error);
 }
 
+// Bandeja de historias de 24h de una o varias cuentas. Los highlights se piden aparte (v1 no los usa).
+// El actor cobra PLANO por usuario, así que da igual que la cuenta tenga 3 historias o 30.
+//
+// OJO: este actor NO está roto si lo ves fallar al instante con
+// `ValidationError: meta.origin ... input_value='MCP'`. Su SDK de Python no conoce el origen 'MCP',
+// así que truena si se lanza desde el conector MCP. Desde apify-client (como aquí) funciona.
+export async function scrapeStories(usernames) {
+  const items = await runActorItems(config.storiesActorId, {
+    usernames,
+    includeStories: true,
+    includeHighlights: false,
+    expandHighlightItems: false,
+    compactOutput: true,
+  });
+  // El dataset incluye un registro recordType:'summary' que no es una cuenta.
+  return items.filter((it) => it && it.recordType !== 'summary' && it.username);
+}
+
 // Scrapea UN contenido de Instagram por su URL directa (reel, post o carrusel). Usa el actor general
 // que soporta los 3 tipos y devuelve el mismo shape (shortCode, caption, videoUrl, audioUrl, etc.).
 export async function scrapeInstagramUrl(url) {

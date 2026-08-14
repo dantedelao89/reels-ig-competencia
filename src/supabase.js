@@ -62,19 +62,39 @@ export async function getExistingShortcodes() {
 export async function getExistingVideoIds() {
   return getExistingColumn(config.ytVideosTable, 'video_id');
 }
-async function getExistingColumn(table, column) {
+// Ids ya presentes en una columna. `filters` acota la consulta ({ eq, gte, notNull }): sin él
+// habría que paginar la tabla entera, que en historias serían decenas de páginas al año.
+async function getExistingColumn(table, column, filters = null) {
   if (!enabled) return new Set();
   const c = await getClient();
   const ids = new Set();
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
-    const { data, error } = await c.from(table).select(column).range(from, from + PAGE - 1);
+    let q = c.from(table).select(column);
+    if (filters?.eq) q = q.eq(filters.eq[0], filters.eq[1]);
+    if (filters?.gte) q = q.gte(filters.gte[0], filters.gte[1]);
+    if (filters?.notNull) q = q.not(filters.notNull, 'is', null);
+    const { data, error } = await q.range(from, from + PAGE - 1);
     if (error) throw new Error(error.message);
     if (!data?.length) break;
     data.forEach((r) => ids.add(String(r[column])));
     if (data.length < PAGE) break;
   }
   return ids;
+}
+
+// Historias de un creador que YA están archivadas de verdad (con su media en R2).
+// Dos matices importantes:
+// - Se acota por fecha porque una historia de Instagram no puede tener más de 24h: con 3 días de
+//   margen la consulta devuelve ~13-40 ids para siempre, aunque el archivo acumule miles de filas.
+// - Se exige `media_url` no nulo para que una historia cuyo archivado falló se REINTENTE en la
+//   siguiente captura, mientras siga viva en Instagram. Si no, se perdería para siempre.
+export async function getExistingStoryIds(creador, desdeIso) {
+  return getExistingColumn(config.igStoriesTable, 'story_id', {
+    eq: ['creador', creador],
+    gte: ['fecha_publicacion', desdeIso],
+    notNull: 'media_url',
+  });
 }
 
 // Videos sin subtítulos (para backfillSubtitles). Devuelve [{ recordId, videoId, url }].
@@ -553,4 +573,112 @@ export async function syncVideos(items, ctx = {}) {
   }
   const synced = await upsert(config.ytVideosTable, rows, 'video_id');
   return { synced, rehosted };
+}
+
+// --- Historias de Instagram (archivo permanente) ---
+
+// El día al que pertenece una historia, en horario de CDMX. Se resuelve AQUÍ y no en el navegador
+// para que el archivo no cambie de día según quién lo mire; y no como columna generada porque
+// `at time zone 'America/Mexico_City'` es STABLE y Postgres no la admite en un GENERATED.
+const TZ_ARCHIVO = 'America/Mexico_City';
+function diaDe(epochSegundos) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ_ARCHIVO }).format(new Date(epochSegundos * 1000));
+}
+
+// Fila de historia. NO incluye notas/favorito a propósito: así un re-scrape nunca pisa la curación
+// (misma disciplina que reelRow con estado/mi_*).
+function storyRow(s, { creador, userId, scrapedAtIso, proyecto, mediaUrl, posterUrl, mediaError }) {
+  return {
+    story_id: String(s.id),
+    creador,
+    user_id: userId || null,
+    fecha_publicacion: new Date(s.takenAt * 1000).toISOString(),
+    dia: diaDe(s.takenAt),
+    expira_en: s.expiringAt ? new Date(s.expiringAt * 1000).toISOString() : null,
+    tipo: s.mediaType === 'video' ? 'video' : 'image',
+    media_url: mediaUrl,
+    poster_url: posterUrl,
+    media_original: s.videoUrl || s.imageUrl || null,
+    media_error: mediaError || null,
+    ancho: s.originalWidth ?? null,
+    alto: s.originalHeight ?? null,
+    tiene_audio: s.hasAudio ?? null,
+    duracion_seg: s.videoDuration ?? null,
+    proyecto: proyecto || null,
+    scrapeado_en: scrapedAtIso,
+  };
+}
+
+// Cuántas historias se archivan a la vez. Secuencial, 13 videos tardaban ~190s, peligrosamente
+// cerca del techo de 290s del proxy del dashboard; de 4 en 4 baja a ~50s.
+const STORIES_CONCURRENCIA = 4;
+
+// Archiva UNA historia en R2. Nunca lanza: devuelve qué se pudo guardar y por qué falló.
+async function archivarHistoria(s, creador) {
+  const esVideo = s.mediaType === 'video' && !!s.videoUrl;
+  const base = `stories/ig/${creador}/${s.id}`;
+  if (!r2Enabled()) return { mediaUrl: null, posterUrl: null, mediaError: 'R2 no está configurado: la historia caducará' };
+
+  let mediaUrl = null;
+  let posterUrl = null;
+  if (esVideo) {
+    mediaUrl = await rehostVideo(s.videoUrl, `${base}.mp4`);
+    if (s.imageUrl) posterUrl = await rehostImage(s.imageUrl, `${base}_poster.jpg`);
+  } else if (s.imageUrl) {
+    mediaUrl = await rehostImage(s.imageUrl, `${base}.jpg`);
+  }
+  const mediaError = mediaUrl
+    ? null
+    : esVideo
+    ? 'No se pudo archivar el video (caducó en Instagram, tardó demasiado o supera los 60 MB)'
+    : 'No se pudo archivar la imagen (caducó en Instagram o tardó demasiado)';
+  return { mediaUrl, posterUrl, mediaError };
+}
+
+// Archiva historias en R2 y las guarda. Recibe [{ username, userId, stories: [...] }] YA filtrado
+// (solo las nuevas). ctx: { scrapedAtIso, proyecto }.
+// Si el rehost falla, la fila se guarda IGUAL con media_error: la hora y el orden son el valor del
+// archivo, y perderlos por un fallo de red sería peor que quedarse sin el archivo.
+export async function syncStories(userRecords, ctx = {}) {
+  if (!enabled) throw new Error('Supabase no está configurado (faltan SUPABASE_URL / SUPABASE_SERVICE_KEY)');
+  const { scrapedAtIso, proyecto } = ctx;
+
+  // Se aplana a una sola cola para que la concurrencia valga aunque sean varias cuentas.
+  const pendientes = [];
+  for (const rec of userRecords || []) {
+    const creador = (rec.username || '').replace(/^@/, '').toLowerCase();
+    for (const s of rec.stories || []) {
+      if (s?.id && s.takenAt) pendientes.push({ s, creador, userId: rec.userId });
+    }
+  }
+  if (!pendientes.length) return { synced: 0, rehosted: 0, fallidas: 0 };
+
+  const rows = [];
+  let rehosted = 0;
+  let fallidas = 0;
+  const cola = [...pendientes];
+  const workers = Array.from({ length: Math.min(STORIES_CONCURRENCIA, cola.length) }, async () => {
+    while (cola.length) {
+      const item = cola.shift();
+      if (!item) break;
+      const { mediaUrl, posterUrl, mediaError } = await archivarHistoria(item.s, item.creador);
+      if (mediaUrl) rehosted++;
+      else fallidas++;
+      rows.push(
+        storyRow(item.s, {
+          creador: item.creador,
+          userId: item.userId,
+          scrapedAtIso,
+          proyecto,
+          mediaUrl,
+          posterUrl,
+          mediaError,
+        })
+      );
+    }
+  });
+  await Promise.all(workers);
+
+  const synced = await upsert(config.igStoriesTable, rows, 'story_id');
+  return { synced, rehosted, fallidas };
 }

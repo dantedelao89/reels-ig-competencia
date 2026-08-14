@@ -20,6 +20,8 @@ export const config = {
   actorId: process.env.APIFY_ACTOR_ID || 'apify/instagram-reel-scraper',
   // Actor para scrapear UNA URL directa (post/reel/carrusel) al agregar contenido ad-hoc desde DISECTA.
   igUrlActorId: process.env.APIFY_IG_URL_ACTOR || 'apify/instagram-scraper',
+  // Actor de historias (bandeja de 24h). Cobra plano por usuario (~$0.0065) + arranque (~$0.0013).
+  storiesActorId: process.env.APIFY_STORIES_ACTOR || 'goat255/instagram-stories-highlights-scraper',
 
   // Reels máximos por creador si la columna "Reels por corrida" está vacía
   defaultResultsLimit: Number(process.env.DEFAULT_RESULTS_LIMIT || 30),
@@ -103,6 +105,7 @@ export const config = {
   supabaseServiceKey: process.env.SUPABASE_SERVICE_KEY || '',
   igReelsTable: process.env.SUPABASE_IG_TABLE || 'ig_reels',
   ytVideosTable: process.env.SUPABASE_YT_TABLE || 'yt_videos',
+  igStoriesTable: process.env.SUPABASE_IG_STORIES_TABLE || 'ig_stories',
 
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',

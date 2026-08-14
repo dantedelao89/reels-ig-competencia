@@ -45,6 +45,17 @@ export async function updateCreatorLastRun(recordId, isoDate) {
   if (error) throw new Error(error.message);
 }
 
+// Marca de la última captura de HISTORIAS. Va en su propia columna: `ultima_corrida` es la de
+// reels y pisarla haría que Fuentes mintiera sobre cuándo se scrapeó el contenido del creador.
+export async function updateCreatorStoriesRun(recordId, isoDate) {
+  const c = await getClient();
+  const { error } = await c
+    .from(config.igCreatorsTable)
+    .update({ ultima_corrida_historias: isoDate })
+    .eq('id', recordId);
+  if (error) throw new Error(error.message);
+}
+
 // Da de alta un creador nuevo como fuente activa (lo dispara el scrape manual por URL cuando el
 // dueño del contenido todavía no era una fuente nuestra). Sin Proyecto: se puede asignar después.
 export async function createCreator(username) {
