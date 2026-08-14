@@ -7,8 +7,8 @@ interface Props {
   stats: { total: number; porEstado: Record<string, number> } | null;
   estado: string;
   onEstado: (e: string) => void;
-  section: 'contenido' | 'fuentes';
-  onSection: (s: 'contenido' | 'fuentes') => void;
+  section: 'contenido' | 'fuentes' | 'historias';
+  onSection: (s: 'contenido' | 'fuentes' | 'historias') => void;
   mode: 'organico' | 'ads';
   onMode: (m: 'organico' | 'ads') => void;
   onOpenRefs: () => void;
@@ -93,6 +93,14 @@ export default function Sidebar({ stats, estado, onEstado, section, onSection, m
           }`}
         >
           <span aria-hidden="true">⊕</span> Fuentes
+        </button>
+        <button
+          onClick={() => onSection('historias')}
+          className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors ${
+            section === 'historias' ? 'bg-accent-soft text-accent font-medium' : 'hover:bg-gray-50 text-gray-700'
+          }`}
+        >
+          <span aria-hidden="true">📖</span> Historias
         </button>
         <button
           onClick={onOpenRefs}

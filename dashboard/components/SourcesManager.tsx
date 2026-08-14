@@ -67,7 +67,35 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
   const [newNum, setNewNum] = useState('');
   const [adding, setAdding] = useState(false);
   const [scrapingId, setScrapingId] = useState('');
+  const [storiesId, setStoriesId] = useState(''); // loading propio: los dos botones son independientes
   const [filter, setFilter] = useState('');
+
+  // Captura la bandeja de historias de 24h de un creador. Es un archivo aparte del de reels:
+  // las historias caducan, así que lo que no se capture hoy se pierde.
+  async function capturarHistorias(row: SourceRecord) {
+    const cuenta = row.key.replace(/^@/, '');
+    setStoriesId(row.id);
+    const doneAct = activity.begin(`Capturando historias: @${cuenta}…`);
+    try {
+      const res = await fetch('/api/scrape-stories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: row.key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al capturar historias');
+      if (data.privada || data.accesible === false) toast.info(data.mensaje || `@${cuenta} no es accesible`);
+      else if (!data.encontradas) toast.info(`@${cuenta} no tiene historias activas ahora`);
+      else if (!data.nuevas) toast.info(`Sin novedades: las ${data.encontradas} ya estaban archivadas`);
+      else toast.success(`${data.nuevas} historias nuevas de @${cuenta}`);
+      if (data.fallidas) toast.error(`${data.fallidas} no se pudieron archivar (se reintentan en la próxima)`);
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo capturar');
+    } finally {
+      setStoriesId('');
+      doneAct();
+    }
+  }
 
   async function scrapeOne(row: SourceRecord) {
     setScrapingId(row.id);
@@ -399,6 +427,16 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                         }
                       >
                         {scrapingId === r.id ? 'Scrapeando…' : '⚡ Scrapear'}
+                      </button>
+                    )}
+                    {type === 'ig' && (
+                      <button
+                        onClick={() => capturarHistorias(r)}
+                        disabled={storiesId === r.id}
+                        className="text-xs px-2 h-7 rounded-md border border-line bg-white hover:bg-gray-100 disabled:opacity-60 mr-1"
+                        title="Capturar las historias activas de este creador (caducan en 24 h) · ≈$0.008"
+                      >
+                        {storiesId === r.id ? 'Capturando…' : '📖 Historias'}
                       </button>
                     )}
                     <button onClick={() => remove(r.id)} className="text-muted hover:text-red-600" title="Eliminar">
