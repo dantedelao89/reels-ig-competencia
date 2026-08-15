@@ -11,6 +11,7 @@ import AsyncButton from './ui/AsyncButton';
 import Spinner from './ui/Spinner';
 import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
+import SearchSelect from './ui/SearchSelect';
 import StoryViewer from './stories/StoryViewer';
 
 export interface Story {
@@ -163,16 +164,13 @@ export default function StoriesView() {
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <h2 className="text-lg font-semibold tracking-tight mr-1">📖 Historias</h2>
 
-        <select
+        <SearchSelect
           value={creador}
-          onChange={(e) => setCreador(e.target.value)}
-          className="h-9 px-2 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
-        >
-          <option value="">Todas las cuentas</option>
-          {cuentas.map((c) => (
-            <option key={c.id} value={c.key}>@{c.key}</option>
-          ))}
-        </select>
+          onChange={setCreador}
+          options={cuentas.map((c) => ({ value: c.key, label: `@${c.key}` }))}
+          emptyLabel="Todas las cuentas"
+          placeholder="Escribe para buscar…"
+        />
 
         <div className="flex bg-gray-100 rounded-lg p-0.5 text-xs">
           {RANGOS.map((r) => (
