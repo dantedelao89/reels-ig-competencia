@@ -50,6 +50,22 @@ export const config = {
   // Si está false, no corre la parte de YouTube
   enableYoutube: process.env.ENABLE_YOUTUBE !== 'false',
 
+  // ---- TikTok (videos de cuentas) ----
+  // Dos actores, como en Instagram: uno para cuentas y otro para una URL de video suelta.
+  tiktokActorId: process.env.TT_ACTOR_ID || 'clockworks/tiktok-profile-scraper',
+  tiktokUrlActorId: process.env.TT_URL_ACTOR || 'clockworks/tiktok-video-scraper',
+  tiktokDefaultMaxResults: Number(process.env.TT_DEFAULT_MAX_RESULTS || 5),
+  tiktokBatchMaxResults: Number(process.env.TT_BATCH_MAX_RESULTS || 3),
+  // OJO: la documentación del actor dice que acepta un número suelto de días, pero su validación
+  // exige "N days" (o una fecha ISO), igual que YouTube. Un número pelado da error de input.
+  tiktokFirstRunLookback: process.env.TT_FIRST_RUN_LOOKBACK || '7 days',
+  tiktokRecentLookback: process.env.TT_RECENT_LOOKBACK || '2 days',
+  // Subtítulos que TikTok ya trae (gratis). Transcribir con IA se hace a pedido desde el detalle.
+  tiktokDownloadSubtitles: process.env.TT_DOWNLOAD_SUBTITLES !== 'false',
+  // OPT-IN a propósito (al revés que enableYoutube): el deploy queda inerte hasta que Dante
+  // ponga ENABLE_TIKTOK=true en Railway.
+  enableTiktok: process.env.ENABLE_TIKTOK === 'true',
+
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',
 
@@ -106,12 +122,14 @@ export const config = {
   igReelsTable: process.env.SUPABASE_IG_TABLE || 'ig_reels',
   ytVideosTable: process.env.SUPABASE_YT_TABLE || 'yt_videos',
   igStoriesTable: process.env.SUPABASE_IG_STORIES_TABLE || 'ig_stories',
+  tiktokVideosTable: process.env.SUPABASE_TIKTOK_TABLE || 'tiktok_videos',
 
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
   ytChannelsTable: process.env.SUPABASE_YT_CHANNELS_TABLE || 'yt_channels',
   ytSearchesTable: process.env.SUPABASE_YT_SEARCHES_TABLE || 'yt_searches',
   fbAdvertisersTable: process.env.SUPABASE_FB_ADVERTISERS_TABLE || 'fb_advertisers',
+  tiktokCreatorsTable: process.env.SUPABASE_TIKTOK_CREATORS_TABLE || 'tiktok_creators',
 
   // --- Cloudflare R2 (opcional): rehospeda thumbnails para que no expiren (las de IG caducan). ---
   // Se activa solo si están las 4 credenciales. Sin esto, thumbnail_url queda null y el dashboard

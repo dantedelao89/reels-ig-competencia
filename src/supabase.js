@@ -62,6 +62,9 @@ export async function getExistingShortcodes() {
 export async function getExistingVideoIds() {
   return getExistingColumn(config.ytVideosTable, 'video_id');
 }
+export async function getExistingTiktokIds() {
+  return getExistingColumn(config.tiktokVideosTable, 'video_id');
+}
 // Ids ya presentes en una columna. `filters` acota la consulta ({ eq, gte, notNull }): sin él
 // habría que paginar la tabla entera, que en historias serían decenas de páginas al año.
 async function getExistingColumn(table, column, filters = null) {
@@ -573,6 +576,72 @@ export async function syncVideos(items, ctx = {}) {
   }
   const synced = await upsert(config.ytVideosTable, rows, 'video_id');
   return { synced, rehosted };
+}
+
+// --- TikTok ---
+
+function tiktokRow(item, scrapedAtIso, project, texto, thumbnailUrl) {
+  const vm = item.videoMeta || {};
+  const am = item.authorMeta || {};
+  const mm = item.musicMeta || {};
+  const row = {
+    // El id de TikTok es un entero enorme: como Number pierde precisión, siempre string.
+    video_id: String(item.id),
+    creador: am.name || null,
+    creador_nombre: am.nickName || null,
+    creador_url: am.profileUrl || null,
+    url: item.webVideoUrl || item.url || null,
+    caption: item.text || null,
+    fecha_publicacion:
+      item.createTimeISO || (item.createTime ? new Date(item.createTime * 1000).toISOString() : null),
+    views: item.playCount ?? null,
+    likes: item.diggCount ?? null,
+    comentarios: item.commentCount ?? null,
+    compartidos: item.shareCount ?? null,
+    guardados: item.collectCount ?? null,
+    duracion_seg: vm.duration ?? null,
+    hashtags: (item.hashtags || []).map((h) => `#${h?.name || h}`).join(' ') || null,
+    mentions: (item.mentions || []).join(' ') || null,
+    musica: [mm.musicName, mm.musicAuthor].filter(Boolean).join(' — ') || null,
+    es_anuncio: !!(item.isAd || item.isSponsored),
+    es_slideshow: !!item.isSlideshow,
+    thumbnail_original: vm.originalCoverUrl || vm.coverUrl || null,
+    thumbnail_url: thumbnailUrl,
+    proyecto: project || null,
+    scrapeado_en: scrapedAtIso,
+  };
+  // La transcripción SOLO se escribe si hay texto. videoRow hace `subtitulos || null`, y por eso
+  // un re-scrape de YouTube borra una transcripción hecha a pedido; aquí la clave se omite y
+  // Postgres deja la columna como estaba.
+  if (texto) row.transcripcion = texto;
+  return row;
+  // Tampoco se incluyen estado/mi_*/recurso_*: la capa de curación no se toca nunca.
+}
+
+// Sincroniza videos de TikTok. ctx: { scrapedAtIso, resolve(item)->{project}, textOf(item)->Promise<string> }.
+// textOf es ASÍNCRONO (baja el VTT de los subtítulos), a diferencia del subtitlesOf de YouTube.
+export async function syncTiktok(items, ctx = {}) {
+  if (!enabled) throw new Error('Supabase no está configurado (faltan SUPABASE_URL / SUPABASE_SERVICE_KEY)');
+  if (!items?.length) return { synced: 0, rehosted: 0, conTexto: 0 };
+  const { scrapedAtIso, resolve, textOf } = ctx;
+  let rehosted = 0;
+  let conTexto = 0;
+  const rows = [];
+  for (const item of items) {
+    if (!item.id) continue;
+    const { project } = resolve ? resolve(item) : {};
+    const texto = textOf ? await textOf(item) : '';
+    if (texto) conTexto++;
+    const cover = item.videoMeta?.originalCoverUrl || item.videoMeta?.coverUrl;
+    let thumbnailUrl = null;
+    if (r2Enabled() && cover) {
+      thumbnailUrl = await rehostImage(cover, `thumbnails/tt/${item.id}.jpg`);
+      if (thumbnailUrl) rehosted++;
+    }
+    rows.push(tiktokRow(item, scrapedAtIso, project, texto, thumbnailUrl));
+  }
+  const synced = await upsert(config.tiktokVideosTable, rows, 'video_id');
+  return { synced, rehosted, conTexto };
 }
 
 // --- Historias de Instagram (archivo permanente) ---

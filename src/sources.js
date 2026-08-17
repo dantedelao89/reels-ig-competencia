@@ -69,6 +69,71 @@ export async function createCreator(username) {
   return { recordId: data.id, username, resultsLimit: config.defaultResultsLimit, lastRun: null, project: '' };
 }
 
+// ---- TikTok (cuentas) ----
+
+export async function getActiveTiktokCreators() {
+  const c = await getClient();
+  const { data, error } = await c
+    .from(config.tiktokCreatorsTable)
+    .select('*')
+    .eq('activo', true);
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => ({
+    recordId: r.id,
+    username: (r.username || '').replace(/^@/, '').toLowerCase(),
+    resultsLimit: r.videos_por_corrida || config.tiktokDefaultMaxResults,
+    lastRun: r.ultima_corrida || null,
+    project: r.proyecto || '',
+  }));
+}
+
+// Acepta @usuario, usuario o la URL del perfil (el botón de Fuentes manda la clave tal cual).
+export async function getTiktokCreatorByUsername(usernameOrUrl) {
+  const c = await getClient();
+  const deUrl = (usernameOrUrl || '').match(/tiktok\.com\/@([^/?\s]+)/i);
+  const buscado = (deUrl ? deUrl[1] : usernameOrUrl || '').replace(/^@/, '').trim().toLowerCase();
+  const { data, error } = await c.from(config.tiktokCreatorsTable).select('*');
+  if (error) throw new Error(error.message);
+  const row = (data || []).find(
+    (r) => (r.username || '').replace(/^@/, '').trim().toLowerCase() === buscado
+  );
+  if (!row) return null;
+  return {
+    recordId: row.id,
+    username: (row.username || '').replace(/^@/, '').toLowerCase(),
+    resultsLimit: row.videos_por_corrida || config.tiktokDefaultMaxResults,
+    lastRun: row.ultima_corrida || null,
+    project: row.proyecto || '',
+  };
+}
+
+export async function updateTiktokCreatorLastRun(recordId, isoDate) {
+  const c = await getClient();
+  const { error } = await c
+    .from(config.tiktokCreatorsTable)
+    .update({ ultima_corrida: isoDate })
+    .eq('id', recordId);
+  if (error) throw new Error(error.message);
+}
+
+export async function createTiktokCreator(username) {
+  const c = await getClient();
+  const limpio = (username || '').replace(/^@/, '').toLowerCase();
+  const { data, error } = await c
+    .from(config.tiktokCreatorsTable)
+    .insert({ username: limpio, activo: true })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return {
+    recordId: data.id,
+    username: limpio,
+    resultsLimit: config.tiktokDefaultMaxResults,
+    lastRun: null,
+    project: '',
+  };
+}
+
 // ---- YouTube (búsqueda por palabra clave) ----
 
 export async function getActiveSearches() {

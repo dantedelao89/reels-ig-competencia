@@ -16,6 +16,7 @@ import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
 import { runScrapeInstagramStories } from './scrapeStories.js';
+import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
 import { interpretarInstruccion } from './regenInstruccion.js';
@@ -43,7 +44,8 @@ async function runAll() {
   const startedAt = new Date().toISOString();
   const instagram = await runScrape();
   const youtube = config.enableYoutube ? await runScrapeYoutube() : null;
-  const result = { ok: true, startedAt, apifyUsd: getApifySpend(), instagram, youtube };
+  const tiktok = config.enableTiktok ? await runScrapeTiktok() : null;
+  const result = { ok: true, startedAt, apifyUsd: getApifySpend(), instagram, youtube, tiktok };
   lastRun = result;
   return result;
 }
@@ -88,6 +90,12 @@ function formatResult(r) {
       d.error ? `• ${d.grupo}: error` : `• ${d.grupo}: ${d.inserted} nuevos`
     );
     parts.push(`▶️ *YouTube* — ${r.youtube.inserted} nuevos\n${lines.join('\n')}`);
+  }
+  if (r.tiktok) {
+    const lines = (r.tiktok.details || []).map((d) =>
+      d.error ? `• ${d.grupo}: error` : `• ${d.grupo}: ${d.inserted} nuevos`
+    );
+    parts.push(`🎵 *TikTok* — ${r.tiktok.inserted} nuevos\n${lines.join('\n')}`);
   }
   return `✅ *Corrida lista*\n\n${parts.join('\n\n')}`;
 }
@@ -412,6 +420,34 @@ app.post('/scrape-stories', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[historias] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- TikTok ---
+
+// Re-scrape de UNA cuenta de TikTok (botón de Fuentes).
+app.post('/scrape-tiktok-creator', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ ok: false, error: 'Falta url (@usuario)' });
+  try {
+    res.json(await runScrapeTiktokCreator(String(url).trim()));
+  } catch (err) {
+    console.error('[TT creator] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// UN video de TikTok por su URL ("＋Agregar por URL" y Slack).
+app.post('/scrape-tiktok-url', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ ok: false, error: 'Falta url' });
+  try {
+    res.json(await runScrapeTiktokUrl(String(url).trim()));
+  } catch (err) {
+    console.error('[TT url] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
