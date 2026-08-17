@@ -1,4 +1,4 @@
-export type Platform = 'ig' | 'yt';
+export type Platform = 'ig' | 'yt' | 'tiktok';
 
 export type Estado = 'nuevo' | 'por_curar' | 'curado' | 'produccion' | 'publicado' | 'descartado';
 

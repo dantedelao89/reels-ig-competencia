@@ -41,6 +41,8 @@ const IG_COLS =
   'id,shortcode,creador,url,video_url,caption,fecha_publicacion,likes,comentarios,views,duracion_seg,tipo,imagenes,regen_estado,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 const YT_COLS =
   'id,video_id,titulo,canal,canal_url,url,fecha_publicacion,views,duracion,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+const TT_COLS =
+  'id,video_id,creador,creador_nombre,url,caption,fecha_publicacion,views,likes,comentarios,duracion_seg,es_slideshow,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 
 export const PLATFORMS: Record<Platform, PlatformDef> = {
   ig: {
@@ -128,9 +130,51 @@ export const PLATFORMS: Record<Platform, PlatformDef> = {
       miVideoUrl: r.mi_video_url,
     }),
   },
+  tiktok: {
+    key: 'tiktok',
+    label: 'TikTok',
+    short: 'TT',
+    table: 'tiktok_videos',
+    idCol: 'video_id',
+    autorCol: 'creador',
+    textCol: 'transcripcion',
+    listCols: TT_COLS,
+    detailExtraCols: '',
+    searchable: true,
+    hasOrigen: false,
+    transcribeOnDemand: true,
+    thumbRatio: 'pt-[177%]', // 9:16
+    icon: 'tiktok',
+    activeClass: 'text-white',
+    activeStyle: { background: '#000000' },
+    toItem: (r) => ({
+      id: r.id,
+      platform: 'tiktok',
+      externalId: r.video_id,
+      creador: r.creador,
+      titulo: r.caption,
+      url: r.url,
+      fechaPublicacion: r.fecha_publicacion,
+      views: r.views,
+      likes: r.likes,
+      comentarios: r.comentarios,
+      duracion: fmtSeconds(r.duracion_seg),
+      thumbnail: r.thumbnail_url || r.thumbnail_original,
+      tipo: r.es_slideshow ? 'Slideshow' : null,
+      imagenes: null,
+      proyecto: r.proyecto,
+      estado: r.estado,
+      transcripcion: null,
+      scrapeadoEn: r.scrapeado_en,
+      miGuion: r.mi_guion,
+      miNotas: r.mi_notas,
+      miLink: r.mi_link,
+      miVideoUrl: r.mi_video_url,
+    }),
+  },
 };
 
-export const PLATFORM_ORDER: Platform[] = ['ig', 'yt'];
+export const PLATFORM_ORDER: Platform[] = ['ig', 'yt', 'tiktok'];
 
 export function isPlatform(v: unknown): v is Platform {
   return typeof v === 'string' && v in PLATFORMS;
@@ -141,12 +185,14 @@ export function isPlatform(v: unknown): v is Platform {
 export const CURATION_TABLES: Record<Platform | 'ad', string> = {
   ig: PLATFORMS.ig.table,
   yt: PLATFORMS.yt.table,
+  tiktok: PLATFORMS.tiktok.table,
   ad: 'meta_ads',
 };
 
 export const CURATION_TEXT_COL: Record<Platform | 'ad', string> = {
   ig: PLATFORMS.ig.textCol,
   yt: PLATFORMS.yt.textCol,
+  tiktok: PLATFORMS.tiktok.textCol,
   ad: 'transcripcion',
 };
 

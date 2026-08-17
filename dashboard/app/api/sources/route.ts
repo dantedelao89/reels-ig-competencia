@@ -5,7 +5,7 @@ import { SOURCE_DEFS, SourceType, normalizeKey } from '@/lib/sources';
 export const dynamic = 'force-dynamic';
 
 function isValidType(t: any): t is SourceType {
-  return t === 'ig' || t === 'yt_channel' || t === 'yt_search' || t === 'fb_advertiser';
+  return typeof t === 'string' && t in SOURCE_DEFS;
 }
 
 function toRecord(type: SourceType, row: any) {

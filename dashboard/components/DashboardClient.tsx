@@ -255,14 +255,17 @@ export default function DashboardClient() {
     if (!u || addingUrl) return;
     const isYt = /youtu\.?be/i.test(u);
     const isIg = /instagram\.com/i.test(u);
-    if (!isYt && !isIg) {
-      toast.error('Pega una URL de Instagram o YouTube');
+    const isTt = /tiktok\.com/i.test(u);
+    if (!isYt && !isIg && !isTt) {
+      toast.error('Pega una URL de Instagram, YouTube o TikTok');
       return;
     }
+    const red = isYt ? 'YouTube' : isTt ? 'TikTok' : 'Instagram';
+    const endpoint = isYt ? '/api/scrape-yt-url' : isTt ? '/api/scrape-tiktok-url' : '/api/scrape-ig-url';
     setAddingUrl(true);
-    const doneAct = activity.begin(`Scrapeando ${isYt ? 'YouTube' : 'Instagram'}: ${u.slice(0, 40)}…`);
+    const doneAct = activity.begin(`Scrapeando ${red}: ${u.slice(0, 40)}…`);
     try {
-      const res = await fetch(isYt ? '/api/scrape-yt-url' : '/api/scrape-ig-url', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: u }),
@@ -369,7 +372,7 @@ export default function DashboardClient() {
             value={igUrl}
             onChange={(e) => setIgUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addByUrl()}
-            placeholder="URL de Instagram (reel/post/carrusel) o de YouTube (video)"
+            placeholder="URL de Instagram, YouTube o TikTok"
             className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
           />
           <AsyncButton onClick={addByUrl} disabled={!igUrl.trim()} loading={addingUrl} loadingLabel="Agregando…">

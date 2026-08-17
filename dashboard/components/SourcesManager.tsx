@@ -104,6 +104,8 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
         ? '/api/scrape-channel'
         : type === 'ig'
         ? '/api/scrape-creator'
+        : type === 'tiktok'
+        ? '/api/scrape-tiktok-creator'
         : type === 'yt_search'
         ? '/api/scrape-search'
         : '/api/scrape-ad';
@@ -411,7 +413,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>
                   <td className="p-2 text-center whitespace-nowrap">
-                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig' || type === 'yt_search') && (
+                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig' || type === 'yt_search' || type === 'tiktok') && (
                       <button
                         onClick={() => scrapeOne(r)}
                         disabled={scrapingId === r.id}
@@ -421,6 +423,8 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                             ? 'Re-scrapear este canal ahora'
                             : type === 'ig'
                             ? 'Re-scrapear los reels de este creador ahora'
+                            : type === 'tiktok'
+                            ? 'Re-scrapear los videos de esta cuenta de TikTok ahora'
                             : type === 'yt_search'
                             ? 'Buscar videos recientes de esta palabra clave ahora'
                             : 'Scrapear los anuncios de esta página ahora'

@@ -12,8 +12,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Falta SCRAPER_URL / TRANSCRIBE_SECRET' }, { status: 500 });
   }
   const body = await req.json().catch(() => null);
-  if (!body?.id || (body?.platform !== 'yt' && body?.platform !== 'ad') || !body?.url) {
-    return NextResponse.json({ error: 'platform (yt|ad), id y url requeridos' }, { status: 400 });
+  const conTranscripcion = ['yt', 'tiktok', 'ad'];
+  if (!body?.id || !conTranscripcion.includes(body?.platform) || !body?.url) {
+    return NextResponse.json(
+      { error: `platform (${conTranscripcion.join('|')}), id y url requeridos` },
+      { status: 400 }
+    );
   }
   try {
     const res = await fetch(`${scraper.replace(/\/$/, '')}/transcribe`, {

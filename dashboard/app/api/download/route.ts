@@ -12,7 +12,7 @@ const ALLOWED = [
 function isAllowed(url: string): boolean {
   const base = process.env.R2_PUBLIC_BASE_URL;
   if (base && url.startsWith(base)) return true;
-  return /^https:\/\/[^/]+\.(cdninstagram\.com|fbcdn\.net|ytimg\.com)\//.test(url);
+  return /^https:\/\/[^/]+\.(cdninstagram\.com|fbcdn\.net|ytimg\.com|tiktokcdn\.com|tiktokcdn-us\.com|ttwstatic\.com|tiktokv\.com)\//.test(url);
 }
 
 export async function GET(req: NextRequest) {
