@@ -243,44 +243,56 @@ function youtubeIdFromUrl(u) {
 }
 
 // Liga el "recurso del creador" (URL) a un contenido YA scrapeado, ubicándolo por su URL original.
-// Soporta Instagram (por shortcode) y YouTube (por video_id). Devuelve { ok, plataforma, quien } o
-// { ok:false, error }. El nombre del recurso = el dominio del link (etiqueta rápida).
+// Soporta Instagram (shortcode), YouTube (video_id) y TikTok (id numérico del video).
+// Devuelve { ok, plataforma, quien } o { ok:false, error }.
 export async function attachRecursoByUrl(contentUrl, recursoUrl) {
   if (!enabled) return { ok: false, error: 'Supabase no configurado' };
   const url = (contentUrl || '').trim();
-  let table, col, id;
+
+  // Cada plataforma con su tabla, su clave y de qué columna sale el autor. Antes esto eran
+  // ternarios binarios (`table === igReelsTable ? 'ig' : 'yt'`) que etiquetaban un TikTok
+  // como YouTube en la respuesta de Slack.
+  let plat = null;
+  let id = null;
   const ig = url.match(/instagram\.com\/(?:p|reel|reels|tv)\/([^/?#]+)/i);
+  const tt = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
   if (ig) {
-    table = config.igReelsTable;
-    col = 'shortcode';
+    plat = 'ig';
     id = ig[1];
+  } else if (tt) {
+    plat = 'tiktok';
+    id = tt[1];
   } else {
     const yt = youtubeIdFromUrl(url);
     if (yt) {
-      table = config.ytVideosTable;
-      col = 'video_id';
+      plat = 'yt';
       id = yt;
     }
   }
-  if (!table) return { ok: false, error: 'URL no reconocida (usa un link de Instagram o YouTube).' };
+  if (!plat) return { ok: false, error: 'URL no reconocida (usa un link de Instagram, YouTube o TikTok).' };
+
+  const DEF = {
+    ig: { table: config.igReelsTable, col: 'shortcode', quienCol: 'creador' },
+    yt: { table: config.ytVideosTable, col: 'video_id', quienCol: 'canal' },
+    tiktok: { table: config.tiktokVideosTable, col: 'video_id', quienCol: 'creador' },
+  }[plat];
 
   let nombre = null;
   try {
     nombre = new URL(recursoUrl).hostname.replace(/^www\./, '');
   } catch {}
 
-  const quienCol = table === config.igReelsTable ? 'creador' : 'canal';
   const c = await getClient();
   const { data, error } = await c
-    .from(table)
+    .from(DEF.table)
     .update({ recurso_url: recursoUrl, recurso_nombre: nombre })
-    .eq(col, id)
-    .select(quienCol);
+    .eq(DEF.col, id)
+    .select(DEF.quienCol);
   if (error) throw new Error(error.message);
   if (!data || data.length === 0) {
-    return { ok: false, notFound: true, plataforma: table === config.igReelsTable ? 'ig' : 'yt', error: 'No encontré ese contenido en la base.' };
+    return { ok: false, notFound: true, plataforma: plat, error: 'No encontré ese contenido en la base.' };
   }
-  return { ok: true, plataforma: table === config.igReelsTable ? 'ig' : 'yt', quien: data[0][quienCol] || null };
+  return { ok: true, plataforma: plat, quien: data[0][DEF.quienCol] || null };
 }
 
 // IDs de anuncios ya presentes en Supabase (meta_ads). Dedup primario del pipeline de ads.

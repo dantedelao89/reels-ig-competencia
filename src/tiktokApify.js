@@ -57,6 +57,17 @@ export async function scrapeTiktokUrls(urls, { downloadVideo = false } = {}) {
   return items.filter((it) => it && it.id && !it.error);
 }
 
+// URL de un MEDIO reproducible del video, para transcribirlo con IA.
+// Hace falta una corrida aparte porque sin `shouldDownloadVideos` el actor no devuelve ninguna
+// URL de video (medido: `videoMeta.downloadAddr` ni siquiera existe como campo). La URL pública
+// de TikTok es una página HTML, así que pasársela a la transcripción no funciona.
+export async function getTiktokMediaUrl(videoUrl) {
+  const items = await scrapeTiktokUrls([videoUrl], { downloadVideo: true });
+  const it = items[0];
+  if (!it) return null;
+  return it.mediaUrls?.[0] || it.videoMeta?.downloadAddr || null;
+}
+
 // --- Subtítulos ---
 
 const MAX_SUBTITLE_CHARS = 1_000_000;

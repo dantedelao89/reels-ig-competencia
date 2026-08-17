@@ -687,7 +687,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                       </button>
                     )
                   )}
-                  {item.platform === 'yt' && transcripcion && !transcribing && (
+                  {PLATFORMS[item.platform].transcribeOnDemand && transcripcion && !transcribing && (
                     <button onClick={transcribe} className="text-xs text-muted hover:text-accent">
                       ↻ Re-transcribir
                     </button>
@@ -732,7 +732,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                   </div>
                 ) : loadingTr ? (
                   <div className="text-sm text-muted text-center py-10">Cargando…</div>
-                ) : item.platform === 'yt' ? (
+                ) : PLATFORMS[item.platform].transcribeOnDemand ? (
                   <div className="h-full flex flex-col items-center justify-center text-center py-10">
                     <p className="text-sm text-muted mb-4 max-w-xs">
                       Este video aún no tiene transcripción. Genérala con IA (baja el audio y lo transcribe).

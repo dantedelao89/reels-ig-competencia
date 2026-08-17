@@ -17,6 +17,7 @@ import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
 import { runScrapeInstagramStories } from './scrapeStories.js';
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
+import { getTiktokMediaUrl } from './tiktokApify.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
 import { interpretarInstruccion } from './regenInstruccion.js';
@@ -37,6 +38,18 @@ const slackFormParser = express.urlencoded({
 // Guarda el resultado de la última corrida para poder consultarlo aunque el HTTP del webhook
 // se corte por timeout del edge (corridas largas).
 let lastRun = null;
+
+// Espejo backend del registro de plataformas del dashboard. Antes esto vivía en ternarios
+// binarios (`platform === 'yt' ? … : 'ig_reels'`), que con TikTok escribían en la tabla
+// equivocada o rechazaban la petición.
+const CONTENT_TABLE = {
+  ig: config.igReelsTable,
+  yt: config.ytVideosTable,
+  tiktok: config.tiktokVideosTable,
+  ad: config.adsMetaAdsTable,
+};
+const TEXT_COL = { ig: 'transcripcion', yt: 'subtitulos', tiktok: 'transcripcion', ad: 'transcripcion' };
+const UNIQ_COL = { ig: 'shortcode', yt: 'video_id', tiktok: 'video_id' };
 
 // Corre Instagram y (si está activo) YouTube en una sola pasada, midiendo el gasto de Apify.
 async function runAll() {
@@ -341,8 +354,8 @@ app.post('/transcribe', async (req, res) => {
     }
   }
   const { platform, id, url } = req.body || {};
-  if ((platform !== 'yt' && platform !== 'ad') || !id || !url) {
-    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|ad), id y url válidos' });
+  if (!['yt', 'tiktok', 'ad'].includes(platform) || !id || !url) {
+    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|tiktok|ad), id y url válidos' });
   }
   if (!config.enableTranscription) {
     return res.status(400).json({ ok: false, error: 'Transcripción deshabilitada (falta OPENROUTER_API_KEY)' });
@@ -350,13 +363,19 @@ app.post('/transcribe', async (req, res) => {
   try {
     // YouTube: hay que bajar el audio con el actor. Ads: el video ya está en R2, se transcribe directo
     // (transcribeAudio extrae el audio con ffmpeg si el mp4 es grande).
-    const audioUrl = platform === 'yt' ? await getYoutubeAudioUrl(url) : url;
+    // TikTok necesita resolverse a un medio: su URL pública es una página HTML.
+    const audioUrl =
+      platform === 'yt'
+        ? await getYoutubeAudioUrl(url)
+        : platform === 'tiktok'
+        ? await getTiktokMediaUrl(url)
+        : url;
     if (!audioUrl) throw new Error('No se obtuvo audio del video');
     const text = await transcribeAudio(audioUrl);
     if (!text) throw new Error('La transcripción quedó vacía');
     if (supabaseEnabled()) {
-      const table = platform === 'ad' ? 'meta_ads' : 'yt_videos';
-      const column = platform === 'ad' ? 'transcripcion' : 'subtitulos';
+      const table = CONTENT_TABLE[platform];
+      const column = TEXT_COL[platform];
       await updateRowById(table, id, { [column]: text });
     }
     console.log(`[transcribe] ${platform} ${id} → ${text.length} chars`);
@@ -377,8 +396,8 @@ app.post('/translate', async (req, res) => {
     }
   }
   const { platform, id, text } = req.body || {};
-  if ((platform !== 'yt' && platform !== 'ig' && platform !== 'ad') || !id || !text) {
-    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|ig|ad), id y text válidos' });
+  if (!CONTENT_TABLE[platform] || !id || !text) {
+    return res.status(400).json({ ok: false, error: 'Faltan platform (ig|yt|tiktok|ad), id y text válidos' });
   }
   if (!config.enableTranscription) {
     return res.status(400).json({ ok: false, error: 'OpenRouter no configurado (falta OPENROUTER_API_KEY)' });
@@ -386,7 +405,7 @@ app.post('/translate', async (req, res) => {
   try {
     const translated = await translateToSpanish(text);
     if (!translated) throw new Error('La traducción quedó vacía');
-    const table = platform === 'yt' ? 'yt_videos' : platform === 'ad' ? 'meta_ads' : 'ig_reels';
+    const table = CONTENT_TABLE[platform];
     if (supabaseEnabled()) await updateRowById(table, id, { traduccion: translated });
     console.log(`[translate] ${platform} ${id} → ${translated.length} chars`);
     res.json({ ok: true, text: translated });
@@ -612,16 +631,17 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
   if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
   const text = (req.body?.text || '').trim();
   const parts = text.split(/\s+/).filter(Boolean);
-  // Orden libre: el que sea link de Instagram/YouTube es el CONTENIDO; el otro link es el RECURSO.
-  const contentUrl = parts.find((p) => /youtu\.?be|instagram\.com/i.test(p));
+  // Orden libre: el que sea link de contenido (IG/YT/TikTok) es el CONTENIDO; el otro es el RECURSO.
+  const contentUrl = parts.find((p) => /youtu\.?be|instagram\.com|tiktok\.com/i.test(p));
   const recursoUrl = parts.find((p) => p !== contentUrl && /^https?:\/\//i.test(p));
   const responseUrl = req.body?.response_url;
   const isYt = /youtu\.?be/i.test(contentUrl || '');
   const isIg = /instagram\.com/i.test(contentUrl || '');
-  if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl) || (!isYt && !isIg)) {
+  const isTt = /tiktok\.com/i.test(contentUrl || '');
+  if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl) || (!isYt && !isIg && !isTt)) {
     return res.json({
       response_type: 'ephemeral',
-      text: 'Uso: `/recurso <url de Instagram/YouTube> <url del recurso>` (en cualquier orden).\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`\n(Uno de los dos links debe ser de Instagram o YouTube.)',
+      text: 'Uso: `/recurso <url de Instagram/YouTube/TikTok> <url del recurso>` (en cualquier orden).\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`\n(Uno de los dos links debe ser de contenido.)',
     });
   }
 
@@ -636,7 +656,11 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
       // 2) si no existía, lo scrapea primero y reintenta ligar (todo en un paso).
       if (!r.ok && r.notFound) {
         await slackReply(responseUrl, '📥 Ese contenido no estaba; lo scrapeo primero…');
-        const scr = isYt ? await runScrapeYoutubeVideo(contentUrl) : await runScrapeInstagramUrl(contentUrl);
+        const scr = isYt
+          ? await runScrapeYoutubeVideo(contentUrl)
+          : isTt
+          ? await runScrapeTiktokUrl(contentUrl)
+          : await runScrapeInstagramUrl(contentUrl);
         if (scr.ok === false) {
           await slackReply(responseUrl, `❌ No se pudo scrapear el contenido: ${scr.error}`);
           return;
@@ -669,11 +693,12 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
   const isYt = /youtu\.?be/i.test(text);
   const isIg = /instagram\.com/i.test(text);
   const isAd = /facebook\.com/i.test(text);
+  const isTt = /tiktok\.com/i.test(text);
 
-  if (!text || (!isYt && !isIg && !isAd)) {
+  if (!text || (!isYt && !isIg && !isAd && !isTt)) {
     return res.json({
       response_type: 'ephemeral',
-      text: 'Uso: `/scrape <url de Instagram, YouTube o Facebook>`',
+      text: 'Uso: `/scrape <url de Instagram, YouTube, TikTok o Facebook>`',
     });
   }
 
@@ -707,7 +732,12 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
   }
 
   try {
-    const result = isYt ? await runScrapeYoutubeVideo(text) : await runScrapeInstagramUrl(text);
+    const result = isYt
+      ? await runScrapeYoutubeVideo(text)
+      : isTt
+      ? await runScrapeTiktokUrl(text)
+      : await runScrapeInstagramUrl(text);
+    const plat = isYt ? 'yt' : isTt ? 'tiktok' : 'ig';
     if (result.ok === false) {
       await slackReply(responseUrl, `❌ Error: ${result.error}`);
       return;
@@ -726,25 +756,29 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
     let ytRowId = null;
     if (!raw && supabaseEnabled()) {
       try {
-        const row = isYt
-          ? await getRowByField('yt_videos', 'video_id', result.videoId, 'id,subtitulos')
-          : await getRowByField('ig_reels', 'shortcode', result.shortCode, 'transcripcion');
-        raw = isYt ? row?.subtitulos : row?.transcripcion;
-        if (isYt) ytRowId = row?.id || null;
+        const claveExterna = isYt ? result.videoId : isTt ? result.videoId : result.shortCode;
+        const row = await getRowByField(
+          CONTENT_TABLE[plat],
+          UNIQ_COL[plat],
+          claveExterna,
+          `id,${TEXT_COL[plat]}`
+        );
+        raw = row?.[TEXT_COL[plat]];
+        ytRowId = row?.id || null;
       } catch (e) {
         console.error('[slack] no se pudo leer transcripción existente:', e.message);
       }
     }
 
-    // YouTube sin subtítulos: transcribe el audio bajo demanda (mismo flujo que el botón de
-    // DISECTA). Puede tardar varios minutos en videos largos (chunking con ffmpeg).
-    if (!raw && isYt && config.enableTranscription) {
+    // Sin subtítulos: transcribe el audio bajo demanda (mismo flujo que el botón de DISECTA).
+    // Puede tardar varios minutos en videos largos (troceo con ffmpeg).
+    if (!raw && (isYt || isTt) && config.enableTranscription) {
       await slackReply(responseUrl, '🎙️ Sin subtítulos, transcribiendo el audio… puede tardar un poco.');
       try {
-        const audioUrl = await getYoutubeAudioUrl(text);
+        const audioUrl = isYt ? await getYoutubeAudioUrl(text) : await getTiktokMediaUrl(text);
         if (audioUrl) {
           raw = await transcribeAudio(audioUrl);
-          if (raw && ytRowId) await updateRowById('yt_videos', ytRowId, { subtitulos: raw });
+          if (raw && ytRowId) await updateRowById(CONTENT_TABLE[plat], ytRowId, { [TEXT_COL[plat]]: raw });
         }
       } catch (e) {
         console.error('[slack] transcripción bajo demanda falló:', e.message);

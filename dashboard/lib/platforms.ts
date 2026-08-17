@@ -142,10 +142,9 @@ export const PLATFORMS: Record<Platform, PlatformDef> = {
     detailExtraCols: '',
     searchable: true,
     hasOrigen: false,
-    // Todavía en false: el botón "Transcribir con IA" necesita sacar el audio del video, y en
-    // TikTok la URL pública es una página HTML, no un medio. Hasta que exista ese paso, se
-    // muestra solo el texto de los subtítulos gratis en vez de un botón que falla.
-    transcribeOnDemand: false,
+    // El botón "Transcribir con IA" resuelve el audio con getTiktokMediaUrl: la URL pública de
+    // TikTok es una página HTML, así que hace falta una corrida del actor de descarga.
+    transcribeOnDemand: true,
     thumbRatio: 'pt-[177%]', // 9:16
     icon: 'tiktok',
     activeClass: 'text-white',
