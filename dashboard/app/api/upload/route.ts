@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToR2, r2Enabled } from '@/lib/r2';
-import { getSupabase, IG_TABLE, YT_TABLE } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
+import { PLATFORMS, isPlatform } from '@/lib/platforms';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   const externalId = (form.get('externalId') || 'video').toString().replace(/[^\w.-]/g, '_');
 
   if (!(file instanceof File)) return NextResponse.json({ error: 'Falta el archivo' }, { status: 400 });
-  if (!id || (platform !== 'ig' && platform !== 'yt')) {
+  if (!id || !isPlatform(platform)) {
     return NextResponse.json({ error: 'id/platform inválidos' }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const url = await uploadToR2(key, buf, file.type || 'video/mp4');
-    const table = platform === 'ig' ? IG_TABLE : YT_TABLE;
+    const table = PLATFORMS[platform].table;
     const { error } = await getSupabase().from(table).update({ mi_video_url: url }).eq('id', id);
     if (error) throw new Error(error.message);
     return NextResponse.json({ ok: true, url });

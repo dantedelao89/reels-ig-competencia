@@ -1,13 +1,30 @@
 'use client';
 
-import { InstagramIcon, YoutubeIcon } from './BrandIcons';
+// Filtro de plataforma. Se dibuja a partir del registro (lib/platforms.ts), así que añadir una
+// plataforma nueva no toca este archivo: basta con su entrada en PLATFORMS.
+
+import type { ComponentType } from 'react';
+import { InstagramIcon, YoutubeIcon, TiktokIcon } from './BrandIcons';
+import { PLATFORMS, PLATFORM_ORDER } from '@/lib/platforms';
 
 interface Props {
   platform: string;
   onPlatform: (v: string) => void;
 }
 
-const IG_GRADIENT = 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)';
+// El registro no puede traer componentes (lo importan route handlers de servidor), así que
+// resuelve la clave de texto aquí.
+const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
+  instagram: InstagramIcon,
+  youtube: YoutubeIcon,
+  tiktok: TiktokIcon,
+};
+
+const COLOR_INACTIVO: Record<string, string> = {
+  instagram: 'text-[#C13584]',
+  youtube: 'text-[#FF0000]',
+  tiktok: 'text-black',
+};
 
 export default function PlatformToggle({ platform, onPlatform }: Props) {
   return (
@@ -21,26 +38,24 @@ export default function PlatformToggle({ platform, onPlatform }: Props) {
         Todo
       </button>
 
-      <button
-        onClick={() => onPlatform('ig')}
-        style={platform === 'ig' ? { background: IG_GRADIENT } : undefined}
-        className={`h-8 px-3 text-sm rounded-md inline-flex items-center gap-1.5 ${
-          platform === 'ig' ? 'text-white font-medium' : 'hover:bg-gray-50'
-        }`}
-      >
-        <InstagramIcon size={15} className={platform === 'ig' ? 'text-white' : 'text-[#C13584]'} />
-        <span className={platform === 'ig' ? 'text-white' : 'text-gray-600'}>Instagram</span>
-      </button>
-
-      <button
-        onClick={() => onPlatform('yt')}
-        className={`h-8 px-3 text-sm rounded-md inline-flex items-center gap-1.5 ${
-          platform === 'yt' ? 'bg-[#FF0000] text-white font-medium' : 'hover:bg-gray-50'
-        }`}
-      >
-        <YoutubeIcon size={16} className={platform === 'yt' ? 'text-white' : 'text-[#FF0000]'} />
-        <span className={platform === 'yt' ? 'text-white' : 'text-gray-600'}>YouTube</span>
-      </button>
+      {PLATFORM_ORDER.map((key) => {
+        const def = PLATFORMS[key];
+        const Icon = ICONS[def.icon];
+        const activo = platform === key;
+        return (
+          <button
+            key={key}
+            onClick={() => onPlatform(key)}
+            style={activo ? def.activeStyle : undefined}
+            className={`h-8 px-3 text-sm rounded-md inline-flex items-center gap-1.5 ${
+              activo ? `${def.activeClass} font-medium` : 'hover:bg-gray-50'
+            }`}
+          >
+            {Icon && <Icon size={15} className={activo ? 'text-white' : COLOR_INACTIVO[def.icon]} />}
+            <span className={activo ? 'text-white' : 'text-gray-600'}>{def.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import type { ContentItem } from '@/lib/types';
 import { fmtNum, fmtDateShort } from '@/lib/format';
 import { ESTADO_STYLE } from '@/lib/estados';
+import { PLATFORMS } from '@/lib/platforms';
 
 interface Props {
   items: ContentItem[];
@@ -12,7 +13,7 @@ interface Props {
 }
 
 function Thumb({ item }: { item: ContentItem }) {
-  const ratio = item.platform === 'ig' ? 'pt-[133%]' : 'pt-[56%]';
+  const ratio = PLATFORMS[item.platform].thumbRatio;
   return (
     <div className={`relative w-full ${ratio} bg-gray-200`}>
       {item.thumbnail ? (
@@ -29,7 +30,7 @@ function Thumb({ item }: { item: ContentItem }) {
         </div>
       )}
       <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">
-        {item.platform === 'ig' ? 'IG' : 'YT'}
+        {PLATFORMS[item.platform].short}
       </span>
       {item.duracion && (
         <span className="absolute bottom-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white tabular-nums">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase, IG_TABLE, YT_TABLE } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
+import { CURATION_TABLES, CURATION_TEXT_COL, PLATFORMS, isCurable } from '@/lib/platforms';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,14 +10,15 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const platform = sp.get('platform');
   const id = sp.get('id');
-  if (!id || (platform !== 'ig' && platform !== 'yt' && platform !== 'ad')) {
+  // Sin esta validación, una plataforma desconocida caía en el `else` (que era YouTube) y leía
+  // la tabla equivocada devolviendo 200 con datos de otro contenido.
+  if (!id || !isCurable(platform)) {
     return NextResponse.json({ error: 'platform e id requeridos' }, { status: 400 });
   }
-  const table = platform === 'ig' ? IG_TABLE : platform === 'ad' ? 'meta_ads' : YT_TABLE;
-  const textCol = platform === 'yt' ? 'subtitulos' : 'transcripcion'; // ig y ad usan 'transcripcion'
-  // Solo YouTube tiene variantes A/B y video_id (para el botón "buscar variantes").
-  // Solo IG tiene el regenerador de carruseles (regen / regen_estado).
-  const extraCols = platform === 'yt' ? ', variantes, video_id' : platform === 'ig' ? ', regen, regen_estado' : '';
+  const table = CURATION_TABLES[platform];
+  const textCol = CURATION_TEXT_COL[platform];
+  // Columnas propias de cada plataforma (variantes A/B en YouTube, regenerador en Instagram).
+  const extraCols = platform === 'ad' ? '' : PLATFORMS[platform].detailExtraCols;
   try {
     const { data, error } = await getSupabase()
       .from(table)

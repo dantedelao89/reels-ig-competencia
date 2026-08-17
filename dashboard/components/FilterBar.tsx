@@ -3,6 +3,8 @@
 import FacetDropdown from './FacetDropdown';
 import DateFilter, { DateState } from './DateFilter';
 import PlatformToggle from './PlatformToggle';
+import { PLATFORMS } from '@/lib/platforms';
+import type { Platform } from '@/lib/types';
 
 interface Facet {
   value: string;
@@ -55,8 +57,9 @@ export default function FilterBar(p: Props) {
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-2">
         <PlatformToggle platform={p.platform} onPlatform={p.onPlatform} />
-        {/* Origen: solo aplica a YouTube (canal vs búsqueda). Se oculta si el filtro es solo Instagram. */}
-        {p.platform !== 'ig' && (
+        {/* Origen: solo lo tienen las plataformas con fuentes de dos clases (YouTube: canal vs
+            búsqueda). Con 'todas menos IG' se colaba en cualquier plataforma nueva. */}
+        {(p.platform === 'all' || PLATFORMS[p.platform as Platform]?.hasOrigen) && (
           <div className="flex items-center bg-gray-100 rounded-md p-0.5 text-xs" title="Cómo se scrapeó el video de YouTube">
             {[
               ['', 'Todo origen'],

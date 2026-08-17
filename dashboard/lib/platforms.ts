@@ -1,0 +1,155 @@
+// Registro de plataformas del pipeline orgánico.
+//
+// Antes de este archivo, la plataforma vivía en ~45 ternarios binarios (`platform === 'ig' ? … : …`).
+// Con dos plataformas funcionaban; con una tercera fallan EN SILENCIO: devuelven la tabla
+// equivocada o un PATCH que responde ok sin actualizar nada. Aquí se declara una vez y los sitios
+// que deciden por plataforma lo consultan.
+//
+// Sin JSX a propósito: este archivo lo importan route handlers de servidor, así que el icono
+// viaja como clave de texto y el componente se resuelve en PlatformToggle.
+
+import type { ContentItem, Platform } from './types';
+
+export interface PlatformDef {
+  key: Platform;
+  label: string;              // 'Instagram'
+  short: string;              // 'IG' — badge de tarjeta y tabla
+  table: string;
+  idCol: string;              // columna del id externo (shortcode / video_id)
+  autorCol: string;           // creador / canal
+  textCol: string;            // dónde vive la transcripción
+  listCols: string;           // select() de la lista (columnas ligeras)
+  detailExtraCols: string;    // columnas extra del detalle, con coma inicial
+  searchable: boolean;        // tiene search_tsv generada + índice GIN
+  hasOrigen: boolean;         // el filtro canal/búsqueda (solo YouTube)
+  transcribeOnDemand: boolean;// muestra el botón "Transcribir con IA"
+  thumbRatio: string;         // proporción de la miniatura
+  icon: 'instagram' | 'youtube' | 'tiktok';
+  activeClass: string;        // clases del toggle cuando está activo
+  activeStyle?: Record<string, string>;
+  toItem: (r: any) => ContentItem;
+}
+
+export function fmtSeconds(s: number | null): string | null {
+  if (s == null) return null;
+  const m = Math.floor(s / 60);
+  const sec = Math.round(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+const IG_COLS =
+  'id,shortcode,creador,url,video_url,caption,fecha_publicacion,likes,comentarios,views,duracion_seg,tipo,imagenes,regen_estado,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+const YT_COLS =
+  'id,video_id,titulo,canal,canal_url,url,fecha_publicacion,views,duracion,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+
+export const PLATFORMS: Record<Platform, PlatformDef> = {
+  ig: {
+    key: 'ig',
+    label: 'Instagram',
+    short: 'IG',
+    table: 'ig_reels',
+    idCol: 'shortcode',
+    autorCol: 'creador',
+    textCol: 'transcripcion',
+    listCols: IG_COLS,
+    detailExtraCols: ', regen, regen_estado',
+    searchable: true,
+    hasOrigen: false,
+    transcribeOnDemand: false,
+    thumbRatio: 'pt-[133%]',
+    icon: 'instagram',
+    activeClass: 'text-white',
+    activeStyle: { background: 'linear-gradient(45deg,#F58529,#DD2A7B,#8134AF)' },
+    toItem: (r) => ({
+      id: r.id,
+      platform: 'ig',
+      externalId: r.shortcode,
+      creador: r.creador,
+      titulo: r.caption,
+      url: r.url,
+      fechaPublicacion: r.fecha_publicacion,
+      views: r.views,
+      likes: r.likes,
+      comentarios: r.comentarios,
+      duracion: fmtSeconds(r.duracion_seg),
+      thumbnail: r.thumbnail_url || r.thumbnail_original,
+      tipo: r.tipo ?? null,
+      imagenes: Array.isArray(r.imagenes) ? r.imagenes : null,
+      regenEstado: r.regen_estado ?? null,
+      proyecto: r.proyecto,
+      estado: r.estado,
+      transcripcion: r.transcripcion,
+      scrapeadoEn: r.scrapeado_en,
+      miGuion: r.mi_guion,
+      miNotas: r.mi_notas,
+      miLink: r.mi_link,
+      miVideoUrl: r.mi_video_url,
+    }),
+  },
+  yt: {
+    key: 'yt',
+    label: 'YouTube',
+    short: 'YT',
+    table: 'yt_videos',
+    idCol: 'video_id',
+    autorCol: 'canal',
+    textCol: 'subtitulos',
+    listCols: YT_COLS,
+    detailExtraCols: ', variantes, video_id',
+    searchable: true,
+    hasOrigen: true,
+    transcribeOnDemand: true,
+    thumbRatio: 'pt-[56%]',
+    icon: 'youtube',
+    activeClass: 'text-white',
+    activeStyle: { background: '#FF0000' },
+    toItem: (r) => ({
+      id: r.id,
+      platform: 'yt',
+      externalId: r.video_id,
+      creador: r.canal,
+      titulo: r.titulo,
+      url: r.url,
+      fechaPublicacion: r.fecha_publicacion,
+      views: r.views,
+      likes: null,
+      comentarios: null,
+      duracion: r.duracion,
+      thumbnail: r.thumbnail_url || r.thumbnail_original,
+      tipo: null,
+      imagenes: null,
+      proyecto: r.proyecto,
+      estado: r.estado,
+      transcripcion: r.subtitulos,
+      scrapeadoEn: r.scrapeado_en,
+      miGuion: r.mi_guion,
+      miNotas: r.mi_notas,
+      miLink: r.mi_link,
+      miVideoUrl: r.mi_video_url,
+    }),
+  },
+};
+
+export const PLATFORM_ORDER: Platform[] = ['ig', 'yt'];
+
+export function isPlatform(v: unknown): v is Platform {
+  return typeof v === 'string' && v in PLATFORMS;
+}
+
+// Tablas que aceptan la capa de curación (estado, mi_*, recurso_*). Incluye 'ad' (meta_ads),
+// que no es una plataforma de la galería orgánica pero sí se cura desde la misma UI.
+export const CURATION_TABLES: Record<Platform | 'ad', string> = {
+  ig: PLATFORMS.ig.table,
+  yt: PLATFORMS.yt.table,
+  ad: 'meta_ads',
+};
+
+export const CURATION_TEXT_COL: Record<Platform | 'ad', string> = {
+  ig: PLATFORMS.ig.textCol,
+  yt: PLATFORMS.yt.textCol,
+  ad: 'transcripcion',
+};
+
+export function isCurable(v: unknown): v is Platform | 'ad' {
+  return typeof v === 'string' && v in CURATION_TABLES;
+}

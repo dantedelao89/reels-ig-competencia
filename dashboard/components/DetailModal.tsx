@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ContentItem, Estado, CarouselSlide } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
+import { PLATFORMS } from '@/lib/platforms';
 import { fmtNum, fmtDateShort, toParagraphs } from '@/lib/format';
 import { useToast } from './ui/Toast';
 import { useActivity } from './ui/Activity';
@@ -229,7 +230,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       const res = await fetch('/api/transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: item.id, platform: 'yt', url: item.url }),
+        body: JSON.stringify({ id: item.id, platform: item.platform, url: item.url }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Falló la transcripción');
@@ -373,7 +374,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
         <div className="flex items-center justify-between px-4 py-3 border-b border-line">
           <div className="flex items-center gap-2 min-w-0">
             <span className="font-medium truncate">{item.creador ? `@${item.creador}` : '—'}</span>
-            <span className="text-xs text-muted shrink-0">{item.platform === 'ig' ? 'Instagram' : 'YouTube'}</span>
+            <span className="text-xs text-muted shrink-0">{PLATFORMS[item.platform].label}</span>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -421,7 +422,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
             {/* IZQUIERDA: datos del video */}
             <div className="p-4 border-r border-line bg-gray-50">
               <div
-                className={`relative w-full ${item.platform === 'ig' ? 'pt-[133%]' : 'pt-[56%]'} bg-gray-200 rounded-lg overflow-hidden mb-3`}
+                className={`relative w-full ${PLATFORMS[item.platform].thumbRatio} bg-gray-200 rounded-lg overflow-hidden mb-3`}
               >
                 {esCarrusel ? (
                   slides[slide].tipo === 'video' ? (

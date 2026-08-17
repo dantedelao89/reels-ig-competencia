@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ContentItem, Estado } from '@/lib/types';
+import { PLATFORMS, PLATFORM_ORDER } from '@/lib/platforms';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import FilterBar from './FilterBar';
@@ -27,8 +28,7 @@ interface Facets {
 
 interface Stats {
   total: number;
-  ig: number;
-  yt: number;
+  porPlataforma: Record<string, number>;
   porEstado: Record<string, number>;
 }
 
@@ -337,8 +337,10 @@ export default function DashboardClient() {
           view={view}
           onView={setView}
           total={total}
-          igCount={stats?.ig}
-          ytCount={stats?.yt}
+          counts={PLATFORM_ORDER.map((k) => ({
+            short: PLATFORMS[k].short,
+            count: stats?.porPlataforma?.[k] ?? 0,
+          })).filter((c) => c.count > 0)}
         />
 
         <FilterBar

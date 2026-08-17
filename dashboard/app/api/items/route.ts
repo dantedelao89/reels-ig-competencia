@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabase, IG_TABLE, YT_TABLE } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
+import { CURATION_TABLES, isCurable } from '@/lib/platforms';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,17 +36,32 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'nada que actualizar' }, { status: 400 });
   }
 
+  // El bucle recorre las TABLAS, no los items: un item con una plataforma desconocida no coincidía
+  // con ninguna y se ignoraba en silencio, devolviendo ok:true. Se valida antes.
+  const desconocidas = [
+    ...new Set(body.items.map((i: any) => i.platform).filter((p: any) => !isCurable(p))),
+  ];
+  if (desconocidas.length) {
+    return NextResponse.json({ error: `plataforma desconocida: ${desconocidas.join(', ')}` }, { status: 400 });
+  }
+
   const supabase = getSupabase();
-  const TABLES: Record<string, string> = { ig: IG_TABLE, yt: YT_TABLE, ad: 'meta_ads' };
 
   try {
     let updated = 0;
-    for (const platform of Object.keys(TABLES)) {
+    for (const platform of Object.keys(CURATION_TABLES)) {
       const ids = body.items.filter((i: any) => i.platform === platform).map((i: any) => i.id);
       if (!ids.length) continue;
-      const { error } = await supabase.from(TABLES[platform]).update(patch).in('id', ids);
+      const { error } = await supabase.from(CURATION_TABLES[platform as keyof typeof CURATION_TABLES]).update(patch).in('id', ids);
       if (error) throw new Error(error.message);
       updated += ids.length;
+    }
+    // Red de seguridad: si por lo que sea no se tocaron todos, no se miente con un ok:true.
+    if (updated !== body.items.length) {
+      return NextResponse.json(
+        { error: `se actualizaron ${updated} de ${body.items.length} items` },
+        { status: 500 }
+      );
     }
     return NextResponse.json({ ok: true, updated });
   } catch (e: any) {

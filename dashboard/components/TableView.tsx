@@ -3,6 +3,7 @@
 import type { ContentItem } from '@/lib/types';
 import { fmtNum, fmtDateShort } from '@/lib/format';
 import { ESTADO_STYLE } from '@/lib/estados';
+import { PLATFORMS } from '@/lib/platforms';
 
 interface Props {
   items: ContentItem[];
@@ -54,7 +55,7 @@ export default function TableView({ items, selected, onToggle, onOpen }: Props) 
                   </button>
                 </td>
                 <td className="p-2 text-muted align-top whitespace-nowrap">{it.creador ? `@${it.creador}` : '—'}</td>
-                <td className="p-2 text-muted">{it.platform === 'ig' ? 'IG' : 'YT'}</td>
+                <td className="p-2 text-muted">{PLATFORMS[it.platform].short}</td>
                 <td className="p-2 text-right tabular-nums">{fmtNum(it.views)}</td>
                 <td className="p-2 text-muted whitespace-nowrap">{fmtDateShort(it.fechaPublicacion)}</td>
                 <td className="p-2">

@@ -9,8 +9,7 @@ interface Props {
   view: 'grid' | 'table';
   onView: (v: 'grid' | 'table') => void;
   total: number;
-  igCount?: number;
-  ytCount?: number;
+  counts?: { short: string; count: number }[];
 }
 
 const SORTS: { field: string; label: string }[] = [
@@ -57,9 +56,9 @@ export default function Topbar(p: Props) {
       <div className="flex items-center justify-between">
         <div className="text-xs text-muted">
           {p.total.toLocaleString('es-MX')} resultados
-          {p.igCount != null && p.ytCount != null && (
+          {!!p.counts?.length && (
             <span className="ml-2 text-muted/70">
-              · {p.igCount} IG · {p.ytCount} YT
+              {p.counts.map((c) => ` · ${c.count} ${c.short}`).join('')}
             </span>
           )}
         </div>

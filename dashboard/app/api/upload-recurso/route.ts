@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadToR2, r2Enabled } from '@/lib/r2';
-import { getSupabase, IG_TABLE, YT_TABLE } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
+import { CURATION_TABLES, isCurable } from '@/lib/platforms';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   const externalId = (form.get('externalId') || 'item').toString().replace(/[^\w.-]/g, '_');
 
   if (!(file instanceof File)) return NextResponse.json({ error: 'Falta el archivo' }, { status: 400 });
-  if (!id || (platform !== 'ig' && platform !== 'yt' && platform !== 'ad')) {
+  if (!id || !isCurable(platform)) {
     return NextResponse.json({ error: 'id/platform inválidos' }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
@@ -39,12 +40,10 @@ export async function POST(req: NextRequest) {
   const buf = Buffer.from(await file.arrayBuffer());
   const key = `recursos/${platform}_${externalId}.${ext}`;
 
-  const TABLES: Record<string, string> = { ig: IG_TABLE, yt: YT_TABLE, ad: 'meta_ads' };
-
   try {
     const url = await uploadToR2(key, buf, file.type || 'application/octet-stream');
     const { error } = await getSupabase()
-      .from(TABLES[platform])
+      .from(CURATION_TABLES[platform])
       .update({ recurso_url: url, recurso_nombre: nombre })
       .eq('id', id);
     if (error) throw new Error(error.message);

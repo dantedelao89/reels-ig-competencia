@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabase, IG_TABLE, YT_TABLE } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
+import { PLATFORMS, PLATFORM_ORDER } from '@/lib/platforms';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,15 +30,14 @@ function mergeSorted(...maps: Map<string, number>[]): { value: string; count: nu
 
 export async function GET() {
   try {
-    const [igCreador, ytCanal, igProy, ytProy] = await Promise.all([
-      distinctCounts(IG_TABLE, 'creador'),
-      distinctCounts(YT_TABLE, 'canal'),
-      distinctCounts(IG_TABLE, 'proyecto'),
-      distinctCounts(YT_TABLE, 'proyecto'),
+    const defs = PLATFORM_ORDER.map((p) => PLATFORMS[p]);
+    const [autores, proyectos] = await Promise.all([
+      Promise.all(defs.map((d) => distinctCounts(d.table, d.autorCol))),
+      Promise.all(defs.map((d) => distinctCounts(d.table, 'proyecto'))),
     ]);
     return NextResponse.json({
-      creadores: mergeSorted(igCreador, ytCanal),
-      proyectos: mergeSorted(igProy, ytProy),
+      creadores: mergeSorted(...autores),
+      proyectos: mergeSorted(...proyectos),
     });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });

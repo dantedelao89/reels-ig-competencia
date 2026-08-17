@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getSupabase, IG_TABLE, YT_TABLE } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { ESTADOS } from '@/lib/types';
+import { PLATFORMS, PLATFORM_ORDER } from '@/lib/platforms';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,15 +16,25 @@ async function countWhere(table: string, estado?: string): Promise<number> {
 
 export async function GET() {
   try {
-    const [ig, yt] = await Promise.all([countWhere(IG_TABLE), countWhere(YT_TABLE)]);
+    const totales = await Promise.all(PLATFORM_ORDER.map((p) => countWhere(PLATFORMS[p].table)));
+    const porPlataforma: Record<string, number> = {};
+    PLATFORM_ORDER.forEach((p, i) => (porPlataforma[p] = totales[i]));
+
     const porEstado: Record<string, number> = {};
     await Promise.all(
       ESTADOS.map(async (e) => {
-        const [a, b] = await Promise.all([countWhere(IG_TABLE, e.key), countWhere(YT_TABLE, e.key)]);
-        porEstado[e.key] = a + b;
+        const n = await Promise.all(PLATFORM_ORDER.map((p) => countWhere(PLATFORMS[p].table, e.key)));
+        porEstado[e.key] = n.reduce((a, b) => a + b, 0);
       })
     );
-    return NextResponse.json({ total: ig + yt, ig, yt, porEstado });
+
+    return NextResponse.json({
+      total: totales.reduce((a, b) => a + b, 0),
+      porPlataforma,
+      porEstado,
+      // Se conservan las claves planas para no romper a nadie que aún las lea.
+      ...porPlataforma,
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
