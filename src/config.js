@@ -62,9 +62,9 @@ export const config = {
   tiktokRecentLookback: process.env.TT_RECENT_LOOKBACK || '2 days',
   // Subtítulos que TikTok ya trae (gratis). Transcribir con IA se hace a pedido desde el detalle.
   tiktokDownloadSubtitles: process.env.TT_DOWNLOAD_SUBTITLES !== 'false',
-  // OPT-IN a propósito (al revés que enableYoutube): el deploy queda inerte hasta que Dante
-  // ponga ENABLE_TIKTOK=true en Railway.
-  enableTiktok: process.env.ENABLE_TIKTOK === 'true',
+  // Igual que enableYoutube: TikTok entra en la corrida cuando Dante la dispara. Que algo corra
+  // SOLO no depende de esto sino del cron, y los crons están pausados (CRONS_PAUSED en index.js).
+  enableTiktok: process.env.ENABLE_TIKTOK !== 'false',
 
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',
