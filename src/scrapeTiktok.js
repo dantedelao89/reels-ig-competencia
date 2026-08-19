@@ -9,7 +9,13 @@ import {
   createTiktokCreator,
   updateTiktokCreatorLastRun,
 } from './sources.js';
-import { scrapeTiktokProfiles, scrapeTiktokUrls, fetchSubtitles, normalizeTiktokHandle } from './tiktokApify.js';
+import {
+  scrapeTiktokProfiles,
+  scrapeTiktokUrls,
+  fetchSubtitles,
+  normalizeTiktokHandle,
+  resolveTiktokUrl,
+} from './tiktokApify.js';
 import { syncTiktok, getExistingTiktokIds } from './supabase.js';
 
 // Inserta los videos nuevos. resolve(item) → { project }. Devuelve cuántos insertó.
@@ -107,11 +113,21 @@ export async function runScrapeTiktokUrl(url) {
   if (!/tiktok\.com/i.test(url || '')) {
     return { ok: false, error: 'La URL no es de TikTok', inserted: 0 };
   }
+  // Los links del botón Compartir (vt.tiktok.com) no los resuelve ningún actor, y esto además
+  // detecta antes de gastar si el video no es accesible (p. ej. un anuncio "dark post").
+  const resuelto = await resolveTiktokUrl(url);
+  if (resuelto.error) {
+    console.log(`[TT url] ${url} → ${resuelto.error}`);
+    return { ok: false, error: resuelto.error, inserted: 0 };
+  }
+  const urlCanonica = resuelto.url;
+  if (urlCanonica !== url) console.log(`[TT url] link resuelto: ${url} → ${urlCanonica}`);
+
   try {
-    const items = await scrapeTiktokUrls([url]);
+    const items = await scrapeTiktokUrls([urlCanonica]);
     if (!items.length) return { ok: false, error: 'No se pudo leer ese video de TikTok', inserted: 0 };
     const item = items[0];
-    const handle = normalizeTiktokHandle(item.authorMeta?.name || url);
+    const handle = normalizeTiktokHandle(item.authorMeta?.name || urlCanonica);
 
     let creator = handle ? await getTiktokCreatorByUsername(handle) : null;
     let cuentaNueva = false;
@@ -127,7 +143,7 @@ export async function runScrapeTiktokUrl(url) {
 
     const resolve = () => ({ project: creator?.project });
     const inserted = await ingestTiktok(items, new Set(), startedAt, resolve);
-    console.log(`[TT url] ${url} video_id=${item.id} actualizado/nuevo=${inserted}`);
+    console.log(`[TT url] ${urlCanonica} video_id=${item.id} actualizado/nuevo=${inserted}`);
     return {
       ok: true,
       inserted,
