@@ -106,10 +106,13 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
         ? '/api/scrape-creator'
         : type === 'tiktok'
         ? '/api/scrape-tiktok-creator'
+        : type === 'x'
+        ? '/api/scrape-x-creator'
         : type === 'yt_search'
         ? '/api/scrape-search'
         : '/api/scrape-ad';
-    const unidad = type === 'ig' ? 'reels' : type === 'fb_advertiser' ? 'anuncios' : 'videos';
+    const unidad =
+      type === 'ig' ? 'reels' : type === 'fb_advertiser' ? 'anuncios' : type === 'x' ? 'posts' : 'videos';
     const doneAct = activity.begin(`Scrapeando ${unidad}: ${row.key.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}…`);
     try {
       const res = await fetch(endpoint, {
@@ -413,7 +416,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>
                   <td className="p-2 text-center whitespace-nowrap">
-                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig' || type === 'yt_search' || type === 'tiktok') && (
+                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig' || type === 'yt_search' || type === 'tiktok' || type === 'x') && (
                       <button
                         onClick={() => scrapeOne(r)}
                         disabled={scrapingId === r.id}
@@ -425,6 +428,8 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                             ? 'Re-scrapear los reels de este creador ahora'
                             : type === 'tiktok'
                             ? 'Re-scrapear los videos de esta cuenta de TikTok ahora'
+                            : type === 'x'
+                            ? 'Re-scrapear los posts de esta cuenta de X ahora'
                             : type === 'yt_search'
                             ? 'Buscar videos recientes de esta palabra clave ahora'
                             : 'Scrapear los anuncios de esta página ahora'

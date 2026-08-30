@@ -1,4 +1,4 @@
-export type Platform = 'ig' | 'yt' | 'tiktok';
+export type Platform = 'ig' | 'yt' | 'tiktok' | 'x';
 
 export type Estado = 'nuevo' | 'por_curar' | 'curado' | 'produccion' | 'publicado' | 'descartado';
 
@@ -36,6 +36,11 @@ export interface ContentItem {
   // Carrusel: diapositivas (R2). Formato nuevo: { tipo:'video'|'image', url, poster? }.
   // Formato viejo (carruseles ya guardados): string (URL de imagen). El front normaliza ambos.
   imagenes: (string | CarouselSlide)[] | null;
+  // Medio principal ya archivado en R2 (video o imagen), para reproducirlo y DESCARGARLO sin
+  // depender de que la plataforma siga sirviéndolo. Hoy lo llena X; las demás lo dejan null y la
+  // UI cae al comportamiento de siempre (solo miniatura).
+  mediaUrl?: string | null;
+  mediaTipo?: 'video' | 'image' | null;
   // Regenerador: null | 'leyendo' | 'ganchos' | 'escribiendo' | 'generando' | 'revisando' | 'listo'
   regenEstado?: string | null;
   proyecto: string | null;

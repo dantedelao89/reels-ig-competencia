@@ -346,3 +346,61 @@ export async function getAdvertiserByUrl(url) {
     project: r.proyecto || '',
   };
 }
+
+// ---- X / Twitter (cuentas) ----
+// Calcadas de las de TikTok. La única diferencia real es que el handle de X puede venir de
+// twitter.com o de x.com, así que normalizeKey acepta las dos.
+
+function xKey(v) {
+  const s = (v || '').trim();
+  const deUrl = s.match(/(?:twitter|x)\.com\/([^/?\s]+)/i);
+  return (deUrl ? deUrl[1] : s).replace(/^@/, '').trim().toLowerCase();
+}
+
+function xCreatorOut(r) {
+  return {
+    recordId: r.id,
+    username: xKey(r.username),
+    resultsLimit: r.posts_por_corrida || config.xDefaultMaxResults,
+    lastRun: r.ultima_corrida || null,
+    project: r.proyecto || '',
+  };
+}
+
+export async function getActiveXCreators() {
+  const c = await getClient();
+  const { data, error } = await c.from(config.xCreatorsTable).select('*').eq('activo', true);
+  if (error) throw new Error(error.message);
+  return (data || []).map(xCreatorOut);
+}
+
+// Acepta @usuario, usuario o la URL del perfil (el botón de Fuentes manda la clave tal cual).
+export async function getXCreatorByUsername(usernameOrUrl) {
+  const c = await getClient();
+  const buscado = xKey(usernameOrUrl);
+  const { data, error } = await c.from(config.xCreatorsTable).select('*');
+  if (error) throw new Error(error.message);
+  const row = (data || []).find((r) => xKey(r.username) === buscado);
+  return row ? xCreatorOut(row) : null;
+}
+
+export async function updateXCreatorLastRun(recordId, isoDate) {
+  const c = await getClient();
+  const { error } = await c
+    .from(config.xCreatorsTable)
+    .update({ ultima_corrida: isoDate })
+    .eq('id', recordId);
+  if (error) throw new Error(error.message);
+}
+
+export async function createXCreator(username) {
+  const c = await getClient();
+  const limpio = xKey(username);
+  const { data, error } = await c
+    .from(config.xCreatorsTable)
+    .insert({ username: limpio, activo: true })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { recordId: data.id, username: limpio, resultsLimit: config.xDefaultMaxResults, lastRun: null, project: '' };
+}

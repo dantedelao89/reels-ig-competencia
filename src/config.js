@@ -66,6 +66,23 @@ export const config = {
   // SOLO no depende de esto sino del cron, y los crons están pausados (CRONS_PAUSED en index.js).
   enableTiktok: process.env.ENABLE_TIKTOK !== 'false',
 
+  // ---- X / Twitter (posts de cuentas) ----
+  // UN SOLO actor cubre las dos rutas: `username` para una cuenta y `lookup_post_ids` para un
+  // post suelto. Se eligió danek por una razón medida: es el único de los cinco probados que
+  // devuelve el TEXTO COMPLETO. El más popular (apidojo/tweet-scraper) corta en 280 caracteres
+  // y en estas cuentas el prompt entero vive justo después del corte; kaitoeasyapi sí trae el
+  // texto pero inyecta ~14 filas de publicidad propia por corrida y las cobra (15x su precio).
+  xActorId: process.env.X_ACTOR_ID || 'danek/twitter-scraper',
+  xDefaultMaxResults: Number(process.env.X_DEFAULT_MAX_RESULTS || 20),
+  xBatchMaxResults: Number(process.env.X_BATCH_MAX_RESULTS || 20),
+  // El actor NO tiene filtro de fecha (a diferencia de TikTok/YouTube): la única defensa contra
+  // volver a pagar por lo mismo es el dedup por post_id, que ya hace ingestX.
+  enableX: process.env.ENABLE_X !== 'false',
+  // El MP4 de video.twimg.com se descarga directo y sin login, así que a diferencia de TikTok
+  // el video sí se archiva en R2: es lo que hace que se pueda descargar desde el dashboard
+  // aunque X deje de servirlo.
+  xRehostVideo: process.env.X_REHOST_VIDEO !== 'false',
+
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',
 
@@ -123,6 +140,7 @@ export const config = {
   ytVideosTable: process.env.SUPABASE_YT_TABLE || 'yt_videos',
   igStoriesTable: process.env.SUPABASE_IG_STORIES_TABLE || 'ig_stories',
   tiktokVideosTable: process.env.SUPABASE_TIKTOK_TABLE || 'tiktok_videos',
+  xPostsTable: process.env.SUPABASE_X_TABLE || 'x_posts',
 
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
@@ -130,6 +148,7 @@ export const config = {
   ytSearchesTable: process.env.SUPABASE_YT_SEARCHES_TABLE || 'yt_searches',
   fbAdvertisersTable: process.env.SUPABASE_FB_ADVERTISERS_TABLE || 'fb_advertisers',
   tiktokCreatorsTable: process.env.SUPABASE_TIKTOK_CREATORS_TABLE || 'tiktok_creators',
+  xCreatorsTable: process.env.SUPABASE_X_CREATORS_TABLE || 'x_creators',
 
   // --- Cloudflare R2 (opcional): rehospeda thumbnails para que no expiren (las de IG caducan). ---
   // Se activa solo si están las 4 credenciales. Sin esto, thumbnail_url queda null y el dashboard

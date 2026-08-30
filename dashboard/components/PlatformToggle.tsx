@@ -4,7 +4,7 @@
 // plataforma nueva no toca este archivo: basta con su entrada en PLATFORMS.
 
 import type { ComponentType } from 'react';
-import { InstagramIcon, YoutubeIcon, TiktokIcon } from './BrandIcons';
+import { InstagramIcon, YoutubeIcon, TiktokIcon, XIcon } from './BrandIcons';
 import { PLATFORMS, PLATFORM_ORDER } from '@/lib/platforms';
 
 interface Props {
@@ -18,12 +18,14 @@ const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>
   instagram: InstagramIcon,
   youtube: YoutubeIcon,
   tiktok: TiktokIcon,
+  x: XIcon,
 };
 
 const COLOR_INACTIVO: Record<string, string> = {
   instagram: 'text-[#C13584]',
   youtube: 'text-[#FF0000]',
   tiktok: 'text-black',
+  x: 'text-black',
 };
 
 export default function PlatformToggle({ platform, onPlatform }: Props) {

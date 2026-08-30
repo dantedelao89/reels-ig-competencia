@@ -17,6 +17,7 @@ import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
 import { runScrapeInstagramStories } from './scrapeStories.js';
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
+import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { getTiktokMediaUrl } from './tiktokApify.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
@@ -46,10 +47,11 @@ const CONTENT_TABLE = {
   ig: config.igReelsTable,
   yt: config.ytVideosTable,
   tiktok: config.tiktokVideosTable,
+  x: config.xPostsTable,
   ad: config.adsMetaAdsTable,
 };
-const TEXT_COL = { ig: 'transcripcion', yt: 'subtitulos', tiktok: 'transcripcion', ad: 'transcripcion' };
-const UNIQ_COL = { ig: 'shortcode', yt: 'video_id', tiktok: 'video_id' };
+const TEXT_COL = { ig: 'transcripcion', yt: 'subtitulos', tiktok: 'transcripcion', x: 'transcripcion', ad: 'transcripcion' };
+const UNIQ_COL = { ig: 'shortcode', yt: 'video_id', tiktok: 'video_id', x: 'post_id' };
 
 // Corre Instagram y (si está activo) YouTube en una sola pasada, midiendo el gasto de Apify.
 async function runAll() {
@@ -58,7 +60,8 @@ async function runAll() {
   const instagram = await runScrape();
   const youtube = config.enableYoutube ? await runScrapeYoutube() : null;
   const tiktok = config.enableTiktok ? await runScrapeTiktok() : null;
-  const result = { ok: true, startedAt, apifyUsd: getApifySpend(), instagram, youtube, tiktok };
+  const x = config.enableX ? await runScrapeX() : null;
+  const result = { ok: true, startedAt, apifyUsd: getApifySpend(), instagram, youtube, tiktok, x };
   lastRun = result;
   return result;
 }
@@ -109,6 +112,13 @@ function formatResult(r) {
       d.error ? `• ${d.grupo}: error` : `• ${d.grupo}: ${d.inserted} nuevos`
     );
     parts.push(`🎵 *TikTok* — ${r.tiktok.inserted} nuevos\n${lines.join('\n')}`);
+  }
+  if (r.x) {
+    // X reporta por cuenta (el actor solo acepta una por corrida), no por grupo como las demás.
+    const lines = (r.x.details || []).map((d) =>
+      d.error ? `• @${d.cuenta}: error` : `• @${d.cuenta}: ${d.inserted} nuevos`
+    );
+    parts.push(`✖️ *X* — ${r.x.inserted} nuevos\n${lines.join('\n')}`);
   }
   return `✅ *Corrida lista*\n\n${parts.join('\n\n')}`;
 }
@@ -354,8 +364,8 @@ app.post('/transcribe', async (req, res) => {
     }
   }
   const { platform, id, url } = req.body || {};
-  if (!['yt', 'tiktok', 'ad'].includes(platform) || !id || !url) {
-    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|tiktok|ad), id y url válidos' });
+  if (!['yt', 'tiktok', 'x', 'ad'].includes(platform) || !id || !url) {
+    return res.status(400).json({ ok: false, error: 'Faltan platform (yt|tiktok|x|ad), id y url válidos' });
   }
   if (!config.enableTranscription) {
     return res.status(400).json({ ok: false, error: 'Transcripción deshabilitada (falta OPENROUTER_API_KEY)' });
@@ -364,6 +374,8 @@ app.post('/transcribe', async (req, res) => {
     // YouTube: hay que bajar el audio con el actor. Ads: el video ya está en R2, se transcribe directo
     // (transcribeAudio extrae el audio con ffmpeg si el mp4 es grande).
     // TikTok necesita resolverse a un medio: su URL pública es una página HTML.
+    // X cae en el caso de los ads: el dashboard manda el MP4 ya archivado en R2, así que se
+    // transcribe directo y sin corrida extra del actor (a diferencia de TikTok).
     const audioUrl =
       platform === 'yt'
         ? await getYoutubeAudioUrl(url)
@@ -467,6 +479,34 @@ app.post('/scrape-tiktok-url', async (req, res) => {
     res.json(await runScrapeTiktokUrl(String(url).trim()));
   } catch (err) {
     console.error('[TT url] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- X / Twitter ---
+
+// Re-scrape de UNA cuenta de X (botón de Fuentes).
+app.post('/scrape-x-creator', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ ok: false, error: 'Falta url (@usuario)' });
+  try {
+    res.json(await runScrapeXCreator(String(url).trim()));
+  } catch (err) {
+    console.error('[X creator] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// UN post de X por su URL ("＋Agregar por URL" y Slack).
+app.post('/scrape-x-url', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ ok: false, error: 'Falta url' });
+  try {
+    res.json(await runScrapeXUrl(String(url).trim()));
+  } catch (err) {
+    console.error('[X url] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -638,6 +678,7 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
   const isYt = /youtu\.?be/i.test(contentUrl || '');
   const isIg = /instagram\.com/i.test(contentUrl || '');
   const isTt = /tiktok\.com/i.test(contentUrl || '');
+  const isX = /(?:twitter|x)\.com\/[^/]+\/status/i.test(contentUrl || '');
   if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl) || (!isYt && !isIg && !isTt)) {
     return res.json({
       response_type: 'ephemeral',
@@ -660,6 +701,8 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
           ? await runScrapeYoutubeVideo(contentUrl)
           : isTt
           ? await runScrapeTiktokUrl(contentUrl)
+          : isX
+          ? await runScrapeXUrl(contentUrl)
           : await runScrapeInstagramUrl(contentUrl);
         if (scr.ok === false) {
           await slackReply(responseUrl, `❌ No se pudo scrapear el contenido: ${scr.error}`);
@@ -694,6 +737,7 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
   const isIg = /instagram\.com/i.test(text);
   const isAd = /facebook\.com/i.test(text);
   const isTt = /tiktok\.com/i.test(text);
+  const isX = /(?:twitter|x)\.com\/[^/]+\/status/i.test(text);
 
   if (!text || (!isYt && !isIg && !isAd && !isTt)) {
     return res.json({
@@ -736,8 +780,10 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
       ? await runScrapeYoutubeVideo(text)
       : isTt
       ? await runScrapeTiktokUrl(text)
+      : isX
+      ? await runScrapeXUrl(text)
       : await runScrapeInstagramUrl(text);
-    const plat = isYt ? 'yt' : isTt ? 'tiktok' : 'ig';
+    const plat = isYt ? 'yt' : isTt ? 'tiktok' : isX ? 'x' : 'ig';
     if (result.ok === false) {
       await slackReply(responseUrl, `❌ Error: ${result.error}`);
       return;

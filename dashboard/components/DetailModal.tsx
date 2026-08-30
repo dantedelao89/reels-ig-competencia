@@ -230,7 +230,9 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       const res = await fetch('/api/transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: item.id, platform: item.platform, url: item.url }),
+        // Para X se manda el MP4 de R2: la URL del post es una página HTML. Para YT/TikTok
+        // mediaUrl es null y sigue yendo item.url, que es lo que sus ramas esperan.
+        body: JSON.stringify({ id: item.id, platform: item.platform, url: item.mediaUrl || item.url }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Falló la transcripción');
@@ -438,10 +440,24 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={slides[slide].url} alt="" className="absolute inset-0 w-full h-full object-cover" />
                   )
+                ) : item.mediaUrl && item.mediaTipo === 'video' ? (
+                  // Medio ya archivado en R2 (hoy: X). Se reproduce aquí mismo en vez de mandar a
+                  // la plataforma; el poster es la miniatura, también nuestra.
+                  <video
+                    src={item.mediaUrl}
+                    poster={item.thumbnail || undefined}
+                    controls
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                  />
                 ) : (
-                  item.thumbnail && (
+                  (item.mediaUrl || item.thumbnail) && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <img
+                      src={(item.mediaTipo === 'image' ? item.mediaUrl : item.thumbnail) || undefined}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
                   )
                 )}
                 {esCarrusel && (
@@ -505,8 +521,27 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 </>
               )}
               <div className="grid grid-cols-2 gap-1.5 mb-3">
+                {/* El medio completo (video o imagen), ya archivado en R2. Va por /api/download
+                    porque el atributo `download` de un <a> lo IGNORA el navegador cuando el
+                    archivo es de otro origen: sin el proxy esto abría el archivo en vez de
+                    bajarlo. El proxy manda Content-Disposition: attachment. */}
+                {item.mediaUrl && (
+                  <a
+                    href={`/api/download?url=${encodeURIComponent(item.mediaUrl)}&name=${encodeURIComponent(
+                      `${item.platform}_${item.creador || 'post'}_${item.externalId}.${item.mediaTipo === 'video' ? 'mp4' : 'jpg'}`
+                    )}`}
+                    className="col-span-2 text-center text-xs h-8 leading-8 rounded-md bg-accent text-white font-medium hover:opacity-90"
+                  >
+                    ⬇️ Descargar {item.mediaTipo === 'video' ? 'video' : 'imagen'}
+                  </a>
+                )}
                 {item.thumbnail && (
-                  <a href={item.thumbnail} download className="text-center text-xs h-8 leading-8 rounded-md border border-line bg-white hover:bg-gray-100">
+                  <a
+                    href={`/api/download?url=${encodeURIComponent(item.thumbnail)}&name=${encodeURIComponent(
+                      `${item.platform}_${item.externalId}.jpg`
+                    )}`}
+                    className="text-center text-xs h-8 leading-8 rounded-md border border-line bg-white hover:bg-gray-100"
+                  >
                     Thumbnail
                   </a>
                 )}

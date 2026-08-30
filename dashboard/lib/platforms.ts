@@ -24,7 +24,7 @@ export interface PlatformDef {
   hasOrigen: boolean;         // el filtro canal/búsqueda (solo YouTube)
   transcribeOnDemand: boolean;// muestra el botón "Transcribir con IA"
   thumbRatio: string;         // proporción de la miniatura
-  icon: 'instagram' | 'youtube' | 'tiktok';
+  icon: 'instagram' | 'youtube' | 'tiktok' | 'x';
   activeClass: string;        // clases del toggle cuando está activo
   activeStyle?: Record<string, string>;
   toItem: (r: any) => ContentItem;
@@ -41,6 +41,8 @@ const IG_COLS =
   'id,shortcode,creador,url,video_url,caption,fecha_publicacion,likes,comentarios,views,duracion_seg,tipo,imagenes,regen_estado,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 const YT_COLS =
   'id,video_id,titulo,canal,canal_url,url,fecha_publicacion,views,duracion,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+const X_COLS =
+  'id,post_id,creador,creador_nombre,url,caption,fecha_publicacion,views,likes,comentarios,retweets,duracion_seg,tipo,video_url,imagenes,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 const TT_COLS =
   'id,video_id,creador,creador_nombre,url,caption,fecha_publicacion,views,likes,comentarios,duracion_seg,es_slideshow,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 
@@ -174,9 +176,58 @@ export const PLATFORMS: Record<Platform, PlatformDef> = {
       miVideoUrl: r.mi_video_url,
     }),
   },
+  x: {
+    key: 'x',
+    label: 'X',
+    short: 'X',
+    table: 'x_posts',
+    idCol: 'post_id',
+    autorCol: 'creador',
+    textCol: 'transcripcion',
+    listCols: X_COLS,
+    detailExtraCols: ', conversation_id',
+    searchable: true,
+    hasOrigen: false,
+    // El MP4 ya está archivado en R2, así que transcribir NO cuesta una corrida extra del actor
+    // (a diferencia de TikTok): el modal manda mediaUrl y el backend lo pasa directo al modelo.
+    transcribeOnDemand: true,
+    // X no tiene una proporción fija (16:9, 1:1 y 9:16 conviven). 4:5 es el punto medio que no
+    // recorta de más en ninguna de las tres.
+    thumbRatio: 'pt-[125%]',
+    icon: 'x',
+    activeClass: 'text-white',
+    activeStyle: { background: '#000000' },
+    toItem: (r) => ({
+      id: r.id,
+      platform: 'x',
+      externalId: r.post_id,
+      creador: r.creador,
+      titulo: r.caption,
+      url: r.url,
+      fechaPublicacion: r.fecha_publicacion,
+      views: r.views,
+      likes: r.likes,
+      comentarios: r.comentarios,
+      duracion: fmtSeconds(r.duracion_seg),
+      thumbnail: r.thumbnail_url || r.thumbnail_original,
+      tipo: r.tipo ?? null,
+      imagenes: Array.isArray(r.imagenes) ? r.imagenes : null,
+      // El medio archivado: es lo que hace que el video se pueda ver y descargar desde el detalle.
+      mediaUrl: r.video_url || (Array.isArray(r.imagenes) ? r.imagenes[0] : null) || null,
+      mediaTipo: r.video_url ? 'video' : Array.isArray(r.imagenes) && r.imagenes.length ? 'image' : null,
+      proyecto: r.proyecto,
+      estado: r.estado,
+      transcripcion: r.transcripcion,
+      scrapeadoEn: r.scrapeado_en,
+      miGuion: r.mi_guion,
+      miNotas: r.mi_notas,
+      miLink: r.mi_link,
+      miVideoUrl: r.mi_video_url,
+    }),
+  },
 };
 
-export const PLATFORM_ORDER: Platform[] = ['ig', 'yt', 'tiktok'];
+export const PLATFORM_ORDER: Platform[] = ['ig', 'yt', 'tiktok', 'x'];
 
 export function isPlatform(v: unknown): v is Platform {
   return typeof v === 'string' && v in PLATFORMS;
@@ -188,6 +239,7 @@ export const CURATION_TABLES: Record<Platform | 'ad', string> = {
   ig: PLATFORMS.ig.table,
   yt: PLATFORMS.yt.table,
   tiktok: PLATFORMS.tiktok.table,
+  x: PLATFORMS.x.table,
   ad: 'meta_ads',
 };
 
@@ -195,6 +247,7 @@ export const CURATION_TEXT_COL: Record<Platform | 'ad', string> = {
   ig: PLATFORMS.ig.textCol,
   yt: PLATFORMS.yt.textCol,
   tiktok: PLATFORMS.tiktok.textCol,
+  x: PLATFORMS.x.textCol,
   ad: 'transcripcion',
 };
 

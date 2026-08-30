@@ -65,6 +65,9 @@ export async function getExistingVideoIds() {
 export async function getExistingTiktokIds() {
   return getExistingColumn(config.tiktokVideosTable, 'video_id');
 }
+export async function getExistingXIds() {
+  return getExistingColumn(config.xPostsTable, 'post_id');
+}
 // Ids ya presentes en una columna. `filters` acota la consulta ({ eq, gte, notNull }): sin él
 // habría que paginar la tabla entera, que en historias serían decenas de páginas al año.
 async function getExistingColumn(table, column, filters = null) {
@@ -256,12 +259,16 @@ export async function attachRecursoByUrl(contentUrl, recursoUrl) {
   let id = null;
   const ig = url.match(/instagram\.com\/(?:p|reel|reels|tv)\/([^/?#]+)/i);
   const tt = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/i);
+  const x = url.match(/(?:twitter|x)\.com\/[^/]+\/status(?:es)?\/(\d+)/i);
   if (ig) {
     plat = 'ig';
     id = ig[1];
   } else if (tt) {
     plat = 'tiktok';
     id = tt[1];
+  } else if (x) {
+    plat = 'x';
+    id = x[1];
   } else {
     const yt = youtubeIdFromUrl(url);
     if (yt) {
@@ -269,12 +276,13 @@ export async function attachRecursoByUrl(contentUrl, recursoUrl) {
       id = yt;
     }
   }
-  if (!plat) return { ok: false, error: 'URL no reconocida (usa un link de Instagram, YouTube o TikTok).' };
+  if (!plat) return { ok: false, error: 'URL no reconocida (usa un link de Instagram, YouTube, TikTok o X).' };
 
   const DEF = {
     ig: { table: config.igReelsTable, col: 'shortcode', quienCol: 'creador' },
     yt: { table: config.ytVideosTable, col: 'video_id', quienCol: 'canal' },
     tiktok: { table: config.tiktokVideosTable, col: 'video_id', quienCol: 'creador' },
+    x: { table: config.xPostsTable, col: 'post_id', quienCol: 'creador' },
   }[plat];
 
   let nombre = null;
@@ -654,6 +662,94 @@ export async function syncTiktok(items, ctx = {}) {
   }
   const synced = await upsert(config.tiktokVideosTable, rows, 'video_id');
   return { synced, rehosted, conTexto };
+}
+
+// --- X / Twitter ---
+
+function xRow(p, scrapedAtIso, project, { thumbnailUrl, videoUrl, imagenes }) {
+  const row = {
+    // El id de X es un entero enorme: como Number pierde precisión, siempre string.
+    post_id: String(p.id),
+    creador: p.handle || null,
+    creador_nombre: p.nombre || null,
+    creador_url: p.handle ? `https://x.com/${p.handle}` : null,
+    url: p.url || null,
+    caption: p.texto || null,
+    fecha_publicacion: p.fecha ? new Date(p.fecha).toISOString() : null,
+    views: p.views,
+    likes: p.likes,
+    comentarios: p.respuestas,
+    retweets: p.retweets,
+    citas: p.citas,
+    guardados: p.guardados,
+    duracion_seg: p.duracionSeg,
+    tipo: p.videoUrl ? 'Video' : p.fotos.length ? 'Imagen' : 'Texto',
+    hashtags: (p.hashtags || []).map((h) => `#${h}`).join(' ') || null,
+    links_externos: (p.linksExternos || []).join(' ') || null,
+    idioma: p.idioma || null,
+    conversation_id: p.conversationId || null,
+    es_respuesta: !!p.esRespuesta,
+    thumbnail_original: p.videoThumb || p.fotos[0] || null,
+    thumbnail_url: thumbnailUrl,
+    video_original: p.videoUrl || null,
+    video_url: videoUrl,
+    imagenes: imagenes && imagenes.length ? imagenes : null,
+    proyecto: project || null,
+    scrapeado_en: scrapedAtIso,
+  };
+  // Misma disciplina que tiktokRow: si no hay transcripción, la clave NO va en el payload, para
+  // que un re-scrape no borre la que se hizo a pedido.
+  if (p.transcripcion) row.transcripcion = p.transcripcion;
+  return row;
+  // estado/mi_*/recurso_* no se tocan nunca: son la capa de curación.
+}
+
+// Sincroniza posts de X. ctx: { scrapedAtIso, resolve(post)->{project} }.
+//
+// A diferencia de TikTok, aquí el VIDEO sí se archiva en R2: el MP4 de video.twimg.com se descarga
+// directo y sin login, y guardarlo es lo que permite descargarlo después desde el dashboard aunque
+// X deje de servir esa URL (las de twimg traen firma y caducan). Si el rehost falla se conserva la
+// URL original, que al menos sirve un rato.
+export async function syncX(posts, ctx = {}) {
+  if (!enabled) throw new Error('Supabase no está configurado (faltan SUPABASE_URL / SUPABASE_SERVICE_KEY)');
+  if (!posts?.length) return { synced: 0, rehosted: 0, videos: 0 };
+  const { scrapedAtIso, resolve } = ctx;
+  let rehosted = 0;
+  let videos = 0;
+  const rows = [];
+  for (const p of posts) {
+    if (!p.id) continue;
+    const { project } = resolve ? resolve(p) : {};
+    const portada = p.videoThumb || p.fotos[0] || null;
+
+    let thumbnailUrl = null;
+    if (r2Enabled() && portada) {
+      thumbnailUrl = await rehostImage(portada, `thumbnails/x/${p.id}.jpg`);
+      if (thumbnailUrl) rehosted++;
+    }
+
+    let videoUrl = null;
+    if (r2Enabled() && config.xRehostVideo && p.videoUrl) {
+      videoUrl = await rehostVideo(p.videoUrl, `videos/x/${p.id}.mp4`);
+      if (videoUrl) videos++;
+      else console.warn(`[X] no se pudo archivar el video de ${p.id}: queda la URL de X, que caduca`);
+    }
+
+    // Posts de varias fotos: se archivan todas para que la descarga no dependa de X.
+    const imagenes = [];
+    if (r2Enabled() && p.fotos.length) {
+      for (let i = 0; i < p.fotos.length; i++) {
+        const u = await rehostImage(p.fotos[i], `images/x/${p.id}_${i + 1}.jpg`);
+        imagenes.push(u || p.fotos[i]);
+      }
+    } else {
+      imagenes.push(...p.fotos);
+    }
+
+    rows.push(xRow(p, scrapedAtIso, project, { thumbnailUrl, videoUrl, imagenes }));
+  }
+  const synced = await upsert(config.xPostsTable, rows, 'post_id');
+  return { synced, rehosted, videos };
 }
 
 // --- Historias de Instagram (archivo permanente) ---

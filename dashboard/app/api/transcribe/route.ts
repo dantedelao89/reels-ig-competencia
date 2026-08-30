@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Falta SCRAPER_URL / TRANSCRIBE_SECRET' }, { status: 500 });
   }
   const body = await req.json().catch(() => null);
-  const conTranscripcion = ['yt', 'tiktok', 'ad'];
+  const conTranscripcion = ['yt', 'tiktok', 'x', 'ad'];
   if (!body?.id || !conTranscripcion.includes(body?.platform) || !body?.url) {
     return NextResponse.json(
       { error: `platform (${conTranscripcion.join('|')}), id y url requeridos` },

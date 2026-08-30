@@ -256,12 +256,20 @@ export default function DashboardClient() {
     const isYt = /youtu\.?be/i.test(u);
     const isIg = /instagram\.com/i.test(u);
     const isTt = /tiktok\.com/i.test(u);
-    if (!isYt && !isIg && !isTt) {
-      toast.error('Pega una URL de Instagram, YouTube o TikTok');
+    // Se exige /status/ para no confundir el link de un PERFIL de X con el de un post.
+    const isX = /(?:twitter|x)\.com\/[^/]+\/status/i.test(u);
+    if (!isYt && !isIg && !isTt && !isX) {
+      toast.error('Pega una URL de Instagram, YouTube, TikTok o X');
       return;
     }
-    const red = isYt ? 'YouTube' : isTt ? 'TikTok' : 'Instagram';
-    const endpoint = isYt ? '/api/scrape-yt-url' : isTt ? '/api/scrape-tiktok-url' : '/api/scrape-ig-url';
+    const red = isYt ? 'YouTube' : isTt ? 'TikTok' : isX ? 'X' : 'Instagram';
+    const endpoint = isYt
+      ? '/api/scrape-yt-url'
+      : isTt
+      ? '/api/scrape-tiktok-url'
+      : isX
+      ? '/api/scrape-x-url'
+      : '/api/scrape-ig-url';
     setAddingUrl(true);
     const doneAct = activity.begin(`Scrapeando ${red}: ${u.slice(0, 40)}…`);
     try {
@@ -372,7 +380,7 @@ export default function DashboardClient() {
             value={igUrl}
             onChange={(e) => setIgUrl(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addByUrl()}
-            placeholder="URL de Instagram, YouTube o TikTok"
+            placeholder="URL de Instagram, YouTube, TikTok o X"
             className="flex-1 min-w-[220px] h-9 px-3 rounded-lg border border-line bg-white text-sm outline-none focus:border-accent"
           />
           <AsyncButton onClick={addByUrl} disabled={!igUrl.trim()} loading={addingUrl} loadingLabel="Agregando…">
