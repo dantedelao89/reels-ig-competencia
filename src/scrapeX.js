@@ -36,12 +36,15 @@ async function conRespuestasDelAutor(post) {
     // Las continuaciones (sin @) son parte del post: X las muestra pegadas, así que se unen al
     // copy. Las respuestas a comentaristas van aparte, que es donde suele estar el prompt.
     const continuaciones = mensajes.filter((m) => !m.esRespuestaAComentario);
-    const respuestas = mensajes.filter((m) => m.esRespuestaAComentario);
+    // OJO con el nombre: `respuestas` YA existe en el post normalizado y es el NÚMERO de replies
+    // que va a la columna bigint `comentarios`. Llamar así al array lo pisaba y Postgres rechazaba
+    // la fila entera con "invalid input syntax for type bigint".
+    const respuestasAutor = mensajes.filter((m) => m.esRespuestaAComentario);
     const texto = [post.texto, ...continuaciones.map((m) => m.texto)].filter(Boolean).join('\n\n');
     console.log(
-      `[X hilo] ${post.id}: ${continuaciones.length} continuación(es), ${respuestas.length} respuesta(s) del autor`
+      `[X hilo] ${post.id}: ${continuaciones.length} continuación(es), ${respuestasAutor.length} respuesta(s) del autor`
     );
-    return { ...post, texto, respuestas };
+    return { ...post, texto, respuestasAutor };
   } catch (e) {
     console.warn(`[X hilo] no se pudo leer la conversación de ${post.id}: ${e.message}`);
     return post;
@@ -203,7 +206,7 @@ export async function runScrapeXUrl(url) {
       postId: post.id,
       creador: handle,
       caption: post.texto?.slice(0, 200) || null,
-      respuestasAutor: (post.respuestas || []).length,
+      respuestasAutor: (post.respuestasAutor || []).length,
       cuentaNueva,
     };
   } catch (err) {

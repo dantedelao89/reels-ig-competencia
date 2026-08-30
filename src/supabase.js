@@ -693,8 +693,8 @@ function xRow(p, scrapedAtIso, project, { thumbnailUrl, videoUrl, imagenes }) {
     // Lo que el autor contestó en los comentarios de su propio post — donde muchas cuentas de X
     // sueltan el prompt. Estructurado para pintarlo en el detalle, y en texto plano aparte para
     // que la búsqueda lo alcance (search_tsv no puede leer dentro del jsonb).
-    respuestas_autor: p.respuestas?.length
-      ? p.respuestas.map((r) => ({
+    respuestas_autor: p.respuestasAutor?.length
+      ? p.respuestasAutor.map((r) => ({
           id: r.id,
           texto: r.texto,
           fecha: r.fecha ? new Date(r.fecha).toISOString() : null,
@@ -702,7 +702,7 @@ function xRow(p, scrapedAtIso, project, { thumbnailUrl, videoUrl, imagenes }) {
           aComentario: !!r.esRespuestaAComentario,
         }))
       : null,
-    respuestas_texto: textoDeRespuestas(p.respuestas),
+    respuestas_texto: textoDeRespuestas(p.respuestasAutor),
     thumbnail_original: p.videoThumb || p.fotos[0] || null,
     thumbnail_url: thumbnailUrl,
     video_original: p.videoUrl || null,
