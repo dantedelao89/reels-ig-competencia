@@ -672,17 +672,21 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
   const text = (req.body?.text || '').trim();
   const parts = text.split(/\s+/).filter(Boolean);
   // Orden libre: el que sea link de contenido (IG/YT/TikTok) es el CONTENIDO; el otro es el RECURSO.
-  const contentUrl = parts.find((p) => /youtu\.?be|instagram\.com|tiktok\.com/i.test(p));
+  // X va con /status/ para no confundir el link de un perfil con el de un post, y para que un
+  // recurso alojado en x.com no se tome por el contenido.
+  const contentUrl = parts.find((p) =>
+    /youtu\.?be|instagram\.com|tiktok\.com|(?:twitter|x)\.com\/[^/]+\/status/i.test(p)
+  );
   const recursoUrl = parts.find((p) => p !== contentUrl && /^https?:\/\//i.test(p));
   const responseUrl = req.body?.response_url;
   const isYt = /youtu\.?be/i.test(contentUrl || '');
   const isIg = /instagram\.com/i.test(contentUrl || '');
   const isTt = /tiktok\.com/i.test(contentUrl || '');
   const isX = /(?:twitter|x)\.com\/[^/]+\/status/i.test(contentUrl || '');
-  if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl) || (!isYt && !isIg && !isTt)) {
+  if (!contentUrl || !recursoUrl || !/^https?:\/\//i.test(recursoUrl) || (!isYt && !isIg && !isTt && !isX)) {
     return res.json({
       response_type: 'ephemeral',
-      text: 'Uso: `/recurso <url de Instagram/YouTube/TikTok> <url del recurso>` (en cualquier orden).\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`\n(Uno de los dos links debe ser de contenido.)',
+      text: 'Uso: `/recurso <url de Instagram/YouTube/TikTok/X> <url del recurso>` (en cualquier orden).\nEj: `/recurso https://www.instagram.com/p/ABC123/ https://drive.google.com/…`\n(Uno de los dos links debe ser de contenido.)',
     });
   }
 
@@ -716,7 +720,7 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
       }
       await slackReply(
         responseUrl,
-        `✅ Recurso ligado${r.quien ? ` a ${r.plataforma === 'ig' ? '@' : ''}${r.quien}` : ''} — ya aparece en DISECTA al abrir el contenido.`
+        `✅ Recurso ligado${r.quien ? ` a ${['ig', 'tiktok', 'x'].includes(r.plataforma) ? '@' : ''}${r.quien}` : ''} — ya aparece en DISECTA al abrir el contenido.`
       );
     } catch (err) {
       console.error('Error en /slack/recurso:', err);
@@ -739,10 +743,14 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
   const isTt = /tiktok\.com/i.test(text);
   const isX = /(?:twitter|x)\.com\/[^/]+\/status/i.test(text);
 
-  if (!text || (!isYt && !isIg && !isAd && !isTt)) {
+  // El guard tiene que listar TODAS las plataformas: la rama de X existía más abajo, pero al
+  // faltar isX aquí el link se rechazaba antes de llegar a ella.
+  if (!text || (!isYt && !isIg && !isAd && !isTt && !isX)) {
     return res.json({
       response_type: 'ephemeral',
-      text: 'Uso: `/scrape <url de Instagram, YouTube, TikTok o Facebook>`',
+      text:
+        'Uso: `/scrape <url de Instagram, YouTube, TikTok, X o Facebook>`\n' +
+        'De X tiene que ser el link de un post (…/status/…), no el de un perfil.',
     });
   }
 
@@ -800,17 +808,19 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
     // (inserted=0), se lee de Supabase.
     let raw = isYt ? result.subtitulos : result.transcripcion;
     let ytRowId = null;
+    let xVideoUrl = null; // el MP4 de X ya archivado en R2, para transcribirlo sin corrida extra
     if (!raw && supabaseEnabled()) {
       try {
-        const claveExterna = isYt ? result.videoId : isTt ? result.videoId : result.shortCode;
+        const claveExterna = isYt || isTt ? result.videoId : isX ? result.postId : result.shortCode;
         const row = await getRowByField(
           CONTENT_TABLE[plat],
           UNIQ_COL[plat],
           claveExterna,
-          `id,${TEXT_COL[plat]}`
+          `id,${TEXT_COL[plat]}${isX ? ',video_url' : ''}`
         );
         raw = row?.[TEXT_COL[plat]];
         ytRowId = row?.id || null;
+        xVideoUrl = row?.video_url || null;
       } catch (e) {
         console.error('[slack] no se pudo leer transcripción existente:', e.message);
       }
@@ -818,10 +828,18 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
 
     // Sin subtítulos: transcribe el audio bajo demanda (mismo flujo que el botón de DISECTA).
     // Puede tardar varios minutos en videos largos (troceo con ffmpeg).
-    if (!raw && (isYt || isTt) && config.enableTranscription) {
+    // X entra solo si el post trae video: los de texto o imagen no tienen nada que transcribir y
+    // anunciarlo sería mentirle a Dante en el canal.
+    const puedeTranscribir = isYt || isTt || (isX && xVideoUrl);
+    if (!raw && puedeTranscribir && config.enableTranscription) {
       await slackReply(responseUrl, '🎙️ Sin subtítulos, transcribiendo el audio… puede tardar un poco.');
       try {
-        const audioUrl = isYt ? await getYoutubeAudioUrl(text) : await getTiktokMediaUrl(text);
+        // X no necesita corrida extra del actor: su MP4 ya es nuestro, en R2.
+        const audioUrl = isYt
+          ? await getYoutubeAudioUrl(text)
+          : isTt
+          ? await getTiktokMediaUrl(text)
+          : xVideoUrl;
         if (audioUrl) {
           raw = await transcribeAudio(audioUrl);
           if (raw && ytRowId) await updateRowById(CONTENT_TABLE[plat], ytRowId, { [TEXT_COL[plat]]: raw });
