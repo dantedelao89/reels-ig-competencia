@@ -1,7 +1,10 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  // lib/ va incluido a propósito: el registro de plataformas (lib/platforms.ts) declara clases
+  // como los ratios de miniatura. Sin este glob Tailwind no las genera y las imágenes quedan con
+  // altura cero — pasó en producción al mover el ratio de ContentGrid al registro.
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './lib/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
