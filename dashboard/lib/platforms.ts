@@ -42,7 +42,7 @@ const IG_COLS =
 const YT_COLS =
   'id,video_id,titulo,canal,canal_url,url,fecha_publicacion,views,duracion,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 const X_COLS =
-  'id,post_id,creador,creador_nombre,url,caption,fecha_publicacion,views,likes,comentarios,retweets,duracion_seg,tipo,video_url,imagenes,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
+  'id,post_id,creador,creador_nombre,url,caption,respuestas_autor,fecha_publicacion,views,likes,comentarios,retweets,duracion_seg,tipo,video_url,imagenes,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 const TT_COLS =
   'id,video_id,creador,creador_nombre,url,caption,fecha_publicacion,views,likes,comentarios,duracion_seg,es_slideshow,thumbnail_original,thumbnail_url,proyecto,estado,scrapeado_en,mi_guion,mi_notas,mi_link,mi_video_url';
 
@@ -215,6 +215,7 @@ export const PLATFORMS: Record<Platform, PlatformDef> = {
       // El medio archivado: es lo que hace que el video se pueda ver y descargar desde el detalle.
       mediaUrl: r.video_url || (Array.isArray(r.imagenes) ? r.imagenes[0] : null) || null,
       mediaTipo: r.video_url ? 'video' : Array.isArray(r.imagenes) && r.imagenes.length ? 'image' : null,
+      respuestasAutor: Array.isArray(r.respuestas_autor) ? r.respuestas_autor : null,
       proyecto: r.proyecto,
       estado: r.estado,
       transcripcion: r.transcripcion,

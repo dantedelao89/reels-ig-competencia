@@ -116,32 +116,37 @@ export async function scrapeXPosts(postIds) {
   return normalizarLista(items, '');
 }
 
-// La CONTINUACIÓN del autor sobre su propio post. Hace falta porque en las cuentas de prompts el
-// gancho va con el video y el prompt entero en un tweet aparte: sin esto se guarda justo la mitad
-// que no sirve (medido en @CharaspowerAI: el post de 255 caracteres con el video, y el prompt
-// completo de 1417 en el siguiente).
+// Todo lo que el AUTOR escribió dentro de su propia conversación, además del post original.
+// Son dos cosas distintas y en X se ven parecido:
 //
-// El actor NO dice a qué tweet responde cada uno: por `post_id` devuelve toda la conversación con
-// `conversation_id` igual para todos, sin campo de destino. La señal que sí distingue es el texto:
-// una respuesta a un comentarista EMPIEZA con @handle ("@Leo_ideatorx Thanks"), y una continuación
-// del hilo no. Se exige además que sea larga, porque lo que interesa es el prompt, no un "gracias".
-const MIN_CONTINUACION = 200;
-
-export async function scrapeXThread(postId, handle) {
+//   * continuación — el autor se responde a sí mismo para seguir el hilo. NO empieza con @.
+//     X la muestra pegada al post, así que se une al copy.
+//   * respuesta    — el autor contesta a un comentarista, casi siempre a quien preguntó
+//     "prompt?". SÍ empieza con @handle. Aquí es donde muchas cuentas sueltan el prompt, así
+//     que se guardan aparte y se ven en el detalle. Antes se descartaban con el mismo filtro
+//     que quitaba los "gracias", y con ellas se iba el prompt.
+//
+// Se usa la ruta `post_id` y no la búsqueda `conversation_id:`: medido, la búsqueda devuelve las
+// respuestas de terceros pero NINGUNA del autor, mientras que post_id sí las trae.
+//
+// Sin filtro por largo: una respuesta corta ("Prompt: wide shot, 35mm") puede ser justo lo que
+// interesa. La UI las muestra en una sección aparte, así que un "gracias" de más no estorba;
+// un prompt de menos, sí.
+export async function scrapeXAutorEnConversacion(postId, handle) {
   const items = await runActorItems(config.xActorId, {
     post_id: String(postId),
-    max_posts: config.xDefaultMaxResults,
+    max_posts: config.xConversacionMaxPosts,
   });
   const propio = normalizeXHandle(handle);
   return normalizarLista(items, handle)
-    .filter(
-      (p) =>
-        p.id !== String(postId) &&
-        p.handle === propio &&
-        !/^@\w/.test(p.texto.trim()) &&
-        p.texto.trim().length >= MIN_CONTINUACION
-    )
+    .filter((p) => p.id !== String(postId) && p.handle === propio && p.texto.trim())
+    .map((p) => ({ ...p, esRespuestaAComentario: /^@\w/.test(p.texto.trim()) }))
     .sort((a, b) => Number(a.id) - Number(b.id));
+}
+
+// El texto que se guarda como "respuestas del autor" y se indexa para la búsqueda.
+export function textoDeRespuestas(respuestas) {
+  return (respuestas || []).map((r) => r.texto).filter(Boolean).join('\n\n') || null;
 }
 
 // Une el gancho con sus continuaciones en UN solo post. En la ruta de perfil las continuaciones

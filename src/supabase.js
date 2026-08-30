@@ -5,6 +5,7 @@
 
 import { config } from './config.js';
 import { r2Enabled, rehostImage, rehostVideo } from './r2.js';
+import { textoDeRespuestas } from './xApify.js';
 
 const enabled = !!(config.supabaseUrl && config.supabaseServiceKey);
 
@@ -689,6 +690,19 @@ function xRow(p, scrapedAtIso, project, { thumbnailUrl, videoUrl, imagenes }) {
     idioma: p.idioma || null,
     conversation_id: p.conversationId || null,
     es_respuesta: !!p.esRespuesta,
+    // Lo que el autor contestó en los comentarios de su propio post — donde muchas cuentas de X
+    // sueltan el prompt. Estructurado para pintarlo en el detalle, y en texto plano aparte para
+    // que la búsqueda lo alcance (search_tsv no puede leer dentro del jsonb).
+    respuestas_autor: p.respuestas?.length
+      ? p.respuestas.map((r) => ({
+          id: r.id,
+          texto: r.texto,
+          fecha: r.fecha ? new Date(r.fecha).toISOString() : null,
+          url: r.url,
+          aComentario: !!r.esRespuestaAComentario,
+        }))
+      : null,
+    respuestas_texto: textoDeRespuestas(p.respuestas),
     thumbnail_original: p.videoThumb || p.fotos[0] || null,
     thumbnail_url: thumbnailUrl,
     video_original: p.videoUrl || null,

@@ -18,15 +18,41 @@ import {
 import {
   scrapeXProfile,
   scrapeXPosts,
-  scrapeXThread,
+  scrapeXAutorEnConversacion,
   agruparHilos,
   xPostIdFromUrl,
 } from './xApify.js';
 import { syncX, getExistingXIds } from './supabase.js';
 
-// Debajo de esto se asume que el prompt vive en un tweet de continuación y vale la pena la
-// corrida extra. Arriba, el post ya se explica solo y no se gasta.
-const LARGO_COMPLETO = 600;
+// Adjunta a un post lo que su autor escribió en los comentarios. Cuesta una corrida del actor,
+// así que quien llama decide a cuáles posts se lo aplica. Nunca lanza: si falla, el post se
+// guarda igual sin esa parte.
+async function conRespuestasDelAutor(post) {
+  if (!config.xFetchRespuestas) return post;
+  try {
+    const mensajes = await scrapeXAutorEnConversacion(post.id, post.handle);
+    if (!mensajes.length) return post;
+
+    // Las continuaciones (sin @) son parte del post: X las muestra pegadas, así que se unen al
+    // copy. Las respuestas a comentaristas van aparte, que es donde suele estar el prompt.
+    const continuaciones = mensajes.filter((m) => !m.esRespuestaAComentario);
+    const respuestas = mensajes.filter((m) => m.esRespuestaAComentario);
+    const texto = [post.texto, ...continuaciones.map((m) => m.texto)].filter(Boolean).join('\n\n');
+    console.log(
+      `[X hilo] ${post.id}: ${continuaciones.length} continuación(es), ${respuestas.length} respuesta(s) del autor`
+    );
+    return { ...post, texto, respuestas };
+  } catch (e) {
+    console.warn(`[X hilo] no se pudo leer la conversación de ${post.id}: ${e.message}`);
+    return post;
+  }
+}
+
+// ¿Vale la pena pagar la corrida extra por este post? Un post con media y poco texto es la firma
+// de "el prompt está en otro lado".
+function pareceIncompleto(p) {
+  return (p.videoUrl || p.fotos.length) && p.texto.trim().length < config.xLargoCompleto;
+}
 
 // Inserta los posts nuevos. resolve(post) → { project }. Devuelve cuántos insertó.
 async function ingestX(posts, existing, startedAt, resolve) {
@@ -61,8 +87,13 @@ export async function runScrapeX() {
 
   for (const c of creators) {
     try {
-      const posts = agruparHilos(
+      let posts = agruparHilos(
         await scrapeXProfile(c.username, { maxPosts: c.resultsLimit || config.xBatchMaxResults })
+      );
+      // Solo se paga la corrida extra por los que aún se ven incompletos, y solo si son nuevos:
+      // pedir la conversación de algo que ya está en la base sería tirar el dinero.
+      posts = await Promise.all(
+        posts.map((p) => (!existing.has(String(p.id)) && pareceIncompleto(p) ? conRespuestasDelAutor(p) : p))
       );
       const n = await ingestX(posts, existing, startedAt, () => ({ project: c.project }));
       inserted += n;
@@ -96,10 +127,13 @@ export async function runScrapeXCreator(usernameOrUrl) {
     return { ok: false, error: `No se encontró la cuenta de X: ${usernameOrUrl}`, inserted: 0 };
   }
   try {
-    const posts = agruparHilos(
+    let posts = agruparHilos(
       await scrapeXProfile(creator.username, {
         maxPosts: Math.max(creator.resultsLimit || config.xDefaultMaxResults, 20),
       })
+    );
+    posts = await Promise.all(
+      posts.map((p) => (!existing.has(String(p.id)) && pareceIncompleto(p) ? conRespuestasDelAutor(p) : p))
     );
     const inserted = await ingestX(posts, existing, startedAt, () => ({ project: creator.project }));
     console.log(`[X manual] ${creator.username} scrapeados=${posts.length} nuevos=${inserted}`);
@@ -143,19 +177,10 @@ export async function runScrapeXUrl(url) {
       };
     }
 
-    // El gancho corto con el video suele traer el prompt en un tweet aparte. Solo se paga la
-    // corrida extra cuando el post se ve incompleto.
-    if (post.texto.trim().length < LARGO_COMPLETO) {
-      try {
-        const cont = await scrapeXThread(postId, post.handle);
-        if (cont.length) {
-          post = agruparHilos([post, ...cont]).find((p) => p.id === post.id) || post;
-          console.log(`[X url] hilo unido: ${cont.length} continuación(es), ${post.texto.length} caracteres`);
-        }
-      } catch (e) {
-        console.warn(`[X url] no se pudo traer el hilo de ${postId}: ${e.message}`);
-      }
-    }
+    // Aquí SIEMPRE se pide la conversación, sin importar el largo del post: es un solo post, es
+    // la vía que Dante usa a mano, y el prompt puede estar en una respuesta aunque el post ya
+    // traiga bastante texto.
+    post = await conRespuestasDelAutor(post);
 
     const handle = post.handle;
     let creator = handle ? await getXCreatorByUsername(handle) : null;
@@ -178,6 +203,7 @@ export async function runScrapeXUrl(url) {
       postId: post.id,
       creador: handle,
       caption: post.texto?.slice(0, 200) || null,
+      respuestasAutor: (post.respuestas || []).length,
       cuentaNueva,
     };
   } catch (err) {

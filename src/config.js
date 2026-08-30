@@ -82,6 +82,14 @@ export const config = {
   // el video sí se archiva en R2: es lo que hace que se pueda descargar desde el dashboard
   // aunque X deje de servirlo.
   xRehostVideo: process.env.X_REHOST_VIDEO !== 'false',
+  // Traer lo que el autor escribió en los comentarios de su propio post: muchas cuentas sueltan
+  // ahí el prompt, contestando a quien lo pidió. Cuesta una corrida extra por post.
+  xFetchRespuestas: process.env.X_FETCH_RESPUESTAS !== 'false',
+  xConversacionMaxPosts: Number(process.env.X_CONVERSACION_MAX_POSTS || 50),
+  // En la corrida de una CUENTA no se piden las respuestas de los 20 posts (serían 20 corridas
+  // extra): solo de los que tienen media y poco texto, que es la firma de "el prompt está en otro
+  // lado". Al pegar un link suelto sí se piden siempre — es un solo post y es lo que Dante hace.
+  xLargoCompleto: Number(process.env.X_LARGO_COMPLETO || 600),
 
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',

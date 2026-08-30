@@ -67,6 +67,14 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [copied, setCopied] = useState(false);
   const [dlCarousel, setDlCarousel] = useState(false);
 
+  // Copiado individual de cada respuesta del autor (el prompt suele estar en una sola de ellas).
+  const [copiadoId, setCopiadoId] = useState<string | null>(null);
+  function copiar(texto: string, id: string) {
+    navigator.clipboard.writeText(texto);
+    setCopiadoId(id);
+    setTimeout(() => setCopiadoId(null), 1500);
+  }
+
   // Recurso que regaló el creador (URL o archivo subido). Opcional; visible al abrir el detalle.
   const [recursoUrl, setRecursoUrl] = useState<string | null>(null);
   const [recursoNombre, setRecursoNombre] = useState<string | null>(null);
@@ -678,6 +686,51 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 <div className="mb-4">
                   <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Descripción</div>
                   <p className="text-sm text-gray-800 whitespace-pre-wrap max-h-40 overflow-y-auto">{item.titulo}</p>
+                </div>
+              )}
+
+              {/* Lo que el AUTOR contestó en los comentarios de su propio post. En X ahí es donde
+                  muchas cuentas sueltan el prompt, contestando a quien lo pidió — por eso va
+                  ARRIBA de la transcripción y con su propio botón de copiar. */}
+              {!!item.respuestasAutor?.length && (
+                <div className="mb-4">
+                  <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+                    🧵 Respuestas del autor ({item.respuestasAutor.length})
+                  </div>
+                  <div className="space-y-1.5">
+                    {item.respuestasAutor.map((r) => (
+                      <div key={r.id} className="rounded-lg border border-line bg-white p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <span className="text-[10px] uppercase tracking-wide text-muted">
+                            {r.aComentario ? 'Respondiendo a un comentario' : 'Continuación del hilo'}
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => copiar(r.texto, r.id)}
+                              className="text-[11px] text-muted hover:text-accent"
+                              title="Copiar este mensaje"
+                            >
+                              {copiadoId === r.id ? '✓' : '📋'}
+                            </button>
+                            {r.url && (
+                              <a
+                                href={r.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] text-muted hover:text-accent"
+                                title="Ver en X"
+                              >
+                                ↗
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-800 whitespace-pre-wrap max-h-60 overflow-y-auto">
+                          {r.texto}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

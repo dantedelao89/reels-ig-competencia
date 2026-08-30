@@ -18,6 +18,15 @@ export interface CarouselSlide {
   poster?: string | null;
 }
 
+// Un mensaje del autor dentro de la conversación de su propio post.
+export interface RespuestaAutor {
+  id: string;
+  texto: string;
+  fecha: string | null;
+  url: string | null;
+  aComentario: boolean; // true = contestando a un comentarista; false = continuación del hilo
+}
+
 // Forma normalizada que consume el frontend (une ig_reels y yt_videos).
 export interface ContentItem {
   id: string;
@@ -41,6 +50,10 @@ export interface ContentItem {
   // UI cae al comportamiento de siempre (solo miniatura).
   mediaUrl?: string | null;
   mediaTipo?: 'video' | 'image' | null;
+  // Lo que el AUTOR escribió en los comentarios de su propio post. En X muchas cuentas publican
+  // el video con un gancho corto y sueltan el prompt contestando a quien lo pidió, así que esto
+  // suele ser el contenido más valioso del item. Solo X lo llena.
+  respuestasAutor?: RespuestaAutor[] | null;
   // Regenerador: null | 'leyendo' | 'ganchos' | 'escribiendo' | 'generando' | 'revisando' | 'listo'
   regenEstado?: string | null;
   proyecto: string | null;
