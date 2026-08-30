@@ -11,7 +11,9 @@ export const maxDuration = 120;
 function isAllowed(url: string): boolean {
   const base = process.env.R2_PUBLIC_BASE_URL;
   if (base && url.startsWith(base)) return true;
-  return /^https:\/\/[^/]+\.(cdninstagram\.com|fbcdn\.net|ytimg\.com)\//.test(url);
+  // twimg.com: los posts de X con varias fotos reutilizan este ZIP. Sus imágenes ya se archivan
+  // en R2 (caso de arriba); esto solo cubre aquellas cuyo rehost falló.
+  return /^https:\/\/[^/]+\.(cdninstagram\.com|fbcdn\.net|ytimg\.com|twimg\.com)\//.test(url);
 }
 
 // CRC32 (requerido por el formato ZIP).
