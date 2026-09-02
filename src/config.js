@@ -22,6 +22,11 @@ export const config = {
   igUrlActorId: process.env.APIFY_IG_URL_ACTOR || 'apify/instagram-scraper',
   // Actor de historias (bandeja de 24h). Cobra plano por usuario (~$0.0065) + arranque (~$0.0013).
   storiesActorId: process.env.APIFY_STORIES_ACTOR || 'goat255/instagram-stories-highlights-scraper',
+  // Respaldo de historias: ~$0.10 por cuenta contra los ~$0.008 del primario, así que solo entra
+  // cuando el primario no devuelve nada. Devuelve el MISMO story_id, así que el dedup no se rompe.
+  // Ponerlo vacío desactiva el respaldo (y con el primario roto, capturar historias deja de servir).
+  storiesFallbackActorId:
+    process.env.APIFY_STORIES_FALLBACK_ACTOR ?? 'datavoyantlab/advanced-instagram-stories-scraper',
 
   // Reels máximos por creador si la columna "Reels por corrida" está vacía
   defaultResultsLimit: Number(process.env.DEFAULT_RESULTS_LIMIT || 30),

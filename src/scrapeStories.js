@@ -5,7 +5,7 @@
 // a R2 en el momento y, si eso falla, la fila se guarda igual con su hora (ver syncStories).
 
 import { config } from './config.js';
-import { scrapeStories } from './apify.js';
+import { scrapeStories, fallóElActor } from './apify.js';
 import { getCreatorByUsername, updateCreatorStoriesRun } from './sources.js';
 import { getExistingStoryIds, syncStories } from './supabase.js';
 
@@ -15,6 +15,8 @@ const VENTANA_DEDUP_DIAS = 3;
 
 const COSTO_ARRANQUE = 0.0013;
 const COSTO_POR_CUENTA = 0.0065;
+// El actor de respaldo, medido: ~$0.10 por cuenta (13x el primario).
+const COSTO_RESPALDO_POR_CUENTA = 0.102;
 
 export async function runScrapeInstagramStories(usernameOrUrl) {
   const startedAt = new Date().toISOString();
@@ -23,7 +25,7 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
     return { ok: false, error: `No se encontró el creador: ${usernameOrUrl}. Agrégalo primero en Fuentes.` };
   }
   const creador = creator.username.replace(/^@/, '').toLowerCase();
-  const costoEstimadoUsd = Math.round((COSTO_ARRANQUE + COSTO_POR_CUENTA) * 10000) / 10000;
+  let costoEstimadoUsd = Math.round((COSTO_ARRANQUE + COSTO_POR_CUENTA) * 10000) / 10000;
 
   let rec;
   try {
@@ -34,10 +36,21 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
     return { ok: false, error: err.message };
   }
 
-  // Cuenta privada o sin historias NO es un error: es información.
-  if (!rec) {
-    return { ok: true, creador, accesible: false, encontradas: 0, nuevas: 0, mensaje: 'El actor no devolvió datos de esta cuenta', costoEstimadoUsd };
+  // "No pude" del scraper y "la cuenta no se puede ver" son cosas DISTINTAS, y confundirlas hacía
+  // que un scraper roto se reportara como si la cuenta tuviera la culpa. Cuando el actor no llega a
+  // Instagram se devuelve ok:false, que es lo que es: un fallo nuestro, no información sobre ella.
+  if (!rec || fallóElActor(rec)) {
+    const detalle = rec?.errorMessage ? ` (${rec.errorMessage})` : '';
+    console.error(`[historias] ${creador}: el scraper no pudo llegar a Instagram${detalle}`);
+    return {
+      ok: false,
+      creador,
+      falloDelScraper: true,
+      error: `El scraper no pudo llegar a Instagram${detalle}. No es que la cuenta no exista: reintenta en un rato.`,
+      costoEstimadoUsd,
+    };
   }
+  // Privada o sin historias SÍ es información sobre la cuenta, no un error.
   if (rec.isAccessible === false) {
     console.log(`[historias] ${creador}: no accesible (privada=${!!rec.isPrivate})`);
     return {
@@ -50,9 +63,16 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
 
   const todas = Array.isArray(rec.stories) ? rec.stories.filter((s) => s?.id && s.takenAt) : [];
   if (!todas.length) {
-    console.log(`[historias] ${creador}: sin historias activas`);
+    console.log(`[historias] ${creador}: sin historias activas (actor ${rec.actor || 'primario'})`);
     await marcarCorrida(creator.recordId, startedAt);
-    return { ok: true, creador, accesible: true, encontradas: 0, nuevas: 0, mensaje: 'Sin historias activas ahora mismo', costoEstimadoUsd };
+    return {
+      ok: true, creador, accesible: true, encontradas: 0, nuevas: 0,
+      // El respaldo no distingue "sin historias" de "privada o inexistente": se dice, no se inventa.
+      mensaje: rec.indeterminado
+        ? 'Sin historias activas ahora mismo (o la cuenta es privada: el scraper de respaldo no las distingue)'
+        : 'Sin historias activas ahora mismo',
+      costoEstimadoUsd,
+    };
   }
 
   // Dedup: solo las que no estén ya archivadas pasan por R2 y por el upsert.
@@ -86,6 +106,9 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
     return { ok: false, error: err.message };
   }
 
+  // El respaldo cuesta ~13x: si corrió, el número que se reporta tiene que decirlo.
+  if (rec.actor === 'respaldo') costoEstimadoUsd = COSTO_RESPALDO_POR_CUENTA;
+
   console.log(
     `[historias] ${creador}: ${todas.length} encontradas, ${synced} nuevas, ${rehosted} archivadas` +
       (fallidas ? `, ${fallidas} sin archivar` : '')
@@ -100,6 +123,7 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
     rehospedadas: rehosted,
     fallidas,
     costoEstimadoUsd,
+    actor: rec.actor || 'primario',
   };
 }
 

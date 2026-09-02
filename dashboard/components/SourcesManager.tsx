@@ -84,6 +84,9 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al capturar historias');
+      if (data.actor === 'respaldo') {
+        toast.info('Se usó el scraper de respaldo (el habitual está caído): ~$0.10 en vez de ~$0.008');
+      }
       if (data.privada || data.accesible === false) toast.info(data.mensaje || `@${cuenta} no es accesible`);
       else if (!data.encontradas) toast.info(`@${cuenta} no tiene historias activas ahora`);
       else if (!data.nuevas) toast.info(`Sin novedades: las ${data.encontradas} ya estaban archivadas`);

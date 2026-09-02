@@ -135,6 +135,11 @@ export default function StoriesView() {
       else if (!d.encontradas) toast.info('Sin historias activas ahora mismo');
       else if (!d.nuevas) toast.info(`Sin novedades: las ${d.encontradas} ya estaban archivadas`);
       else toast.success(`${d.nuevas} historias nuevas de @${creador}`);
+      // El respaldo cuesta ~13x el actor de siempre: si corrió, Dante tiene que enterarse en el
+      // momento, no al ver la factura de Apify.
+      if (d.actor === 'respaldo') {
+        toast.info('Se usó el scraper de respaldo (el habitual está caído): ~$0.10 en vez de ~$0.008');
+      }
       if (d.fallidas) toast.error(`${d.fallidas} no se pudieron archivar (se reintentan en la próxima captura)`);
       setPage(1);
       fetchPage(1, true);
