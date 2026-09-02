@@ -58,6 +58,7 @@ export default function StoriesView() {
   const [error, setError] = useState<string | null>(null);
   const [capturando, setCapturando] = useState(false);
   const [viendo, setViendo] = useState<number | null>(null); // índice en el array plano
+  const [bajandoDia, setBajandoDia] = useState<string | null>(null);
 
   // Las cuentas salen de las Fuentes de IG que ya existen (sin endpoint nuevo).
   useEffect(() => {
@@ -141,6 +142,48 @@ export default function StoriesView() {
       toast.error(e.message || 'No se pudo capturar');
     } finally {
       setCapturando(false);
+      doneAct();
+    }
+  }
+
+  // Baja la secuencia completa de un día en un .zip, numerada en el orden en que se publicó.
+  // El servidor arma la lista desde la base (no desde lo que hay cargado aquí), así que el zip
+  // trae el día entero aunque la vista solo tenga una parte.
+  async function descargarDia(dia: string) {
+    if (bajandoDia) return;
+    setBajandoDia(dia);
+    const doneAct = activity.begin(`Preparando el zip de ${fmtDiaRel(dia)}…`);
+    try {
+      const res = await fetch('/api/stories-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dia, creador: creador || undefined }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || `Error ${res.status}`);
+      }
+      const incluidas = Number(res.headers.get('X-Historias-Incluidas') || 0);
+      const totales = Number(res.headers.get('X-Historias-Totales') || 0);
+      const cortado = res.headers.get('X-Historias-Cortado') === '1';
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `historias_${creador ? creador + '_' : ''}${dia}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      if (cortado) toast.info(`Zip con ${incluidas} de ${totales}: el día pesaba demasiado para uno solo`);
+      else if (incluidas < totales) toast.info(`${incluidas} de ${totales} historias (${totales - incluidas} sin archivo)`);
+      else toast.success(`${incluidas} historias descargadas en orden`);
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo preparar la descarga');
+    } finally {
+      setBajandoDia(null);
       doneAct();
     }
   }
@@ -235,6 +278,15 @@ export default function StoriesView() {
                   {delDia.length} {delDia.length === 1 ? 'historia' : 'historias'}
                   {dia === hoy ? '' : ` · ${dia}`}
                 </span>
+                <span className="flex-1" />
+                <button
+                  onClick={() => descargarDia(dia)}
+                  disabled={bajandoDia === dia}
+                  className="text-xs px-2.5 h-7 rounded-md border border-line bg-white hover:bg-gray-100 disabled:opacity-60 shrink-0"
+                  title={`Descargar la secuencia completa de este día en un .zip, numerada en el orden en que se publicó${creador ? ` (solo @${creador})` : ''}`}
+                >
+                  {bajandoDia === dia ? 'Preparando…' : '⬇️ Descargar el día'}
+                </button>
               </div>
 
               <div className="flex flex-wrap gap-2">
