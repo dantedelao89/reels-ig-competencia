@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ContentItem, Estado, CarouselSlide } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
-import { PLATFORMS } from '@/lib/platforms';
+import { PLATFORMS, codigoDe } from '@/lib/platforms';
 import { fmtNum, fmtDateShort, toParagraphs } from '@/lib/format';
 import { useToast } from './ui/Toast';
 import { useActivity } from './ui/Activity';
@@ -682,6 +682,21 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
 
             {/* DERECHA: transcripción grande */}
             <div className="p-5 flex flex-col min-h-[58vh]">
+              {/* Identificador copiable del contenido. Sirve fuera de DISECTA (para hablar de un
+                  item concreto) y dentro: pegado en el buscador, lleva directo a él. */}
+              <div className="flex items-center gap-2 mb-3">
+                <code className="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 border border-line text-gray-700 select-all">
+                  {codigoDe(item)}
+                </code>
+                <button
+                  onClick={() => copiar(codigoDe(item), '__codigo__')}
+                  className="text-[11px] text-muted hover:text-accent"
+                  title="Copiar el ID de este contenido (se puede pegar en el buscador para volver a él)"
+                >
+                  {copiadoId === '__codigo__' ? '✓ Copiado' : '📋 Copiar ID'}
+                </button>
+              </div>
+
               {item.titulo && (
                 <div className="mb-4">
                   <div className="text-[11px] uppercase tracking-wide text-muted mb-1">Descripción</div>

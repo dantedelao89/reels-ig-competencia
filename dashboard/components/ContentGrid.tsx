@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
+
 import type { ContentItem } from '@/lib/types';
 import { fmtNum, fmtDateShort } from '@/lib/format';
 import { ESTADO_STYLE } from '@/lib/estados';
-import { PLATFORMS } from '@/lib/platforms';
+import { PLATFORMS, codigoDe } from '@/lib/platforms';
 
 interface Props {
   items: ContentItem[];
@@ -14,6 +16,8 @@ interface Props {
 
 function Thumb({ item }: { item: ContentItem }) {
   const ratio = PLATFORMS[item.platform].thumbRatio;
+  const [copiado, setCopiado] = useState(false);
+
   return (
     <div className={`relative w-full ${ratio} bg-gray-200`}>
       {item.thumbnail ? (
@@ -29,9 +33,25 @@ function Thumb({ item }: { item: ContentItem }) {
           sin imagen
         </div>
       )}
-      <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white">
-        {PLATFORMS[item.platform].short}
-      </span>
+      {/* La etiqueta de plataforma es también el botón de copiar el ID: al pasar el ratón se
+          convierte en "📋 ID" y un clic lo copia, sin tener que abrir el contenido. */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation(); // no abrir el detalle al copiar
+          navigator.clipboard.writeText(codigoDe(item));
+          setCopiado(true);
+          setTimeout(() => setCopiado(false), 1200);
+        }}
+        title={`Copiar el ID: ${codigoDe(item)}`}
+        className="group/id absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 hover:bg-black/80 text-white"
+      >
+        {copiado ? '✓' : (
+          <>
+            <span className="group-hover/id:hidden">{PLATFORMS[item.platform].short}</span>
+            <span className="hidden group-hover/id:inline">📋 ID</span>
+          </>
+        )}
+      </button>
       {item.duracion && (
         <span className="absolute bottom-2 right-2 text-[10px] px-1.5 py-0.5 rounded bg-black/55 text-white tabular-nums">
           {item.duracion}

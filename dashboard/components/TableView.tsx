@@ -3,7 +3,7 @@
 import type { ContentItem } from '@/lib/types';
 import { fmtNum, fmtDateShort } from '@/lib/format';
 import { ESTADO_STYLE } from '@/lib/estados';
-import { PLATFORMS } from '@/lib/platforms';
+import { PLATFORMS, codigoDe } from '@/lib/platforms';
 
 interface Props {
   items: ContentItem[];
@@ -23,6 +23,7 @@ export default function TableView({ items, selected, onToggle, onOpen }: Props) 
             <th className="text-left p-2 font-medium">Título</th>
             <th className="text-left p-2 font-medium w-32">Creador</th>
             <th className="text-left p-2 font-medium w-14">Plat.</th>
+            <th className="text-left p-2 font-medium w-40">ID</th>
             <th className="text-right p-2 font-medium w-20">Vistas</th>
             <th className="text-left p-2 font-medium w-24">Fecha</th>
             <th className="text-left p-2 font-medium w-28">Estado</th>
@@ -56,6 +57,10 @@ export default function TableView({ items, selected, onToggle, onOpen }: Props) 
                 </td>
                 <td className="p-2 text-muted align-top whitespace-nowrap">{it.creador ? `@${it.creador}` : '—'}</td>
                 <td className="p-2 text-muted">{PLATFORMS[it.platform].short}</td>
+                <td className="p-2">
+                  {/* select-all: un clic selecciona el ID entero, para copiarlo sin arrastrar. */}
+                  <code className="text-[10px] text-muted select-all">{codigoDe(it)}</code>
+                </td>
                 <td className="p-2 text-right tabular-nums">{fmtNum(it.views)}</td>
                 <td className="p-2 text-muted whitespace-nowrap">{fmtDateShort(it.fechaPublicacion)}</td>
                 <td className="p-2">

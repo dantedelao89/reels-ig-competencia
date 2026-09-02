@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
 import type { ContentItem, Platform } from '@/lib/types';
-import { PLATFORMS, PLATFORM_ORDER, type PlatformDef } from '@/lib/platforms';
+import { PLATFORMS, PLATFORM_ORDER, type PlatformDef, desdeCodigo } from '@/lib/platforms';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
   const creadores = (sp.get('creador') || '').split(',').map((s) => s.trim()).filter(Boolean);
   const proyectos = (sp.get('proyecto') || '').split(',').map((s) => s.trim()).filter(Boolean);
   const q = sp.get('q')?.trim() || '';
+  // Si lo que se busca es un código copiado del propio DISECTA, se resuelve por id y no por texto.
+  const codigo = q ? desdeCodigo(q) : null;
   // Origen (solo YouTube): 'canal' = origen es una URL de canal; 'busqueda' = origen es palabra clave.
   const origen = sp.get('origen') || '';
   const sort = sp.get('sort') || 'fecha_publicacion';
@@ -56,7 +58,10 @@ export async function GET(req: NextRequest) {
       if (estado) query = query.eq('estado', estado);
       if (creadores.length) query = query.in(def.autorCol, creadores);
       if (proyectos.length) query = query.in('proyecto', proyectos);
-      if (q) query = query.textSearch('search_tsv', q, { config: 'spanish', type: 'websearch' });
+      // Un código copiado del propio DISECTA (IG-DMxxxx) se resuelve por el id nativo: pasarlo
+      // por search_tsv no encontraría nada, porque ese id no está en el texto indexado.
+      if (codigo) query = query.eq(def.idCol, codigo.externalId);
+      else if (q) query = query.textSearch('search_tsv', q, { config: 'spanish', type: 'websearch' });
       if (desde) query = query.gte(dateField, desde);
       if (hasta) query = query.lte(dateField, hasta);
       // Filtro por origen: solo lo tienen las plataformas con fuentes de dos clases (YouTube:
@@ -78,10 +83,12 @@ export async function GET(req: NextRequest) {
     // tabla equivocada sin dar error.
     const defs = PLATFORM_ORDER.map((p) => PLATFORMS[p]).filter((def) => {
       if (platform !== 'all' && platform !== def.key) return false;
+      // Un código apunta a UNA plataforma: buscar en las demás sería tiempo tirado.
+      if (codigo && codigo.platform !== def.key) return false;
       // El filtro de origen excluye a quien no lo tiene (si no, se colaría todo su contenido).
       if (origen && !def.hasOrigen) return false;
       // Buscar en una tabla sin search_tsv daría 500; se excluye en vez de devolverla sin filtrar.
-      if (q && !def.searchable) return false;
+      if (q && !codigo && !def.searchable) return false;
       return true;
     });
 

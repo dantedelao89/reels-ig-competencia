@@ -230,6 +230,26 @@ export const PLATFORMS: Record<Platform, PlatformDef> = {
 
 export const PLATFORM_ORDER: Platform[] = ['ig', 'yt', 'tiktok', 'x'];
 
+// --- Identificador copiable de un contenido ---
+//
+// Formato `IG-DMxxxx`, `YT-dQw4w9WgXcQ`, `TT-7412…`, `X-2093…`: la plataforma más el id nativo.
+// Se prefiere esto al uuid interno porque dice de un vistazo de qué red es, permite reconstruir la
+// URL original, y es el mismo id que ya usan los endpoints — o sea que sirve para hablar del
+// contenido fuera de DISECTA, no solo para verlo.
+export function codigoDe(item: Pick<ContentItem, 'platform' | 'externalId'>): string {
+  return `${PLATFORMS[item.platform].short}-${item.externalId}`;
+}
+
+// Lo contrario: de un código pegado en el buscador, a qué tabla y qué id mirar. Devuelve null si
+// el texto no es un código, para que la búsqueda normal siga su curso.
+export function desdeCodigo(texto: string): { platform: Platform; externalId: string } | null {
+  const m = String(texto || '').trim().match(/^([A-Za-z]{1,3})-(.+)$/);
+  if (!m) return null;
+  const short = m[1].toUpperCase();
+  const key = PLATFORM_ORDER.find((p) => PLATFORMS[p].short === short);
+  return key ? { platform: key, externalId: m[2].trim() } : null;
+}
+
 export function isPlatform(v: unknown): v is Platform {
   return typeof v === 'string' && v in PLATFORMS;
 }

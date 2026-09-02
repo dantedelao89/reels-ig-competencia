@@ -28,7 +28,7 @@ export default function Topbar(p: Props) {
           <input
             value={p.q}
             onChange={(e) => p.onQ(e.target.value)}
-            placeholder="Buscar en captions y transcripciones…"
+            placeholder="Buscar en captions, transcripciones o pegar un ID (IG-…)"
             className="w-full h-10 pl-8 pr-3 rounded-lg border border-line bg-white outline-none focus:border-accent text-sm"
           />
         </div>
