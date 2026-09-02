@@ -243,11 +243,17 @@ export function codigoDe(item: Pick<ContentItem, 'platform' | 'externalId'>): st
 // Lo contrario: de un código pegado en el buscador, a qué tabla y qué id mirar. Devuelve null si
 // el texto no es un código, para que la búsqueda normal siga su curso.
 export function desdeCodigo(texto: string): { platform: Platform; externalId: string } | null {
-  const m = String(texto || '').trim().match(/^([A-Za-z]{1,3})-(.+)$/);
+  // La parte del id se exige con forma de id (>=5 caracteres, sin espacios): si no, una búsqueda
+  // como "X-men" se tomaría por un código y devolvería cero en vez de buscar el texto.
+  const m = String(texto || '').trim().match(/^([A-Za-z]{1,3})-([A-Za-z0-9_-]{5,})$/);
   if (!m) return null;
   const short = m[1].toUpperCase();
   const key = PLATFORM_ORDER.find((p) => PLATFORMS[p].short === short);
-  return key ? { platform: key, externalId: m[2].trim() } : null;
+  if (!key) return null;
+  // Los ids de TikTok y X son numéricos; exigirlo evita colarse en su tabla por un texto cualquiera.
+  const soloDigitos = key === 'tiktok' || key === 'x';
+  if (soloDigitos && !/^\d+$/.test(m[2])) return null;
+  return { platform: key, externalId: m[2] };
 }
 
 export function isPlatform(v: unknown): v is Platform {
