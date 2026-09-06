@@ -6,6 +6,7 @@ import { ESTADO_STYLE } from '@/lib/estados';
 import { fmtDateShort, toParagraphs } from '@/lib/format';
 import FacetDropdown from './FacetDropdown';
 import { useToast } from './ui/Toast';
+import FrameCapture from './FrameCapture';
 import { useActivity } from './ui/Activity';
 import { CardGridSkeleton } from './ui/Skeleton';
 import EmptyState from './ui/EmptyState';
@@ -558,7 +559,10 @@ function AdDetail({ item, onClose, onEstado, onRescraped }: { item: AdItem; onCl
         <div className="grid md:grid-cols-[300px_1fr]">
           <div className="p-4 border-r border-line bg-gray-50">
             {item.videoUrl ? (
-              <video src={item.videoUrl} poster={item.thumbnail || undefined} controls className="w-full rounded-lg bg-black mb-2 max-h-[60vh]" />
+              // Mismo capturador de frames que el detalle de Orgánico. Sin `ratio` a propósito: los
+              // anuncios conviven en cuadrado, vertical y horizontal, y forzarles una proporción
+              // los recortaría.
+              <FrameCapture src={item.videoUrl} poster={item.thumbnail} nombreBase={`ad_${item.adId}`} />
             ) : (
               <div className="w-full rounded-lg overflow-hidden mb-2 bg-gray-100 flex items-center justify-center">
                 {item.thumbnail ? (

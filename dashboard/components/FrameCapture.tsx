@@ -26,10 +26,13 @@ interface Captura {
 }
 
 interface Props {
-  src: string;        // URL del medio en R2
+  src: string;        // URL del medio (R2 o el CDN original)
   poster?: string | null;
-  ratio: string;      // clase de proporción del contenedor
-  nombreBase: string; // p. ej. "IG-DctMqGSDd6R"
+  // Clase de proporción del contenedor. Sin ella el video se dibuja con su tamaño natural, que es
+  // lo que quieren los anuncios: conviven cuadrados, verticales y horizontales, y forzarles una
+  // proporción los recortaría o los dejaría con franjas.
+  ratio?: string;
+  nombreBase: string; // p. ej. "IG-DctMqGSDd6R" o "ad_1735139354331160"
 }
 
 // 12.34 s → "00-12.34", apto para nombre de archivo y ordenable.
@@ -122,7 +125,20 @@ export default function FrameCapture({ src, poster, ratio, nombreBase }: Props) 
 
   return (
     <div onKeyDown={onKeyDown} tabIndex={-1} className="outline-none">
-      <div className={`relative w-full ${ratio} bg-gray-200 rounded-lg overflow-hidden mb-2`}>
+      {ratio ? (
+        <div className={`relative w-full ${ratio} bg-gray-200 rounded-lg overflow-hidden mb-2`}>
+          <video
+            ref={videoRef}
+            src={`/api/media?url=${encodeURIComponent(src)}`}
+            poster={poster || undefined}
+            controls
+            playsInline
+            preload="metadata"
+            onLoadedMetadata={() => setListo(true)}
+            className="absolute inset-0 w-full h-full object-contain bg-black"
+          />
+        </div>
+      ) : (
         <video
           ref={videoRef}
           src={`/api/media?url=${encodeURIComponent(src)}`}
@@ -131,9 +147,9 @@ export default function FrameCapture({ src, poster, ratio, nombreBase }: Props) 
           playsInline
           preload="metadata"
           onLoadedMetadata={() => setListo(true)}
-          className="absolute inset-0 w-full h-full object-contain bg-black"
+          className="w-full rounded-lg bg-black mb-2 max-h-[60vh]"
         />
-      </div>
+      )}
 
       {/* Paso cuadro a cuadro: pausar con el ratón nunca cae donde uno quiere. */}
       <div className="flex items-center gap-1 mb-2">

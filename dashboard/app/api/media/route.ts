@@ -19,7 +19,11 @@ export const maxDuration = 300;
 
 function isAllowed(url: string): boolean {
   const base = process.env.R2_PUBLIC_BASE_URL;
-  return !!base && url.startsWith(base);
+  if (base && url.startsWith(base)) return true;
+  // Mismos CDN que /api/download: no todo lo scrapeado llegó a archivarse (184 anuncios se
+  // quedaron con la URL de Facebook porque su rehost falló). Pasarlos por aquí los vuelve
+  // del mismo origen, así que también se pueden capturar mientras esa URL siga viva.
+  return /^https:\/\/[^/]+\.(cdninstagram\.com|fbcdn\.net|ytimg\.com|tiktokcdn\.com|tiktokcdn-us\.com|ttwstatic\.com|tiktokv\.com|twimg\.com)\//.test(url);
 }
 
 export async function GET(req: NextRequest) {
