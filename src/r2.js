@@ -199,6 +199,10 @@ export async function rehostVideo(sourceUrl, key, { audioUrl = null } = {}) {
       console.log(`[R2 video] ${key}: ${normalizado.motivo} (${Math.round(normalizado.buffer.length / 1024)} KB)`);
       body = normalizado.buffer;
       if (body.length > MAX_VIDEO_BYTES) throw new Error(`video normalizado de ${body.length} bytes excede el límite`);
+    } else if (!bufAudio) {
+      // Ni pista dentro ni audioUrl: el reel es mudo de origen. Se deja constancia para que un
+      // video sin sonido no se confunda con un fallo del archivado.
+      console.log(`[R2 video] ${key}: sin audio (Instagram no sirve pista para este reel)`);
     }
     const { PutObjectCommand } = await import('@aws-sdk/client-s3');
     const c = await getClient();
