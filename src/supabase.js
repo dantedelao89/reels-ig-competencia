@@ -575,7 +575,9 @@ export async function syncReels(items, ctx = {}) {
   // al techo de la petición (la misma razón por la que las historias se archivan de 4 en 4).
   const videos = await enPool(rows, 4, async ({ item }) => {
     if (!r2Enabled() || !item.videoUrl) return null;
-    const u = await rehostVideo(item.videoUrl, `videos/ig/${item.shortCode}.mp4`);
+    // audioUrl: Instagram sirve DASH y en varios reels el video viene MUDO, con su pista aparte.
+    // rehostVideo la pega cuando hace falta, así que lo archivado siempre tiene sonido.
+    const u = await rehostVideo(item.videoUrl, `videos/ig/${item.shortCode}.mp4`, { audioUrl: item.audioUrl || null });
     if (!u) console.warn(`[IG] no se pudo archivar el video de ${item.shortCode}: queda la URL de IG, que caduca en días`);
     return u;
   });
