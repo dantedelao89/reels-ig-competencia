@@ -80,6 +80,11 @@ export const PLATFORMS: Record<Platform, PlatformDef> = {
       tipo: r.tipo ?? null,
       imagenes: Array.isArray(r.imagenes) ? r.imagenes : null,
       regenEstado: r.regen_estado ?? null,
+      // El mp4 archivado en R2: es lo que hace que el reel se pueda ver y DESCARGAR desde el
+      // detalle. Solo se ofrece si está en R2 — la URL de Instagram caduca en días y un botón
+      // que falla es peor que no tenerlo.
+      mediaUrl: r.video_url?.includes('/videos/ig/') ? r.video_url : null,
+      mediaTipo: r.video_url?.includes('/videos/ig/') ? 'video' : null,
       proyecto: r.proyecto,
       estado: r.estado,
       transcripcion: r.transcripcion,

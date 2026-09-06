@@ -469,7 +469,22 @@ function carouselSlides(item) {
   return [];
 }
 
-function reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl, imagenes) {
+// Ejecuta fn sobre los items con N en vuelo a la vez, conservando el orden del array.
+function enPool(items, n, fn) {
+  const out = new Array(items.length);
+  let siguiente = 0;
+  return Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      for (;;) {
+        const i = siguiente++;
+        if (i >= items.length) return;
+        out[i] = await fn(items[i], i);
+      }
+    })
+  ).then(() => out);
+}
+
+function reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl, imagenes, videoUrl) {
   const music = item.musicInfo
     ? [item.musicInfo.song_name, item.musicInfo.artist_name].filter(Boolean).join(' — ')
     : '';
@@ -478,7 +493,12 @@ function reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl, image
     shortcode: item.shortCode,
     creador: item.ownerUsername || null,
     url: item.url || null,
-    video_url: item.videoUrl || null,
+    // El mp4 archivado en R2. La URL del CDN de Instagram MUERE en ~3 días (medido: de 1243 reels
+    // guardados, solo los del último día seguían respondiendo), así que dejarla en video_url hacía
+    // que el archivo naciera roto. Si el archivado falla se conserva la de Instagram, que al menos
+    // sirve un rato.
+    video_url: videoUrl || item.videoUrl || null,
+    video_original: item.videoUrl || null,
     caption: item.caption || null,
     fecha_publicacion: item.timestamp || null,
     likes: item.likesCount ?? null,
@@ -547,9 +567,23 @@ export async function syncReels(items, ctx = {}) {
         }
       }
     }
-    rows.push(reelRow(item, scrapedAtIso, project, transcripcion, thumbnailUrl, imagenes));
+    rows.push({ item, args: [scrapedAtIso, project, transcripcion, thumbnailUrl, imagenes] });
   }
-  const data = await upsertReturning(config.igReelsTable, rows, 'shortcode', 'id, shortcode');
+
+  // El mp4 del reel, archivado en R2. Va en un pool aparte y no dentro del bucle de arriba porque
+  // un video pesa mucho más que una portada: con 60 reels en una corrida, secuencial se acercaba
+  // al techo de la petición (la misma razón por la que las historias se archivan de 4 en 4).
+  const videos = await enPool(rows, 4, async ({ item }) => {
+    if (!r2Enabled() || !item.videoUrl) return null;
+    const u = await rehostVideo(item.videoUrl, `videos/ig/${item.shortCode}.mp4`);
+    if (!u) console.warn(`[IG] no se pudo archivar el video de ${item.shortCode}: queda la URL de IG, que caduca en días`);
+    return u;
+  });
+  const filas = rows.map((r, i) => {
+    if (videos[i]) rehosted++;
+    return reelRow(r.item, ...r.args, videos[i]);
+  });
+  const data = await upsertReturning(config.igReelsTable, filas, 'shortcode', 'id, shortcode');
   const idsByShortcode = new Map(data.map((r) => [r.shortcode, r.id]));
   return { synced: data.length, rehosted, idsByShortcode };
 }
