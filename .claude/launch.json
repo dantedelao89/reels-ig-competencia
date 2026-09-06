@@ -2,17 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dashboard",
+      "name": "disecta-dashboard",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "dashboard", "run", "dev"],
+      "runtimeArgs": ["run", "dev"],
       "port": 3000,
-      "autoPort": true
-    },
-    {
-      "name": "scraper",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
-      "port": 3000
+      "cwd": "dashboard"
     }
   ]
 }

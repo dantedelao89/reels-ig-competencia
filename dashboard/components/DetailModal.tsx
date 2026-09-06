@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import FrameCapture from './FrameCapture';
 import type { ContentItem, Estado, CarouselSlide } from '@/lib/types';
 import { ESTADOS } from '@/lib/types';
 import { PLATFORMS, codigoDe } from '@/lib/platforms';
@@ -56,6 +57,8 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     ? item.imagenes.map((x) => (typeof x === 'string' ? { tipo: 'image' as const, url: x } : x))
     : [];
   const esCarrusel = slides.length > 1;
+  // Solo un video suelto ya archivado en R2 se puede capturar cuadro a cuadro.
+  const mostrarCapturador = !esCarrusel && !!item.mediaUrl && item.mediaTipo === 'video';
   const [slide, setSlide] = useState(0);
   useEffect(() => setSlide(0), [item.id]);
 
@@ -431,6 +434,17 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
           <div className="grid md:grid-cols-[260px_1fr]">
             {/* IZQUIERDA: datos del video */}
             <div className="p-4 border-r border-line bg-gray-50">
+              {/* Video archivado: reproductor con capturador de frames en lugar de la miniatura
+                  estática, porque de un video lo que interesa es poder pararlo donde uno quiera.
+                  Un carrusel conserva su visor: ahí la navegación es por diapositiva. */}
+              {mostrarCapturador ? (
+                <FrameCapture
+                  src={item.mediaUrl!}
+                  poster={item.thumbnail}
+                  ratio={PLATFORMS[item.platform].thumbRatio}
+                  nombreBase={codigoDe(item)}
+                />
+              ) : (
               <div
                 className={`relative w-full ${PLATFORMS[item.platform].thumbRatio} bg-gray-200 rounded-lg overflow-hidden mb-3`}
               >
@@ -448,16 +462,6 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={slides[slide].url} alt="" className="absolute inset-0 w-full h-full object-cover" />
                   )
-                ) : item.mediaUrl && item.mediaTipo === 'video' ? (
-                  // Medio ya archivado en R2 (hoy: X). Se reproduce aquí mismo en vez de mandar a
-                  // la plataforma; el poster es la miniatura, también nuestra.
-                  <video
-                    src={item.mediaUrl}
-                    poster={item.thumbnail || undefined}
-                    controls
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-contain bg-black"
-                  />
                 ) : (
                   (item.mediaUrl || item.thumbnail) && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -490,6 +494,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                   </>
                 )}
               </div>
+              )}
               {esCarrusel && (
                 <>
                   {/* Tira de miniaturas para saltar a cualquier diapositiva (video muestra su portada + ▶). */}
