@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const RADAR_TABLE = 'x_radar';
 const COLS =
-  'id,post_id,busqueda_id,busqueda_etiqueta,creador,creador_nombre,creador_url,url,caption,respuestas_autor,fecha_publicacion,dia,views,likes,comentarios,retweets,guardados,duracion_seg,tipo,hashtags,links_externos,idioma,conversation_id,thumbnail_original,video_original,promovido,descartado,scrapeado_en';
+  'id,post_id,busqueda_id,busqueda_etiqueta,creador,creador_nombre,creador_url,creador_seguidores,url,caption,respuestas_autor,fecha_publicacion,dia,views,likes,comentarios,retweets,guardados,duracion_seg,tipo,hashtags,links_externos,idioma,conversation_id,thumbnail_original,video_original,promovido,descartado,scrapeado_en';
 
 // Lo que trajeron las consultas del radar. Devuelve PLANO y ordenado; la vista agrupa por día
 // (mismo criterio que las historias: agrupar aquí obligaría a paginar por día y un día partido
@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
     busqueda: r.busqueda_etiqueta,
     creador: r.creador,
     creadorNombre: r.creador_nombre,
+    seguidores: r.creador_seguidores,
     url: r.url,
     caption: r.caption,
     respuestasAutor: Array.isArray(r.respuestas_autor) ? r.respuestas_autor : null,

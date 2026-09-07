@@ -816,6 +816,7 @@ function radarRow(p, { busqueda, scrapedAtIso }) {
     creador: p.handle || null,
     creador_nombre: p.nombre || null,
     creador_url: p.handle ? `https://x.com/${p.handle}` : null,
+    creador_seguidores: p.seguidores ?? null,
     url: p.url || null,
     caption: p.texto || null,
     respuestas_autor: p.respuestasAutor?.length

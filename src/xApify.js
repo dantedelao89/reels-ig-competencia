@@ -1,10 +1,14 @@
 // Actor de X/Twitter (danek) y normalización de sus dos formas de salida.
 //
-// UN solo actor cubre las dos rutas —`username` para una cuenta, `lookup_post_ids` para un post
-// suelto— pero DEVUELVE DOS SHAPES DISTINTOS, y ahí está la trampa: la ruta de perfil usa
-// `tweet_id`/`favorites` y deja el autor casi vacío, mientras la de lookup usa `id`/`likes` y sí
-// trae el autor completo. Leer `it.id` sin más en la ruta de perfil da undefined, o sea que se
-// pierde el identificador y el dedup deja de funcionar. Por eso todo pasa por normalizeXPost.
+// UN solo actor cubre TRES rutas —`username` (cuenta), `lookup_post_ids` (post suelto) y `query`
+// (búsqueda del radar)— y cada una DEVUELVE UN SHAPE DISTINTO. Ahí está la trampa:
+//   * perfil    → `tweet_id` / `favorites`, y el autor casi vacío (`author.screen_name` null).
+//   * lookup    → `id` / `likes`, con `author` completo.
+//   * búsqueda  → `tweet_id` / `favorites`, SIN `author`: el handle va en `screen_name` al nivel
+//                 raíz y los datos de la cuenta en `user_info` (que además trae followers_count,
+//                 el único de los tres que lo da).
+// Leer `it.id` o `it.author` sin más falla en dos de las tres. Por eso todo pasa por
+// normalizeXPost: se descubrió con el radar guardando 80 hallazgos con el autor en null.
 
 import { config } from './config.js';
 import { runActorItems } from './apifyRun.js';
@@ -47,8 +51,9 @@ export function normalizeXPost(raw, handleFallback = '') {
   const id = String(raw.id || raw.tweet_id || '');
   if (!id) return null;
 
-  const autor = raw.author || {};
-  const handle = normalizeXHandle(autor.screen_name || handleFallback);
+  // Las tres procedencias del autor, en orden de fiabilidad. `user_info` es el de la búsqueda.
+  const autor = raw.author || raw.user_info || {};
+  const handle = normalizeXHandle(autor.screen_name || raw.screen_name || handleFallback);
   const videos = raw.media?.video || [];
   const fotos = raw.media?.photo || [];
   const gifs = raw.media?.animated_gif || [];
@@ -59,6 +64,9 @@ export function normalizeXPost(raw, handleFallback = '') {
     url: handle ? `https://x.com/${handle}/status/${id}` : `https://x.com/i/status/${id}`,
     handle,
     nombre: autor.name || null,
+    // Solo lo da la ruta de búsqueda, y en el radar vale oro: una cuenta de 900 seguidores que
+    // hace 3000 likes es un hallazgo; una de 900 mil es rutina.
+    seguidores: num(autor.followers_count ?? autor.followers ?? autor.sub_count),
     // El texto completo: es la razón de haber elegido este actor sobre el más popular.
     texto: raw.text || raw.display_text || '',
     fecha: raw.created_at || null,

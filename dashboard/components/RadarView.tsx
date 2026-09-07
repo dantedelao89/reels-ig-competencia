@@ -25,6 +25,7 @@ interface Hallazgo {
   busqueda: string | null;
   creador: string | null;
   creadorNombre: string | null;
+  seguidores: number | null;
   url: string | null;
   caption: string | null;
   respuestasAutor: RespuestaAutor[] | null;
@@ -289,6 +290,11 @@ export default function RadarView() {
                           <div className="flex items-center gap-2 flex-wrap mb-1 text-xs">
                             <span className="font-medium">@{h.creador}</span>
                             {h.creadorNombre && <span className="text-muted truncate">{h.creadorNombre}</span>}
+                            {/* Los seguidores son el contexto que decide si promover: 3000 likes
+                                con 900 seguidores es un hallazgo; con 900 mil es rutina. */}
+                            {h.seguidores != null && (
+                              <span className="text-muted" title="Seguidores de la cuenta">{fmtNum(h.seguidores)} seg.</span>
+                            )}
                             {h.busqueda && (
                               <span className="px-1.5 py-0.5 rounded bg-gray-100 text-muted text-[10px]">{h.busqueda}</span>
                             )}
