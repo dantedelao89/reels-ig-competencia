@@ -152,9 +152,15 @@ export async function runScrapeXCreator(usernameOrUrl) {
   }
 }
 
-// UN post por su URL. Da de alta la cuenta como fuente si no la teníamos, y fuerza upsert
-// (Set vacío) para que re-pegar el mismo link siempre actualice.
-export async function runScrapeXUrl(url) {
+// UN post por su URL: lo trae completo (hilo del autor incluido) y lo archiva a R2.
+//
+// `altaFuente` separa dos intenciones que se confundían: pegar una URL a mano suele significar
+// "quiero seguir a esta cuenta", pero GUARDAR un hallazgo del radar significa "quiero este post",
+// no la cuenta. Dando de alta al autor siempre, guardar cinco hallazgos sueltos metía cinco
+// cuentas en Fuentes que nunca se pidieron.
+//
+// Fuerza upsert (Set vacío) para que re-pegar el mismo link siempre actualice.
+export async function runScrapeXUrl(url, { altaFuente = true } = {}) {
   const startedAt = new Date().toISOString();
   const limpio = (url || '').trim();
   if (!/(?:twitter|x)\.com\//i.test(limpio)) {
@@ -188,7 +194,7 @@ export async function runScrapeXUrl(url) {
     const handle = post.handle;
     let creator = handle ? await getXCreatorByUsername(handle) : null;
     let cuentaNueva = false;
-    if (!creator && handle) {
+    if (!creator && handle && altaFuente) {
       try {
         creator = await createXCreator(handle);
         cuentaNueva = true;

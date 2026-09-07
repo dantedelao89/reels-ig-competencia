@@ -40,6 +40,7 @@ interface Hallazgo {
   linksExternos: string | null;
   thumbnail: string | null;
   promovido: boolean;
+  guardado: boolean;
   descartado: boolean;
 }
 
@@ -83,6 +84,7 @@ export default function RadarView() {
   const [error, setError] = useState<string | null>(null);
   const [corriendo, setCorriendo] = useState(false);
   const [actuando, setActuando] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState<string | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
 
   useEffect(() => {
@@ -145,6 +147,31 @@ export default function RadarView() {
       toast.error(e.message || 'No se pudo correr el radar');
     } finally {
       setCorriendo(false);
+      doneAct();
+    }
+  }
+
+  // Guardar es la otra mitad de promover: promover se queda con la CUENTA, guardar se queda con
+  // ESTE post. Tarda porque trae el hilo y archiva video y portada a R2 — que es justo lo que el
+  // radar no hace por defecto, para no llenar R2 de cosas que se van a descartar.
+  async function guardar(h: Hallazgo) {
+    if (guardando) return;
+    setGuardando(h.id);
+    const doneAct = activity.begin(`Guardando el post de @${h.creador}…`);
+    try {
+      const res = await fetch('/api/radar/guardar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: h.id }),
+      });
+      const d = await res.json();
+      if (!res.ok || d.error) throw new Error(d.error || 'No se pudo guardar');
+      toast.success(`Guardado en Orgánico como ${d.codigo}. Pégalo en el buscador para abrirlo.`);
+      setItems((prev) => prev.map((x) => (x.id === h.id ? { ...x, guardado: true } : x)));
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo guardar');
+    } finally {
+      setGuardando(null);
       doneAct();
     }
   }
@@ -279,7 +306,7 @@ export default function RadarView() {
                   return (
                     <article
                       key={h.id}
-                      className={`rounded-lg border bg-white p-3 ${h.descartado ? 'border-line opacity-60' : h.promovido ? 'border-accent/40' : 'border-line'}`}
+                      className={`rounded-lg border bg-white p-3 ${h.descartado ? 'border-line opacity-60' : h.guardado || h.promovido ? 'border-accent/40' : 'border-line'}`}
                     >
                       <div className="flex items-start gap-3">
                         {h.thumbnail && (
@@ -334,12 +361,30 @@ export default function RadarView() {
                         </div>
 
                         <div className="flex flex-col gap-1 shrink-0">
+                          {/* Guardar ESTE post (lo trae completo y lo archiva a R2) vs. seguir la
+                              CUENTA. Son intenciones distintas y por eso son dos botones. */}
+                          {h.guardado ? (
+                            <span className="text-[11px] px-2 h-7 leading-7 text-accent" title="Ya está en Orgánico, con su video y su hilo">
+                              ✓ guardado
+                            </span>
+                          ) : (
+                            !h.descartado && (
+                              <button
+                                onClick={() => guardar(h)}
+                                disabled={guardando === h.id}
+                                className="text-[11px] px-2 h-7 rounded-md bg-accent text-white font-medium disabled:opacity-60"
+                                title="Traer el post completo (hilo + video y portada en R2) y guardarlo en Orgánico, donde se puede reproducir, capturar frames y descargar"
+                              >
+                                {guardando === h.id ? 'Guardando…' : '💾 Guardar'}
+                              </button>
+                            )
+                          )}
                           {!h.promovido && !h.descartado && (
                             <button
                               onClick={() => accion(h, 'promover')}
                               disabled={actuando === h.id}
-                              className="text-[11px] px-2 h-7 rounded-md bg-accent text-white font-medium disabled:opacity-60"
-                              title={`Añadir @${h.creador} a Fuentes → Cuentas X: a partir de ahí se scrapea y archiva como las demás`}
+                              className="text-[11px] px-2 h-7 rounded-md border border-line hover:bg-gray-50 disabled:opacity-60"
+                              title={`Seguir a @${h.creador}: se añade a Fuentes → Cuentas X y a partir de ahí se scrapea solo`}
                             >
                               ＋ Fuentes
                             </button>
