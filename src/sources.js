@@ -404,3 +404,41 @@ export async function createXCreator(username) {
   if (error) throw new Error(error.message);
   return { recordId: data.id, username: limpio, resultsLimit: config.xDefaultMaxResults, lastRun: null, project: '' };
 }
+
+// ---- Radar de X (consultas guardadas) ----
+
+export async function getActiveXBusquedas() {
+  const c = await getClient();
+  const { data, error } = await c.from(config.xBusquedasTable).select('*').eq('activo', true);
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => ({
+    recordId: r.id,
+    consulta: r.consulta,
+    etiqueta: r.etiqueta || r.consulta.slice(0, 40),
+    maxPosts: r.posts_por_corrida || config.xRadarMaxPosts,
+    lastRun: r.ultima_corrida || null,
+  }));
+}
+
+export async function getXBusquedaById(id) {
+  const c = await getClient();
+  const { data, error } = await c.from(config.xBusquedasTable).select('*').eq('id', id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    recordId: data.id,
+    consulta: data.consulta,
+    etiqueta: data.etiqueta || data.consulta.slice(0, 40),
+    maxPosts: data.posts_por_corrida || config.xRadarMaxPosts,
+    lastRun: data.ultima_corrida || null,
+  };
+}
+
+export async function updateXBusquedaLastRun(recordId, isoDate) {
+  const c = await getClient();
+  const { error } = await c
+    .from(config.xBusquedasTable)
+    .update({ ultima_corrida: isoDate })
+    .eq('id', recordId);
+  if (error) throw new Error(error.message);
+}

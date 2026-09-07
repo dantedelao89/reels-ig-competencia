@@ -111,17 +111,20 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
         ? '/api/scrape-tiktok-creator'
         : type === 'x'
         ? '/api/scrape-x-creator'
+        : type === 'x_search'
+        ? '/api/radar-x-busqueda'
         : type === 'yt_search'
         ? '/api/scrape-search'
         : '/api/scrape-ad';
     const unidad =
-      type === 'ig' ? 'reels' : type === 'fb_advertiser' ? 'anuncios' : type === 'x' ? 'posts' : 'videos';
+      type === 'ig' ? 'reels' : type === 'fb_advertiser' ? 'anuncios' : type === 'x' || type === 'x_search' ? 'posts' : 'videos';
     const doneAct = activity.begin(`Scrapeando ${unidad}: ${row.key.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}…`);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: row.key }),
+        // El radar se dispara por id de consulta; las demás fuentes por su clave (URL o @usuario).
+        body: JSON.stringify(type === 'x_search' ? { id: row.id } : { url: row.key }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al scrapear');
@@ -419,7 +422,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>
                   <td className="p-2 text-center whitespace-nowrap">
-                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig' || type === 'yt_search' || type === 'tiktok' || type === 'x') && (
+                    {(type === 'fb_advertiser' || type === 'yt_channel' || type === 'ig' || type === 'yt_search' || type === 'tiktok' || type === 'x' || type === 'x_search') && (
                       <button
                         onClick={() => scrapeOne(r)}
                         disabled={scrapingId === r.id}
@@ -433,6 +436,8 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                             ? 'Re-scrapear los videos de esta cuenta de TikTok ahora'
                             : type === 'x'
                             ? 'Re-scrapear los posts de esta cuenta de X ahora'
+                            : type === 'x_search'
+                            ? 'Correr esta consulta del radar ahora'
                             : type === 'yt_search'
                             ? 'Buscar videos recientes de esta palabra clave ahora'
                             : 'Scrapear los anuncios de esta página ahora'

@@ -14,6 +14,7 @@ import SourcesManager from './SourcesManager';
 import AdsView from './AdsView';
 import RefsManager from './RefsManager';
 import StoriesView from './StoriesView';
+import RadarView from './RadarView';
 import { useToast } from './ui/Toast';
 import { useActivity } from './ui/Activity';
 import { CardGridSkeleton } from './ui/Skeleton';
@@ -61,7 +62,7 @@ export default function DashboardClient() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<ContentItem | null>(null);
-  const [section, setSection] = useState<'contenido' | 'fuentes' | 'historias'>('contenido');
+  const [section, setSection] = useState<'contenido' | 'fuentes' | 'historias' | 'radar'>('contenido');
   const [mode, setMode] = useState<'organico' | 'ads'>('organico');
   const [showRefs, setShowRefs] = useState(false); // modal de referencias del regenerador
   // hydrated = ya restauramos la navegación guardada. Hasta entonces no persistimos, para no pisar
@@ -94,7 +95,7 @@ export default function DashboardClient() {
       if (raw) {
         const nav = JSON.parse(raw);
         if (nav.mode === 'ads' || nav.mode === 'organico') setMode(nav.mode);
-        if (['fuentes', 'contenido', 'historias'].includes(nav.section)) setSection(nav.section);
+        if (['fuentes', 'contenido', 'historias', 'radar'].includes(nav.section)) setSection(nav.section);
         if (typeof nav.estado === 'string') setEstado(nav.estado);
         if (typeof nav.adsEstado === 'string') setAdsEstado(nav.adsEstado);
       }
@@ -332,6 +333,7 @@ export default function DashboardClient() {
       <main className="flex-1 min-w-0 px-4 md:px-6 py-5">
         {section === 'fuentes' && <SourcesManager mode={mode} />}
         {section === 'historias' && <StoriesView />}
+        {section === 'radar' && <RadarView />}
         {section === 'contenido' && mode === 'ads' && (
           <AdsView estado={adsEstado} stats={adsStats} onStatsChange={refreshAdsStats} />
         )}

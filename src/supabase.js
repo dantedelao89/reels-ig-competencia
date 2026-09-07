@@ -802,6 +802,57 @@ export async function syncX(posts, ctx = {}) {
   return { synced, rehosted, videos };
 }
 
+// --- Radar de X (descubrimiento por consultas) ---
+
+export async function getExistingRadarIds() {
+  return getExistingColumn(config.xRadarTable, 'post_id');
+}
+
+function radarRow(p, { busqueda, scrapedAtIso }) {
+  return {
+    post_id: String(p.id),
+    busqueda_id: busqueda?.recordId || null,
+    busqueda_etiqueta: busqueda?.etiqueta || null,
+    creador: p.handle || null,
+    creador_nombre: p.nombre || null,
+    creador_url: p.handle ? `https://x.com/${p.handle}` : null,
+    url: p.url || null,
+    caption: p.texto || null,
+    respuestas_autor: p.respuestasAutor?.length
+      ? p.respuestasAutor.map((r) => ({ id: r.id, texto: r.texto, url: r.url }))
+      : null,
+    fecha_publicacion: p.fecha ? new Date(p.fecha).toISOString() : null,
+    // El día en CDMX, resuelto AQUÍ: como columna generada no se puede (`at time zone` es STABLE),
+    // y resolverlo en el navegador haría que el radar cambiara de día según quién lo mire.
+    dia: p.fecha ? diaDe(new Date(p.fecha).getTime() / 1000) : null,
+    views: p.views,
+    likes: p.likes,
+    comentarios: p.respuestas,
+    retweets: p.retweets,
+    guardados: p.guardados,
+    duracion_seg: p.duracionSeg,
+    tipo: p.videoUrl ? 'Video' : p.fotos.length ? 'Imagen' : 'Texto',
+    hashtags: (p.hashtags || []).map((h) => `#${h}`).join(' ') || null,
+    links_externos: (p.linksExternos || []).join(' ') || null,
+    idioma: p.idioma || null,
+    conversation_id: p.conversationId || null,
+    // Solo la URL original: el radar NO archiva a R2. Es un firehose del que casi todo se descarta;
+    // lo que valga la pena se promueve a Fuentes y entra por el pipeline orgánico, que sí archiva.
+    thumbnail_original: p.videoThumb || p.fotos[0] || null,
+    video_original: p.videoUrl || null,
+    scrapeado_en: scrapedAtIso,
+  };
+}
+
+// Inserta lo que trajo una consulta. No toca `promovido`/`descartado`: son la capa de decisión.
+export async function syncXRadar(posts, ctx = {}) {
+  if (!enabled) throw new Error('Supabase no está configurado');
+  if (!posts?.length) return { synced: 0 };
+  const rows = posts.filter((p) => p.id).map((p) => radarRow(p, ctx));
+  const synced = await upsert(config.xRadarTable, rows, 'post_id');
+  return { synced };
+}
+
 // --- Historias de Instagram (archivo permanente) ---
 
 // El día al que pertenece una historia, en horario de CDMX. Se resuelve AQUÍ y no en el navegador

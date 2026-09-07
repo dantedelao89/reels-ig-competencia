@@ -116,6 +116,21 @@ export async function scrapeXPosts(postIds) {
   return normalizarLista(items, '');
 }
 
+// Búsqueda de X con toda su sintaxis avanzada. El actor la pasa tal cual, y eso es lo que hace
+// útil al radar: `min_faves:300`, `lang:es`, `-filter:replies`, `since:`… Comprobado que SÍ se
+// aplican (con `min_faves:500`, 20 de 20 resultados lo cumplían).
+//
+// `search_type: 'Latest'` y no 'Top': el radar quiere lo que está saliendo AHORA. Con 'Top' salen
+// los virales de siempre, que ya se vieron.
+export async function scrapeXQuery(consulta, { maxPosts } = {}) {
+  const items = await runActorItems(config.xActorId, {
+    query: consulta,
+    search_type: 'Latest',
+    max_posts: maxPosts || config.xRadarMaxPosts,
+  });
+  return normalizarLista(items, '');
+}
+
 // Todo lo que el AUTOR escribió dentro de su propia conversación, además del post original.
 // Son dos cosas distintas y en X se ven parecido:
 //

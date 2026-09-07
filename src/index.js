@@ -18,6 +18,7 @@ import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } fro
 import { runScrapeInstagramStories } from './scrapeStories.js';
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
 import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
+import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
 import { getTiktokMediaUrl } from './tiktokApify.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
@@ -507,6 +508,32 @@ app.post('/scrape-x-url', async (req, res) => {
     res.json(await runScrapeXUrl(String(url).trim()));
   } catch (err) {
     console.error('[X url] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Radar de X (consultas guardadas) ---
+
+// Corre TODAS las consultas activas.
+app.post('/radar-x', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  try {
+    res.json(await runRadarX());
+  } catch (err) {
+    console.error('[radar] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Corre UNA consulta (botón por fila en Fuentes).
+app.post('/radar-x-busqueda', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ ok: false, error: 'Falta id de la consulta' });
+  try {
+    res.json(await runRadarXBusqueda(String(id).trim()));
+  } catch (err) {
+    console.error('[radar consulta] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

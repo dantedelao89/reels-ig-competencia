@@ -1,7 +1,7 @@
 // Definición de las 4 fuentes que se gestionan desde DISECTA. Supabase es la fuente única:
 // estos mapeos coinciden con las tablas/columnas que lee el scraper (src/sources.js).
 
-export type SourceType = 'ig' | 'tiktok' | 'x' | 'yt_channel' | 'yt_search' | 'fb_advertiser';
+export type SourceType = 'ig' | 'tiktok' | 'x' | 'x_search' | 'yt_channel' | 'yt_search' | 'fb_advertiser';
 
 export interface SourceDef {
   label: string;
@@ -38,6 +38,17 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
     keyLabel: '@usuario',
     keyPlaceholder: '@usuario o URL del perfil',
   },
+  x_search: {
+    label: 'Búsquedas X',
+    table: 'x_busquedas',
+    keyColumn: 'consulta',
+    numColumn: 'posts_por_corrida',
+    keyLabel: 'Consulta de X',
+    // Se muestra la sintaxis en el placeholder porque es lo que separa señal de ruido: sin
+    // operadores, una consulta de hashtags devuelve casi todo con menos de 10 likes.
+    keyPlaceholder: 'ej. ("just released" OR "introducing") (AI OR LLM) min_faves:300 -filter:replies',
+    nameColumn: 'etiqueta',
+  },
   yt_channel: {
     label: 'Canales YT',
     table: 'yt_channels',
@@ -65,7 +76,7 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
   },
 };
 
-export const SOURCE_ORDER: SourceType[] = ['ig', 'tiktok', 'x', 'yt_channel', 'yt_search'];
+export const SOURCE_ORDER: SourceType[] = ['ig', 'tiktok', 'x', 'x_search', 'yt_channel', 'yt_search'];
 export const ADS_SOURCE_ORDER: SourceType[] = ['fb_advertiser'];
 export const ALL_SOURCE_ORDER: SourceType[] = [...SOURCE_ORDER, ...ADS_SOURCE_ORDER];
 
@@ -92,6 +103,10 @@ export function normalizeKey(type: SourceType, key: string): string {
     // Igual que TikTok, tolerando la URL del perfil en sus dos dominios.
     const deUrl = k.match(/(?:twitter|x)\.com\/([^/?\s]+)/i);
     k = (deUrl ? deUrl[1] : k).replace(/^@/, '').toLowerCase();
+  } else if (type === 'x_search') {
+    // La consulta se compara tal cual (sin bajar a minúsculas los operadores cambiaría el sentido
+    // de cosas como lang:ES), solo normalizando espacios.
+    k = k.replace(/\s+/g, ' ').toLowerCase();
   } else if (type === 'yt_channel' || type === 'fb_advertiser') {
     k = k
       .toLowerCase()

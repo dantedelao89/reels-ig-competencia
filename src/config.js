@@ -95,6 +95,9 @@ export const config = {
   // extra): solo de los que tienen media y poco texto, que es la firma de "el prompt está en otro
   // lado". Al pegar un link suelto sí se piden siempre — es un solo post y es lo que Dante hace.
   xLargoCompleto: Number(process.env.X_LARGO_COMPLETO || 600),
+  // Posts por consulta del radar. 30 es suficiente para ver el pulso del día sin inflar la base:
+  // el dedup por post_id hace que las corridas siguientes solo traigan lo nuevo.
+  xRadarMaxPosts: Number(process.env.X_RADAR_MAX_POSTS || 30),
 
   // Secreto para proteger el endpoint manual POST /scrape
   triggerSecret: process.env.TRIGGER_SECRET || '',
@@ -154,6 +157,10 @@ export const config = {
   igStoriesTable: process.env.SUPABASE_IG_STORIES_TABLE || 'ig_stories',
   tiktokVideosTable: process.env.SUPABASE_TIKTOK_TABLE || 'tiktok_videos',
   xPostsTable: process.env.SUPABASE_X_TABLE || 'x_posts',
+  // Radar: consultas guardadas de X y lo que traen. Tabla aparte de x_posts porque son cosas
+  // distintas — el radar es descubrimiento desechable, x_posts son las cuentas que Dante sigue.
+  xRadarTable: process.env.SUPABASE_X_RADAR_TABLE || 'x_radar',
+  xBusquedasTable: process.env.SUPABASE_X_BUSQUEDAS_TABLE || 'x_busquedas',
 
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
