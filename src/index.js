@@ -502,10 +502,12 @@ app.post('/scrape-x-creator', async (req, res) => {
 // UN post de X por su URL ("＋Agregar por URL" y Slack).
 app.post('/scrape-x-url', async (req, res) => {
   if (requireSecret(req, res)) return;
-  const { url } = req.body || {};
+  const { url, altaFuente } = req.body || {};
   if (!url) return res.status(400).json({ ok: false, error: 'Falta url' });
   try {
-    res.json(await runScrapeXUrl(String(url).trim()));
+    // altaFuente=false lo manda el radar al guardar un hallazgo: quedarse con un post NO debe
+    // meter a su autor en Fuentes. Por defecto true, que es lo que espera "＋Agregar por URL".
+    res.json(await runScrapeXUrl(String(url).trim(), { altaFuente: altaFuente !== false }));
   } catch (err) {
     console.error('[X url] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
