@@ -58,7 +58,10 @@ export async function POST(req: NextRequest) {
     }
 
     const row: Record<string, any> = { [d.keyColumn]: body.key.trim(), activo: body.activo !== false };
-    if (body.proyecto) row.proyecto = body.proyecto;
+    // Solo donde la tabla lo tiene: x_busquedas no tiene columna `proyecto` y el insert fallaría.
+    if (body.proyecto && !d.sinProyecto) row.proyecto = body.proyecto;
+    // Etiqueta legible que escribe el usuario (las búsquedas del radar: "Lanzamientos IA").
+    if (body.nombre && d.nameColumn) row[d.nameColumn] = String(body.nombre).trim();
     if (body.num != null && body.num !== '') row[d.numColumn] = Number(body.num);
     const { data, error } = await c.from(d.table).insert(row).select().single();
     if (error) throw new Error(error.message);

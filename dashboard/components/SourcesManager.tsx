@@ -64,6 +64,7 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
 
   const [newKey, setNewKey] = useState('');
   const [newProyecto, setNewProyecto] = useState('');
+  const [newNombre, setNewNombre] = useState('');
   const [newNum, setNewNum] = useState('');
   const [adding, setAdding] = useState(false);
   const [scrapingId, setScrapingId] = useState('');
@@ -205,13 +206,15 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
       const res = await fetch('/api/sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, key, proyecto: newProyecto, num: newNum }),
+        // `proyecto` solo va donde la tabla lo tiene: mandarlo a x_busquedas reventaba el insert.
+        body: JSON.stringify({ type, key, num: newNum, nombre: newNombre || undefined, ...(def.sinProyecto ? {} : { proyecto: newProyecto }) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al añadir');
       setRecords((r) => [data.record, ...r]);
       rememberProject(newProyecto);
       setNewKey('');
+      setNewNombre('');
       setNewProyecto('');
       setNewNum('');
       toast.success('Fuente añadida');
@@ -300,6 +303,20 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
             className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
           />
         </div>
+        {def.nombreEditable && (
+          <div className="w-40">
+            <label className="text-xs text-muted block mb-1">Etiqueta</label>
+            <input
+              value={newNombre}
+              onChange={(e) => setNewNombre(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && add()}
+              placeholder="ej. Lanzamientos IA"
+              title="Nombre corto para reconocerla en el Radar. Sin él se muestra la consulta entera."
+              className="w-full h-9 px-2 text-sm border border-line rounded-md bg-white outline-none focus:border-accent"
+            />
+          </div>
+        )}
+        {!def.sinProyecto && (
         <div className="w-44">
           <label className="text-xs text-muted block mb-1">Proyecto</label>
           {/* Combobox: se escribe libremente un proyecto nuevo, o se elige uno existente de las
@@ -317,8 +334,9 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
             ))}
           </datalist>
         </div>
-        <div className="w-28">
-          <label className="text-xs text-muted block mb-1">{type === 'ig' ? 'Reels' : 'Videos'}/corrida</label>
+        )}
+        <div className={def.numLabel ? 'w-40' : 'w-28'}>
+          <label className="text-xs text-muted block mb-1">{def.numLabel || `${type === 'ig' ? 'Reels' : 'Videos'}/corrida`}</label>
           <input
             value={newNum}
             onChange={(e) => setNewNum(e.target.value.replace(/[^0-9]/g, ''))}

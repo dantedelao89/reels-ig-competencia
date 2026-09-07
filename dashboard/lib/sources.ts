@@ -11,6 +11,13 @@ export interface SourceDef {
   keyLabel: string;
   keyPlaceholder: string;
   nameColumn?: string; // columna con el nombre legible (ej. anunciantes: 'marca')
+  // Etiqueta de la columna numérica, para no decirle "Videos/corrida" a una búsqueda de X.
+  numLabel?: string;
+  // Si la tabla NO tiene columna `proyecto`, el formulario no debe mandarlo: el insert fallaría
+  // con "column … does not exist". Le pasa a las búsquedas del radar.
+  sinProyecto?: boolean;
+  // El nombre legible lo escribe el usuario (no lo rellena el scraper, como sí hace 'marca').
+  nombreEditable?: boolean;
 }
 
 export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
@@ -37,12 +44,18 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
     numColumn: 'posts_por_corrida',
     keyLabel: '@usuario',
     keyPlaceholder: '@usuario o URL del perfil',
+    numLabel: 'Posts/corrida',
   },
   x_search: {
     label: 'Búsquedas X',
     table: 'x_busquedas',
     keyColumn: 'consulta',
     numColumn: 'posts_por_corrida',
+    // El actor devuelve en bloques de 20 y redondea HACIA ARRIBA (medido: pedir 10 da 20, pedir 30
+    // da 40, pedir 60 da 60). Así que el número es un mínimo, no un tope, y el piso real es 20.
+    numLabel: 'Posts/corrida (de 20 en 20)',
+    sinProyecto: true,
+    nombreEditable: true,
     keyLabel: 'Consulta de X',
     // Se muestra la sintaxis en el placeholder porque es lo que separa señal de ruido: sin
     // operadores, una consulta de hashtags devuelve casi todo con menos de 10 likes.
