@@ -50,7 +50,19 @@ function RowProjectSelect({
 
 export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico' | 'ads' }) {
   const order = mode === 'ads' ? ADS_SOURCE_ORDER : SOURCE_ORDER;
-  const [type, setType] = useState<SourceType>(order[0]);
+  // Si se llegó desde el Radar con una pestaña pedida, se abre esa. Se consume al leerla para que
+  // la siguiente visita a Fuentes vuelva a empezar por la primera.
+  const [type, setType] = useState<SourceType>(() => {
+    if (typeof window === 'undefined') return order[0];
+    try {
+      const pedido = localStorage.getItem('disecta.fuentesTipo');
+      if (pedido) {
+        localStorage.removeItem('disecta.fuentesTipo');
+        if ((order as string[]).includes(pedido)) return pedido as SourceType;
+      }
+    } catch {}
+    return order[0];
+  });
   useEffect(() => {
     setType(order[0]);
   }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps

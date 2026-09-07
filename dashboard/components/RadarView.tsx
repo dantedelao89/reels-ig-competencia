@@ -16,6 +16,11 @@ import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
 import SearchSelect from './ui/SearchSelect';
 
+interface Props {
+  // Para llevar a gestionar las consultas sin que el usuario tenga que adivinar dónde están.
+  onGestionarConsultas?: () => void;
+}
+
 interface RespuestaAutor { id: string; texto: string; url: string | null }
 
 interface Hallazgo {
@@ -67,7 +72,7 @@ function desdeHace(dias: number): string {
   );
 }
 
-export default function RadarView() {
+export default function RadarView({ onGestionarConsultas }: Props) {
   const toast = useToast();
   const activity = useActivity();
 
@@ -267,6 +272,17 @@ export default function RadarView() {
         <span className="flex-1" />
         <span className="text-xs text-muted tabular-nums">{total} hallazgos</span>
 
+        {/* El acceso a las consultas vive aquí y no solo en Fuentes: estando en el Radar, tener que
+            adivinar en qué otra sección se editan los hashtags era la friccion principal. */}
+        {onGestionarConsultas && (
+          <button
+            onClick={onGestionarConsultas}
+            className="h-9 px-3 text-sm rounded-lg border border-line bg-white hover:bg-gray-50"
+            title="Añadir, editar o quitar las palabras clave y hashtags que se rastrean"
+          >
+            ⚙️ Consultas ({busquedas.length})
+          </button>
+        )}
         <AsyncButton onClick={correrRadar} loading={corriendo} loadingLabel="Rastreando…" title="Correr todas las consultas activas de X">
           📡 Rastrear ahora
         </AsyncButton>
@@ -285,8 +301,8 @@ export default function RadarView() {
               ? 'No hay hallazgos con estos filtros. Baja el umbral de likes, amplía el rango o rastrea ahora.'
               : 'Primero agrega consultas en Fuentes → Búsquedas X. Una consulta con operadores (min_faves:300, lang:es) rinde mucho más que un hashtag suelto.'
           }
-          actionLabel={busquedas.length ? 'Rastrear ahora' : undefined}
-          onAction={busquedas.length ? correrRadar : undefined}
+          actionLabel={busquedas.length ? 'Rastrear ahora' : 'Añadir una consulta'}
+          onAction={busquedas.length ? correrRadar : onGestionarConsultas}
         />
       ) : (
         <>

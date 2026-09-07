@@ -333,7 +333,15 @@ export default function DashboardClient() {
       <main className="flex-1 min-w-0 px-4 md:px-6 py-5">
         {section === 'fuentes' && <SourcesManager mode={mode} />}
         {section === 'historias' && <StoriesView />}
-        {section === 'radar' && <RadarView />}
+        {section === 'radar' && (
+          <RadarView
+            onGestionarConsultas={() => {
+              // Deja elegida la pestaña de Búsquedas X para no aterrizar en Creadores IG.
+              try { localStorage.setItem('disecta.fuentesTipo', 'x_search'); } catch {}
+              setSection('fuentes');
+            }}
+          />
+        )}
         {section === 'contenido' && mode === 'ads' && (
           <AdsView estado={adsEstado} stats={adsStats} onStatsChange={refreshAdsStats} />
         )}
