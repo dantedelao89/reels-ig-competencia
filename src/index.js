@@ -16,6 +16,7 @@ import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
 import { runScrapeInstagramStories, runScrapeStoriesAuto } from './scrapeStories.js';
+import { getCreatorsConHistoriasAuto } from './sources.js';
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
 import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
@@ -129,8 +130,19 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 // Estado de los crons: responde "¿está encendido de verdad?" sin tener que leer los logs de
 // arranque de Railway. Hizo falta al activar la captura automática de historias — el endpoint
 // manual funciona con la variable puesta o sin ella, así que no servía para comprobarlo.
-app.get('/crons', (req, res) => {
+app.get('/crons', async (req, res) => {
   if (requireSecret(req, res)) return;
+
+  // Las cuentas marcadas son lo que decide si el cron gasta algo, así que van aquí: el panel de
+  // Historias pinta estado y cuentas con una sola petición. Si la lectura falla se devuelve null
+  // (≠ lista vacía) para que la UI diga "no pude leerlas" en vez de "ninguna", que es mentira.
+  let cuentas = null;
+  try {
+    cuentas = (await getCreatorsConHistoriasAuto()).map((c) => c.username);
+  } catch (err) {
+    console.error('[crons] no se pudieron leer las cuentas en automático:', err.message);
+  }
+
   res.json({
     historias: {
       activo: config.enableStoriesCron,
@@ -140,6 +152,7 @@ app.get('/crons', (req, res) => {
       // Qué llegó de verdad en la variable: distingue "no la puse" de "la puse en el servicio
       // equivocado" de "la escribí distinto", que desde fuera se ven igual.
       variableRecibida: process.env.ENABLE_STORIES_CRON ?? null,
+      cuentas,
     },
     // Los otros dos siguen bajo el interruptor global CRONS_PAUSED del arranque.
     organico: { habilitado: config.enableCron, horario: config.cronSchedule, pausadoGlobalmente: true },

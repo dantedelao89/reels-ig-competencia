@@ -34,7 +34,7 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
       column: 'historias_auto',
       label: 'Historias auto',
       title:
-        'Capturar sus historias solas, 2 veces al día. Solo las cuentas marcadas: el actor cobra por historia, así que cada cuenta encendida suma al gasto.',
+        'Capturar sus historias solas, 2 veces al día. Solo las cuentas marcadas: el actor cobra por historia, así que cada cuenta encendida suma al gasto. El estado del cron y la lista completa están en la sección Historias.',
     },
   },
   tiktok: {

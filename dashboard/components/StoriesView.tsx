@@ -13,6 +13,7 @@ import EmptyState from './ui/EmptyState';
 import ErrorState from './ui/ErrorState';
 import SearchSelect from './ui/SearchSelect';
 import StoryViewer from './stories/StoryViewer';
+import CapturaAuto from './stories/CapturaAuto';
 
 export interface Story {
   id: string;
@@ -208,6 +209,10 @@ export default function StoriesView() {
 
   return (
     <div>
+      {/* Estado de la captura automática, antes de todo lo demás: si algo no se está capturando
+          solo, esto tiene que verse sin buscarlo ni entrar a Railway. */}
+      <CapturaAuto />
+
       {/* Cabecera */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <h2 className="text-lg font-semibold tracking-tight mr-1">📖 Historias</h2>

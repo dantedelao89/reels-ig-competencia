@@ -33,9 +33,13 @@ export const config = {
   // Respaldo de historias: ~$0.10 por cuenta contra los ~$0.008 del primario, así que solo entra
   // cuando el primario no devuelve nada. Devuelve el MISMO story_id, así que el dedup no se rompe.
   // Ponerlo vacío desactiva el respaldo (y con el primario roto, capturar historias deja de servir).
-  // Captura automática de historias. Apagada por defecto: encenderla cuesta dinero de verdad
-  // (ver abajo) y solo debe pasar cuando Dante lo decide con ENABLE_STORIES_CRON=true.
-  enableStoriesCron: flag(process.env.ENABLE_STORIES_CRON),
+  // Captura automática de historias. ENCENDIDA por defecto, y esto es deliberado: el gasto NO lo
+  // decide esta variable, lo deciden las cuentas marcadas con `historias_auto`. Sin ninguna marcada
+  // la corrida sale a los 0 ms sin llamar a Apify, así que un interruptor global adicional no
+  // protegía de nada y sí escondía el estado real: había que entrar a Railway para saber si estaba
+  // encendido, y una variable que no se guardó se ve exactamente igual que una apagada a propósito.
+  // Queda como FRENO DE EMERGENCIA (ENABLE_STORIES_CRON=false mata el cron sin desmarcar cuentas).
+  enableStoriesCron: flag(process.env.ENABLE_STORIES_CRON, true),
   // Dos veces al día. Las historias viven 24 h, así que con 12 h de separación no se escapa
   // ninguna aunque una corrida falle. Más veces al día NO captura más: solo paga de más, porque
   // el actor cobra por historia y en cada pasada vuelve a ver las que siguen vivas.
