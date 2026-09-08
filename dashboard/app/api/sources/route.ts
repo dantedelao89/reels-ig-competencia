@@ -11,6 +11,7 @@ function isValidType(t: any): t is SourceType {
 function toRecord(type: SourceType, row: any) {
   const d = SOURCE_DEFS[type];
   return {
+    ...(d.extraBool ? { extra: !!row[d.extraBool.column] } : {}),
     id: row.id,
     key: (row[d.keyColumn] ?? '').toString(),
     name: d.nameColumn ? (row[d.nameColumn] ?? null) : null,
@@ -81,6 +82,9 @@ export async function PATCH(req: NextRequest) {
   if (body.activo !== undefined) row.activo = !!body.activo;
   if (body.proyecto !== undefined) row.proyecto = body.proyecto;
   if (body.num !== undefined) row[d.numColumn] = body.num === '' || body.num == null ? null : Number(body.num);
+  // Columna booleana extra de la fuente (IG: historias_auto). Solo se escribe si esa fuente la
+  // declara, para no inventar columnas en tablas que no la tienen.
+  if (body.extra !== undefined && d.extraBool) row[d.extraBool.column] = !!body.extra;
   try {
     const { data, error } = await getSupabase().from(d.table).update(row).eq('id', id).select().single();
     if (error) throw new Error(error.message);

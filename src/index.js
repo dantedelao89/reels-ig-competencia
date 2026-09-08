@@ -15,7 +15,7 @@ import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
-import { runScrapeInstagramStories } from './scrapeStories.js';
+import { runScrapeInstagramStories, runScrapeStoriesAuto } from './scrapeStories.js';
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
 import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
@@ -452,6 +452,18 @@ app.post('/scrape-stories', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('[historias] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Dispara la captura de TODAS las cuentas marcadas con historias_auto. Es lo mismo que hace el
+// cron, expuesto a mano para poder probarlo sin esperar al horario.
+app.post('/scrape-stories-auto', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  try {
+    res.json(await runScrapeStoriesAuto());
+  } catch (err) {
+    console.error('[historias auto] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -970,6 +982,31 @@ app.listen(config.port, () => {
   // Para REACTIVAR: cambiar esta constante a false (o mejor, quitarla y usar ENABLE_CRON en Railway).
   const CRONS_PAUSED = true;
   if (CRONS_PAUSED) console.log('⏸️  Crons automáticos PAUSADOS (orgánico + ads). Los scrapes manuales siguen activos.');
+
+  // Cron de HISTORIAS: deliberadamente fuera de CRONS_PAUSED. Ese interruptor pausa el orgánico y
+  // los ads; las historias son el único caso donde no capturar a tiempo pierde el contenido para
+  // siempre (caducan en 24 h), así que se gobierna solo, con su propia variable y apagado por
+  // defecto. Solo toca las cuentas marcadas con historias_auto, no las 167 de Fuentes.
+  if (config.enableStoriesCron) {
+    if (cron.validate(config.storiesCronSchedule)) {
+      cron.schedule(
+        config.storiesCronSchedule,
+        async () => {
+          console.log(`[cron-historias] capturando (${config.storiesCronSchedule} ${config.cronTimezone})`);
+          try {
+            const result = await runScrapeStoriesAuto();
+            console.log('[cron-historias] resultado:', JSON.stringify(result));
+          } catch (err) {
+            console.error('[cron-historias] error:', err.message);
+          }
+        },
+        { timezone: config.cronTimezone }
+      );
+      console.log(`📖 Cron de historias ACTIVO: ${config.storiesCronSchedule} (${config.cronTimezone})`);
+    } else {
+      console.error(`STORIES_CRON_SCHEDULE inválido: "${config.storiesCronSchedule}" — cron de historias desactivado`);
+    }
+  }
 
   // Cron del pipeline de ads (8am CDMX), independiente del orgánico.
   // enableAdsCron permite apagar SOLO esta corrida diaria sin tocar el scrape manual.

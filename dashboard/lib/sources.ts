@@ -18,6 +18,8 @@ export interface SourceDef {
   sinProyecto?: boolean;
   // El nombre legible lo escribe el usuario (no lo rellena el scraper, como sí hace 'marca').
   nombreEditable?: boolean;
+  // Columna booleana extra que se edita desde la tabla (IG: captura automática de historias).
+  extraBool?: { column: string; label: string; title: string };
 }
 
 export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
@@ -28,6 +30,12 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
     numColumn: 'reels_por_corrida',
     keyLabel: '@usuario',
     keyPlaceholder: '@usuario',
+    extraBool: {
+      column: 'historias_auto',
+      label: 'Historias auto',
+      title:
+        'Capturar sus historias solas, 2 veces al día. Solo las cuentas marcadas: el actor cobra por historia, así que cada cuenta encendida suma al gasto.',
+    },
   },
   tiktok: {
     label: 'Cuentas TikTok',
@@ -101,6 +109,7 @@ export interface SourceRecord {
   proyecto: string | null;
   num: number | null;
   ultimaCorrida: string | null;
+  extra?: boolean; // valor de extraBool (IG: historias_auto)
 }
 
 // Normaliza la "key" para comparar duplicados (mismo creador/canal escrito distinto).

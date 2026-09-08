@@ -237,13 +237,14 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
     }
   }
 
-  async function patch(id: string, fields: Partial<{ activo: boolean; proyecto: string; num: string }>) {
+  async function patch(id: string, fields: Partial<{ activo: boolean; proyecto: string; num: string; extra: boolean }>) {
     setRecords((r) =>
       r.map((x) =>
         x.id === id
           ? {
               ...x,
               ...('activo' in fields ? { activo: fields.activo! } : {}),
+              ...('extra' in fields ? { extra: fields.extra! } : {}),
               ...('proyecto' in fields ? { proyecto: fields.proyecto! } : {}),
               ...('num' in fields ? { num: fields.num === '' ? null : Number(fields.num) } : {}),
             }
@@ -407,6 +408,9 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                 <th className="text-left p-2">{type === 'fb_advertiser' ? 'Anunciante' : def.keyLabel}</th>
                 <th className="text-left p-2 w-44">Proyecto</th>
                 <th className="text-left p-2 w-24">{type === 'ig' ? 'Reels' : 'Videos'}</th>
+                {def.extraBool && (
+                  <th className="text-left p-2 w-28" title={def.extraBool.title}>{def.extraBool.label}</th>
+                )}
                 <th className="text-left p-2 w-28">Última corrida</th>
                 <th className="p-2 w-10"></th>
               </tr>
@@ -448,6 +452,19 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                       className="w-16 h-7 px-1.5 text-xs border border-transparent hover:border-line focus:border-accent rounded outline-none bg-transparent"
                     />
                   </td>
+                  {def.extraBool && (
+                    <td className="p-2">
+                      <button
+                        onClick={() => patch(r.id, { extra: !r.extra })}
+                        className={`text-xs px-2 py-1 rounded-md ${
+                          r.extra ? 'bg-accent-soft text-accent font-medium' : 'bg-gray-100 text-gray-500'
+                        }`}
+                        title={def.extraBool.title}
+                      >
+                        {r.extra ? '📖 Auto' : 'Manual'}
+                      </button>
+                    </td>
+                  )}
                   <td className="p-2 text-muted whitespace-nowrap">
                     {r.ultimaCorrida ? fmtDateShort(r.ultimaCorrida) : 'nunca'}
                   </td>

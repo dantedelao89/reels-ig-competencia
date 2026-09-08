@@ -69,6 +69,23 @@ export async function createCreator(username) {
   return { recordId: data.id, username, resultsLimit: config.defaultResultsLimit, lastRun: null, project: '' };
 }
 
+// Cuentas de IG marcadas para captura AUTOMÁTICA de historias. Es un subconjunto explícito de
+// las fuentes: `activo` gobierna el scrapeo de reels, `historias_auto` el de historias, y son
+// decisiones distintas — hay cuentas cuyos reels interesan y cuyas historias no.
+export async function getCreatorsConHistoriasAuto() {
+  const c = await getClient();
+  const { data, error } = await c
+    .from(config.igCreatorsTable)
+    .select('*')
+    .eq('historias_auto', true);
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => ({
+    recordId: r.id,
+    username: (r.username || '').replace(/^@/, '').toLowerCase(),
+    project: r.proyecto || '',
+  }));
+}
+
 // ---- TikTok (cuentas) ----
 
 export async function getActiveTiktokCreators() {

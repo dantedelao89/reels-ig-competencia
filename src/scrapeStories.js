@@ -6,7 +6,7 @@
 
 import { config } from './config.js';
 import { scrapeStories, fallóElActor } from './apify.js';
-import { getCreatorByUsername, updateCreatorStoriesRun } from './sources.js';
+import { getCreatorByUsername, updateCreatorStoriesRun, getCreatorsConHistoriasAuto } from './sources.js';
 import { getExistingStoryIds, syncStories } from './supabase.js';
 
 // Margen del dedup: una historia de IG no puede tener más de 24h, así que 3 días sobran y la
@@ -133,4 +133,54 @@ async function marcarCorrida(recordId, iso) {
   } catch (e) {
     console.error(`[historias lastRun] ${e.message}`);
   }
+}
+
+// Captura automática de las cuentas marcadas con `historias_auto`.
+//
+// Se corre sola dos veces al día (ver storiesCronSchedule). Las historias viven 24 h, así que con
+// 12 h de separación no se escapa ninguna aunque una pasada falle; correrla más veces NO captura
+// más y sí paga más, porque el actor cobra POR HISTORIA y en cada pasada vuelve a ver las que
+// siguen vivas. El dedup por story_id es nuestro, no suyo: nos ahorra guardar duplicados, no el
+// costo de que las devuelva.
+//
+// Las cuentas se procesan una por una a propósito: el actor cobra por cuenta+historia, así que un
+// fallo en una no debe abortar las demás ni repetir lo ya pagado.
+export async function runScrapeStoriesAuto() {
+  const startedAt = new Date().toISOString();
+  let cuentas;
+  try {
+    cuentas = await getCreatorsConHistoriasAuto();
+  } catch (err) {
+    console.error('[historias auto] no se pudieron leer las cuentas:', err.message);
+    return { ok: false, error: err.message, cuentas: 0, nuevas: 0, details: [] };
+  }
+  if (!cuentas.length) {
+    console.log('[historias auto] ninguna cuenta marcada: no hay nada que capturar');
+    return { ok: true, cuentas: 0, nuevas: 0, details: [] };
+  }
+
+  const details = [];
+  let nuevas = 0;
+  let costo = 0;
+  for (const c of cuentas) {
+    try {
+      const r = await runScrapeInstagramStories(c.username);
+      nuevas += r.nuevas || 0;
+      costo += r.costoEstimadoUsd || 0;
+      details.push({
+        cuenta: c.username,
+        encontradas: r.encontradas ?? 0,
+        nuevas: r.nuevas ?? 0,
+        error: r.ok === false ? r.error : undefined,
+        mensaje: r.mensaje,
+      });
+    } catch (err) {
+      console.error(`[historias auto ${c.username}] ERROR:`, err.message);
+      details.push({ cuenta: c.username, error: err.message });
+    }
+  }
+  console.log(
+    `[historias auto] ${cuentas.length} cuentas · ${nuevas} historias nuevas · ~$${costo.toFixed(4)}`
+  );
+  return { ok: true, startedAt, cuentas: cuentas.length, nuevas, costoEstimadoUsd: Math.round(costo * 10000) / 10000, details };
 }

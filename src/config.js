@@ -25,6 +25,13 @@ export const config = {
   // Respaldo de historias: ~$0.10 por cuenta contra los ~$0.008 del primario, así que solo entra
   // cuando el primario no devuelve nada. Devuelve el MISMO story_id, así que el dedup no se rompe.
   // Ponerlo vacío desactiva el respaldo (y con el primario roto, capturar historias deja de servir).
+  // Captura automática de historias. Apagada por defecto: encenderla cuesta dinero de verdad
+  // (ver abajo) y solo debe pasar cuando Dante lo decide con ENABLE_STORIES_CRON=true.
+  enableStoriesCron: process.env.ENABLE_STORIES_CRON === 'true',
+  // Dos veces al día. Las historias viven 24 h, así que con 12 h de separación no se escapa
+  // ninguna aunque una corrida falle. Más veces al día NO captura más: solo paga de más, porque
+  // el actor cobra por historia y en cada pasada vuelve a ver las que siguen vivas.
+  storiesCronSchedule: process.env.STORIES_CRON_SCHEDULE || '0 9,21 * * *',
   storiesFallbackActorId:
     process.env.APIFY_STORIES_FALLBACK_ACTOR ?? 'datavoyantlab/advanced-instagram-stories-scraper',
 
