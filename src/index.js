@@ -126,6 +126,24 @@ function formatResult(r) {
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
+// Estado de los crons: responde "¿está encendido de verdad?" sin tener que leer los logs de
+// arranque de Railway. Hizo falta al activar la captura automática de historias — el endpoint
+// manual funciona con la variable puesta o sin ella, así que no servía para comprobarlo.
+app.get('/crons', (req, res) => {
+  if (requireSecret(req, res)) return;
+  res.json({
+    historias: {
+      activo: config.enableStoriesCron,
+      horario: config.storiesCronSchedule,
+      zona: config.cronTimezone,
+      valido: cron.validate(config.storiesCronSchedule),
+    },
+    // Los otros dos siguen bajo el interruptor global CRONS_PAUSED del arranque.
+    organico: { habilitado: config.enableCron, horario: config.cronSchedule, pausadoGlobalmente: true },
+    ads: { habilitado: config.enableAds && config.enableAdsCron, horario: config.adsCronSchedule, pausadoGlobalmente: true },
+  });
+});
+
 // Resultado de la última corrida (incluye gasto de Apify). Útil cuando el webhook se corta por timeout.
 app.get('/last-run', (req, res) => {
   if (config.triggerSecret) {
