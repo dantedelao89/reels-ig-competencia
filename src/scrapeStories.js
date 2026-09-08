@@ -14,7 +14,11 @@ import { getExistingStoryIds, syncStories } from './supabase.js';
 const VENTANA_DEDUP_DIAS = 3;
 
 const COSTO_ARRANQUE = 0.0013;
-const COSTO_POR_CUENTA = 0.0065;
+// El actor cobraba PLANO por cuenta (evento `user-scraped`, ~$0.0065) hasta su build del 5 de
+// septiembre de 2026; desde entonces cobra POR HISTORIA (`story-scraped`). Medido: 17 historias
+// costaron $0.0572 con el arranque incluido → ~$0.0033 cada una. Mantener el número viejo hacía
+// que el sistema reportara 7 veces menos de lo que realmente se gastó.
+const COSTO_POR_HISTORIA = 0.0033;
 // El actor de respaldo, medido: ~$0.10 por cuenta (13x el primario).
 const COSTO_RESPALDO_POR_CUENTA = 0.102;
 
@@ -25,7 +29,8 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
     return { ok: false, error: `No se encontró el creador: ${usernameOrUrl}. Agrégalo primero en Fuentes.` };
   }
   const creador = creator.username.replace(/^@/, '').toLowerCase();
-  let costoEstimadoUsd = Math.round((COSTO_ARRANQUE + COSTO_POR_CUENTA) * 10000) / 10000;
+  // Solo el arranque hasta saber cuántas historias trajo: el resto depende de eso.
+  let costoEstimadoUsd = COSTO_ARRANQUE;
 
   let rec;
   try {
@@ -62,6 +67,9 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
   }
 
   const todas = Array.isArray(rec.stories) ? rec.stories.filter((s) => s?.id && s.takenAt) : [];
+  // Se cobra por lo que el actor DEVUELVE, no por lo que guardamos: el dedup es nuestro. Por eso
+  // el costo va sobre `todas`, no sobre las nuevas.
+  costoEstimadoUsd = Math.round((COSTO_ARRANQUE + todas.length * COSTO_POR_HISTORIA) * 10000) / 10000;
   if (!todas.length) {
     console.log(`[historias] ${creador}: sin historias activas (actor ${rec.actor || 'primario'})`);
     await marcarCorrida(creator.recordId, startedAt);
@@ -106,7 +114,7 @@ export async function runScrapeInstagramStories(usernameOrUrl) {
     return { ok: false, error: err.message };
   }
 
-  // El respaldo cuesta ~13x: si corrió, el número que se reporta tiene que decirlo.
+  // El respaldo cobra por CUENTA, no por historia: si corrió él, el número es otro.
   if (rec.actor === 'respaldo') costoEstimadoUsd = COSTO_RESPALDO_POR_CUENTA;
 
   console.log(
