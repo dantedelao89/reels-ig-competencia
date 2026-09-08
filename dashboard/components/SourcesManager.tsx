@@ -409,7 +409,15 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                 <th className="text-left p-2 w-44">Proyecto</th>
                 <th className="text-left p-2 w-24">{type === 'ig' ? 'Reels' : 'Videos'}</th>
                 {def.extraBool && (
-                  <th className="text-left p-2 w-28" title={def.extraBool.title}>{def.extraBool.label}</th>
+                  <th className="text-left p-2 w-28" title={def.extraBool.title}>
+                    {def.extraBool.label}
+                    {/* El contador a la vista: es la forma de saber, sin recorrer 167 filas, si se
+                        encendió algo sin querer. */}
+                    {(() => {
+                      const n = records.filter((x) => x.extra).length;
+                      return n ? <span className="ml-1 text-accent font-medium">({n})</span> : null;
+                    })()}
+                  </th>
                 )}
                 <th className="text-left p-2 w-28">Última corrida</th>
                 <th className="p-2 w-10"></th>
@@ -455,7 +463,17 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
                   {def.extraBool && (
                     <td className="p-2">
                       <button
-                        onClick={() => patch(r.id, { extra: !r.extra })}
+                        onClick={() => {
+                          // Encender cuesta dinero recurrente (~$3/mes por cuenta), así que se
+                          // confirma con el número delante. Apagar no se pregunta: dejar de gastar
+                          // nunca necesita permiso.
+                          if (!r.extra && !confirm(
+                            `¿Capturar las historias de ${r.key} automáticamente, 2 veces al día?\n\n` +
+                            'El actor cobra por historia (~$0.0033), así que una cuenta que publica ' +
+                            'unas 15 al día ronda $3 al mes. Solo se cobran las cuentas marcadas.'
+                          )) return;
+                          patch(r.id, { extra: !r.extra });
+                        }}
                         className={`text-xs px-2 py-1 rounded-md ${
                           r.extra ? 'bg-accent-soft text-accent font-medium' : 'bg-gray-100 text-gray-500'
                         }`}
