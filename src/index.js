@@ -137,6 +137,9 @@ app.get('/crons', (req, res) => {
       horario: config.storiesCronSchedule,
       zona: config.cronTimezone,
       valido: cron.validate(config.storiesCronSchedule),
+      // Qué llegó de verdad en la variable: distingue "no la puse" de "la puse en el servicio
+      // equivocado" de "la escribí distinto", que desde fuera se ven igual.
+      variableRecibida: process.env.ENABLE_STORIES_CRON ?? null,
     },
     // Los otros dos siguen bajo el interruptor global CRONS_PAUSED del arranque.
     organico: { habilitado: config.enableCron, horario: config.cronSchedule, pausadoGlobalmente: true },

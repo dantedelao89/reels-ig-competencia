@@ -1,5 +1,13 @@
 // Carga y valida la configuración desde variables de entorno.
 
+// Lee una variable de entorno como booleano tolerando cómo la escriba un humano.
+// `=== 'true'` a secas rechazaba TRUE, 1, yes o sí, y el síntoma es peor que el bug: la función
+// simplemente no se enciende y no hay ningún error que lo explique.
+function flag(valor, pordefecto = false) {
+  if (valor == null || valor === '') return pordefecto;
+  return /^(true|1|yes|y|si|sí|on)$/i.test(String(valor).trim());
+}
+
 function required(name) {
   const v = process.env[name];
   if (!v) throw new Error(`Falta la variable de entorno requerida: ${name}`);
@@ -27,7 +35,7 @@ export const config = {
   // Ponerlo vacío desactiva el respaldo (y con el primario roto, capturar historias deja de servir).
   // Captura automática de historias. Apagada por defecto: encenderla cuesta dinero de verdad
   // (ver abajo) y solo debe pasar cuando Dante lo decide con ENABLE_STORIES_CRON=true.
-  enableStoriesCron: process.env.ENABLE_STORIES_CRON === 'true',
+  enableStoriesCron: flag(process.env.ENABLE_STORIES_CRON),
   // Dos veces al día. Las historias viven 24 h, así que con 12 h de separación no se escapa
   // ninguna aunque una corrida falle. Más veces al día NO captura más: solo paga de más, porque
   // el actor cobra por historia y en cada pasada vuelve a ver las que siguen vivas.
