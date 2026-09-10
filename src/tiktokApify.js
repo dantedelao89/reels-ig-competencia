@@ -67,9 +67,19 @@ export async function resolveTiktokUrl(url) {
         const det = data?.__DEFAULT_SCOPE__?.['webapp.video-detail'] || {};
         const status = det.statusCode;
         if (status && status !== 0) {
+          // El 10240 es un anuncio. Decir solo "es un anuncio" deja a Dante sin salida, y SÍ la hay
+          // en la mitad de los casos: los Spark Ads son publicaciones orgánicas reales del
+          // anunciante que se promocionan, así que están en su perfil y este mismo scraper los
+          // captura. Los que no tienen arreglo son los creados en el gestor de anuncios y nunca
+          // publicados: TikTok no los expone fuera de la biblioteca europea (su transparencia por
+          // anunciante es solo UE/EEE/RU — no hay MX ni US), así que no existe herramienta que los
+          // saque. El mensaje distingue los dos casos para no mandarlo a buscar lo imposible.
           const motivo =
             status === 10240
-              ? 'es un anuncio (dark post): no está publicado en el perfil del creador, así que no existe en la API pública de TikTok'
+              ? 'es un anuncio y no está publicado en ningún perfil (dark post). ' +
+                'Si fuera un Spark Ad sí estaría: abre el perfil del anunciante, busca ahí ese ' +
+                'mismo video y pega ESE link, que sí se puede guardar. Si no aparece en su perfil, ' +
+                'no hay forma de traerlo: fuera de Europa TikTok no publica los anuncios de nadie'
               : `TikTok lo marca como no disponible (${det.statusMsg || 'privado o borrado'})`;
           return { error: `Ese video no se puede scrapear: ${motivo}`, videoId, status };
         }
