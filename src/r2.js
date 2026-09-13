@@ -143,7 +143,10 @@ function normalizarVideo(bufVideo, bufAudio) {
 
     const esVp9 = info.codecVideo === 'vp9';
     const faltaAudio = !info.tieneAudio && bufAudio?.length;
-    if (!esVp9 && !faltaAudio) return null; // ya estaba bien
+    // Nada que cambiar. Se informa si el archivo de verdad no trae pista de audio: antes el caller lo
+    // deducía de "no me pasaron audioUrl" y marcaba como mudos videos de X y de anuncios que sí tenían
+    // voz (medido 11 sep 2026: uno de esos "sin audio" se transcribió entero).
+    if (!esVp9 && !faltaAudio) return { buffer: null, sinAudio: !info.tieneAudio };
 
     const out = join(dir, 'out.mp4');
     const args = ['-y', '-i', v];
@@ -195,14 +198,14 @@ export async function rehostVideo(sourceUrl, key, { audioUrl = null } = {}) {
       }
     }
     const normalizado = normalizarVideo(body, bufAudio);
-    if (normalizado) {
+    if (normalizado?.buffer) {
       console.log(`[R2 video] ${key}: ${normalizado.motivo} (${Math.round(normalizado.buffer.length / 1024)} KB)`);
       body = normalizado.buffer;
       if (body.length > MAX_VIDEO_BYTES) throw new Error(`video normalizado de ${body.length} bytes excede el límite`);
-    } else if (!bufAudio) {
-      // Ni pista dentro ni audioUrl: el reel es mudo de origen. Se deja constancia para que un
-      // video sin sonido no se confunda con un fallo del archivado.
-      console.log(`[R2 video] ${key}: sin audio (Instagram no sirve pista para este reel)`);
+    } else if (normalizado?.sinAudio) {
+      // Mudo de origen: ffprobe no encontró pista y tampoco llegó audioUrl para unir. Se deja
+      // constancia para que un video sin sonido no se confunda con un fallo del archivado.
+      console.log(`[R2 video] ${key}: sin pista de audio en el original`);
     }
     const { PutObjectCommand } = await import('@aws-sdk/client-s3');
     const c = await getClient();

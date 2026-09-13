@@ -28,15 +28,33 @@ export function verifySlackSignature(req) {
   return ok;
 }
 
+// Todo mensaje a response_url SIN `response_type` sale EFÍMERO: solo lo ve quien lanzó el comando
+// y Slack no lo conserva al recargar ni entre el iPhone y el escritorio. El ACK "🔄 Procesando…" sí
+// es in_channel, así que quedaba fijo en el canal mientras el ✅ se esfumaba: el comando "se quedaba
+// procesando" aunque hubiera terminado bien (medido 13 sep 2026: 6 de 8 /scrape se guardaron y aun
+// así parecían colgados). Por eso aquí todo va al canal salvo que se pida efímero explícito.
+//
+// Tampoco se revisaba la respuesta. Slack acepta como máximo 5 mensajes por response_url en 30 min
+// y rechaza el resto (`used_url`, `expired_url`); ese rechazo no dejaba ni un log. Devuelve si Slack
+// lo aceptó, para que quien llama pueda saberlo.
 export async function slackReply(responseUrl, textOrPayload) {
-  const payload = typeof textOrPayload === 'string' ? { text: textOrPayload } : textOrPayload;
+  const payload = typeof textOrPayload === 'string' ? { text: textOrPayload } : { ...textOrPayload };
+  if (!payload.response_type) payload.response_type = 'in_channel';
   try {
-    await fetch(responseUrl, {
+    const res = await fetch(responseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15_000),
     });
+    const cuerpo = await res.text().catch(() => '');
+    if (!res.ok || /"ok"\s*:\s*false/.test(cuerpo)) {
+      console.error(`[slack] Slack rechazó el mensaje (${res.status}): ${cuerpo.slice(0, 200)}`);
+      return false;
+    }
+    return true;
   } catch (e) {
     console.error('[slack] no se pudo responder vía response_url:', e.message);
+    return false;
   }
 }

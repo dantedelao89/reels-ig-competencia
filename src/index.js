@@ -809,8 +809,14 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
 app.post('/slack/scrape', slackFormParser, async (req, res) => {
   if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
 
-  const text = (req.body?.text || '').trim();
-  console.log(`[slack /scrape] recibido: "${text}"`);
+  const crudo = (req.body?.text || '').trim();
+  console.log(`[slack /scrape] recibido: "${crudo}"`);
+  // Pegar desde el iPhone a veces arrastra dos links (medido 11 sep 2026: uno de Drive delante del
+  // reel de Instagram). Se mandaba el texto ENTERO como URL y el actor lo rechazaba por patrón. Se
+  // toma el primer link de una plataforma soportada; los detectores de abajo son los mismos.
+  const soportado = (u) =>
+    /youtu\.?be|instagram\.com|facebook\.com|tiktok\.com|(?:twitter|x)\.com\/[^/]+\/status/i.test(u);
+  const text = (crudo.match(/https?:\/\/\S+/gi) || []).find(soportado) || crudo;
   const responseUrl = req.body?.response_url;
   const isYt = /youtu\.?be/i.test(text);
   const isIg = /instagram\.com/i.test(text);
@@ -905,9 +911,13 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
     // Puede tardar varios minutos en videos largos (troceo con ffmpeg).
     // X entra solo si el post trae video: los de texto o imagen no tienen nada que transcribir y
     // anunciarlo sería mentirle a Dante en el canal.
+    // Slack acepta 5 mensajes por response_url y el resultado (✅/ℹ️) ya gastó uno. El ACK
+    // "🔄 Procesando…" NO cuenta: es la respuesta HTTP, no un uso de response_url.
+    let mensajesUsados = 1;
     const puedeTranscribir = isYt || isTt || (isX && xVideoUrl);
     if (!raw && puedeTranscribir && config.enableTranscription) {
       await slackReply(responseUrl, '🎙️ Sin subtítulos, transcribiendo el audio… puede tardar un poco.');
+      mensajesUsados++;
       try {
         // X no necesita corrida extra del actor: su MP4 ya es nuestro, en R2.
         const audioUrl = isYt
@@ -941,10 +951,11 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
       }
     }
 
-    // response_url solo permite 5 mensajes en 30 min y el status ya gastó 1: reparte lo que
-    // queda entre original y traducida (2 y 2) si hay traducción, o 4 si no la hay.
-    const remaining = 4;
-    const perVersion = translated ? Math.floor(remaining / 2) : remaining;
+    // Reparte lo que queda del cupo de 5 entre original y traducida. Antes era un 4 fijo que no
+    // descontaba el "🎙️ transcribiendo…": con transcripción + traducción salían 6 mensajes y Slack
+    // rechazaba el último sin dejar rastro.
+    const remaining = Math.max(5 - mensajesUsados, 1);
+    const perVersion = translated ? Math.max(Math.floor(remaining / 2), 1) : remaining;
 
     async function sendVersion(label, txt) {
       const chunks = chunkParagraphs(toParagraphs(txt), 3500);

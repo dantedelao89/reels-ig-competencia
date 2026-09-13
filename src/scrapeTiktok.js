@@ -125,7 +125,19 @@ export async function runScrapeTiktokUrl(url) {
 
   try {
     const items = await scrapeTiktokUrls([urlCanonica]);
-    if (!items.length) return { ok: false, error: 'No se pudo leer ese video de TikTok', inserted: 0 };
+    // Si el link ya resolvió (existe y no es anuncio), un dataset vacío casi siempre es contenido que
+    // TikTok solo enseña con sesión iniciada: el actor lo avisa como "video with sensitive content…
+    // not able to see posts that require login" (medido 12 sep 2026 con un vt.tiktok.com). El error
+    // genérico de antes no decía nada de eso y parecía un fallo nuestro.
+    if (!items.length) {
+      return {
+        ok: false,
+        error:
+          'TikTok no deja ver ese video sin iniciar sesión (está marcado como sensible o con restricción ' +
+          'de edad). Ningún scraper sin cuenta puede leerlo.',
+        inserted: 0,
+      };
+    }
     const item = items[0];
     const handle = normalizeTiktokHandle(item.authorMeta?.name || urlCanonica);
 
