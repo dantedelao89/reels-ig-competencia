@@ -116,7 +116,11 @@ export interface SourceRecord {
 export function normalizeKey(type: SourceType, key: string): string {
   let k = (key || '').trim();
   if (type === 'ig') {
-    k = k.replace(/^@/, '').toLowerCase();
+    // Se tolera la URL del perfil, igual que en TikTok y X: Dante pega desde el iPhone, y sin esto
+    // "instagram.com/paula" y "@paula" no se detectaban como la misma cuenta, así que el candado
+    // anti-duplicados las dejaba entrar a las dos.
+    const deUrl = k.match(/instagram\.com\/([^/?\s]+)/i);
+    k = (deUrl ? deUrl[1] : k).replace(/^@/, '').toLowerCase();
   } else if (type === 'tiktok') {
     // Igual que IG, pero tolerando que peguen la URL del perfil.
     const deUrl = k.match(/tiktok\.com\/@([^/?\s]+)/i);

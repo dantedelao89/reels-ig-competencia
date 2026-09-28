@@ -61,17 +61,22 @@ export default function StoriesView() {
   const [viendo, setViendo] = useState<number | null>(null); // índice en el array plano
   const [bajandoDia, setBajandoDia] = useState<string | null>(null);
 
-  // Las cuentas salen de las Fuentes de IG que ya existen (sin endpoint nuevo).
-  useEffect(() => {
-    fetch('/api/sources?type=ig', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d.records)) {
-          setCuentas(d.records.map((r: any) => ({ id: r.id, key: String(r.key).replace(/^@/, '').toLowerCase() })));
-        }
-      })
-      .catch(() => {});
+  // Las cuentas salen de las Fuentes de IG que ya existen (sin endpoint nuevo). Va en un callback
+  // para poder recargarla cuando se da de alta una cuenta desde el panel de captura automática.
+  const cargarCuentas = useCallback(async () => {
+    try {
+      const d = await fetch('/api/sources?type=ig', { cache: 'no-store' }).then((r) => r.json());
+      if (Array.isArray(d.records)) {
+        setCuentas(d.records.map((r: any) => ({ id: r.id, key: String(r.key).replace(/^@/, '').toLowerCase() })));
+      }
+    } catch {
+      // Sin la lista el selector sale vacío; no vale la pena molestar con un toast al cargar.
+    }
   }, []);
+
+  useEffect(() => {
+    cargarCuentas();
+  }, [cargarCuentas]);
 
   const fetchPage = useCallback(
     async (pageNum: number, replace: boolean) => {
@@ -211,7 +216,14 @@ export default function StoriesView() {
     <div>
       {/* Estado de la captura automática, antes de todo lo demás: si algo no se está capturando
           solo, esto tiene que verse sin buscarlo ni entrar a Railway. */}
-      <CapturaAuto />
+      <CapturaAuto
+        onCuentaAgregada={(handle) => {
+          // La cuenta nueva queda seleccionada: el botón "Capturar historias" exige un creador, y
+          // obligar a buscarla otra vez en el selector era el ida y vuelta que veníamos a quitar.
+          cargarCuentas();
+          setCreador(handle);
+        }}
+      />
 
       {/* Cabecera */}
       <div className="flex flex-wrap items-center gap-2 mb-4">

@@ -7,7 +7,8 @@
 // entorno en Railway que no se ve desde ninguna pantalla, y la sección de Historias, que no decía
 // nada. Para saber si la captura estaba encendida había que entrar a Railway; para cambiar qué
 // cuentas entraban, ir a otra pestaña. Aquí se responde de una vez: si está encendida, cuándo
-// corre, a quién le corre, cuánto cuesta, y cómo se le añade o se le quita una cuenta.
+// corre, a quién le corre, cuánto cuesta, y cómo se le añade o se le quita una cuenta —incluida una
+// que todavía no exista en Fuentes.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useToast } from '../ui/Toast';
@@ -28,6 +29,12 @@ interface EstadoCron {
   cuentas: string[] | null;
 }
 
+interface Props {
+  // Avisa a Historias que la lista de cuentas cambió, para que su selector la recargue y deje
+  // seleccionada la nueva: así se puede capturar sin buscarla a mano.
+  onCuentaAgregada?: (handle: string) => void;
+}
+
 // El actor cobra por historia. Una cuenta que publica ~15 al día, 2 pasadas diarias, ronda los
 // $3/mes; se muestra para que encender cuentas nunca sea una decisión a ciegas.
 const USD_MES_POR_CUENTA = 3;
@@ -45,7 +52,14 @@ function horarioLegible(expr: string): string | null {
   return hs.length === 1 ? hs[0] : `${hs.slice(0, -1).join(', ')} y ${hs[hs.length - 1]}`;
 }
 
-export default function CapturaAuto() {
+// "@Paula", "paula", "https://www.instagram.com/paula/?igsh=…" → "paula". Dante pega desde el
+// iPhone, así que el link del perfil tiene que valer igual que el handle.
+function normalizarHandle(v: string): string {
+  const deUrl = (v || '').match(/instagram\.com\/([^/?\s]+)/i);
+  return (deUrl ? deUrl[1] : v || '').trim().replace(/^@/, '').toLowerCase();
+}
+
+export default function CapturaAuto({ onCuentaAgregada }: Props) {
   const toast = useToast();
   const [abierto, setAbierto] = useState(false);
   const [estado, setEstado] = useState<EstadoCron | null>(null);
@@ -54,12 +68,17 @@ export default function CapturaAuto() {
   const [porAñadir, setPorAñadir] = useState('');
   const [guardando, setGuardando] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
+  const [nueva, setNueva] = useState('');
+  const [agregando, setAgregando] = useState(false);
+  // Apagado por defecto: dar de alta una cuenta es gratis, capturarla sola cuesta ~$3/mes. Que el
+  // gasto empiece solo por agregar a alguien sería una sorpresa desagradable.
+  const [autoAlAgregar, setAutoAlAgregar] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
       const [rc, rs] = await Promise.all([
         fetch('/api/crons').then((r) => r.json()),
-        fetch('/api/sources?type=ig').then((r) => r.json()),
+        fetch('/api/sources?type=ig', { cache: 'no-store' }).then((r) => r.json()),
       ]);
       if (rc.error) setErrorEstado(rc.error);
       else {
@@ -85,6 +104,28 @@ export default function CapturaAuto() {
     [cuentas]
   );
 
+  // Escribe historias_auto. Optimista: el interruptor responde al instante y se revierte si falla.
+  async function patchExtra(id: string, key: string, valor: boolean): Promise<boolean> {
+    setCuentas((prev) => prev.map((c) => (c.id === id ? { ...c, extra: valor } : c)));
+    try {
+      const res = await fetch('/api/sources', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'ig', id, extra: valor }),
+      });
+      const d = await res.json();
+      if (!res.ok || d.error) throw new Error(d.error || 'No se pudo guardar');
+      toast.success(
+        valor ? `@${key} entra en la captura automática` : `@${key} ya no se captura sola`
+      );
+      return true;
+    } catch (e: any) {
+      setCuentas((prev) => prev.map((c) => (c.id === id ? { ...c, extra: !valor } : c)));
+      toast.error(e.message || 'No se pudo guardar');
+      return false;
+    }
+  }
+
   async function marcar(cuenta: CuentaIG, valor: boolean) {
     if (guardando) return;
     // Encender cuesta dinero recurrente; apagar nunca necesita permiso.
@@ -95,27 +136,47 @@ export default function CapturaAuto() {
     )) return;
 
     setGuardando(cuenta.id);
-    // Optimista: el interruptor responde al instante y se revierte si el guardado falla.
-    setCuentas((prev) => prev.map((c) => (c.id === cuenta.id ? { ...c, extra: valor } : c)));
+    const ok = await patchExtra(cuenta.id, cuenta.key, valor);
+    if (ok) setPorAñadir('');
+    setGuardando(null);
+  }
+
+  // Da de alta una cuenta que no estaba en Fuentes. Usa la MISMA API que la pestaña Fuentes, así
+  // que el candado anti-duplicados y la normalización del handle son los de siempre.
+  async function agregar() {
+    const handle = normalizarHandle(nueva);
+    if (!handle || agregando) return;
+    setAgregando(true);
     try {
       const res = await fetch('/api/sources', {
-        method: 'PATCH',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'ig', id: cuenta.id, extra: valor }),
+        body: JSON.stringify({ type: 'ig', key: handle }),
       });
-      const d = await res.json();
-      if (!res.ok || d.error) throw new Error(d.error || 'No se pudo guardar');
-      toast.success(
-        valor
-          ? `@${cuenta.key} entra en la captura automática`
-          : `@${cuenta.key} ya no se captura sola`
-      );
-      setPorAñadir('');
+      const d = await res.json().catch(() => ({}));
+      let id: string | null = d?.record?.id || null;
+
+      if (res.status === 409) {
+        // Ya existía: no es un error, es el caso normal de "creí que no la tenía". Se sigue para
+        // poder marcarla en automático y dejarla seleccionada.
+        toast.info(`@${handle} ya estaba en Fuentes`);
+        id = cuentas.find((c) => c.key === handle)?.id || null;
+      } else if (!res.ok || d.error) {
+        throw new Error(d.error || 'No se pudo agregar');
+      } else {
+        toast.success(`@${handle} agregada a Fuentes`);
+      }
+
+      // El checkbox ya es el permiso explícito: aquí no se vuelve a preguntar.
+      if (id && autoAlAgregar) await patchExtra(id, handle, true);
+
+      setNueva('');
+      await cargar();
+      onCuentaAgregada?.(handle);
     } catch (e: any) {
-      setCuentas((prev) => prev.map((c) => (c.id === cuenta.id ? { ...c, extra: !valor } : c)));
-      toast.error(e.message || 'No se pudo guardar');
+      toast.error(e.message || 'No se pudo agregar');
     } finally {
-      setGuardando(null);
+      setAgregando(false);
     }
   }
 
@@ -224,7 +285,7 @@ export default function CapturaAuto() {
               value={porAñadir}
               onChange={setPorAñadir}
               options={disponibles}
-              emptyLabel="Añadir una cuenta…"
+              emptyLabel="Añadir una que ya tengas…"
               placeholder="Escribe para buscar…"
             />
             <button
@@ -237,6 +298,44 @@ export default function CapturaAuto() {
             >
               Añadir a automático
             </button>
+          </div>
+
+          {/* Alta de una cuenta que NO está en Fuentes. Antes había que salir a otra pestaña,
+              agregarla ahí y volver aquí; es la misma API que usa Fuentes. */}
+          <div className="mt-3 pt-3 border-t border-line">
+            <div className="text-[11px] uppercase tracking-wide text-muted mb-1.5">
+              Seguir una cuenta nueva
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={nueva}
+                onChange={(e) => setNueva(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') agregar();
+                }}
+                placeholder="@usuario o link del perfil"
+                className="h-8 px-2 w-56 text-xs border border-line rounded-md outline-none focus:border-accent"
+              />
+              <button
+                onClick={agregar}
+                disabled={!nueva.trim() || agregando}
+                className="text-xs px-2.5 h-8 rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-50"
+              >
+                {agregando ? 'Agregando…' : '＋ Agregar'}
+              </button>
+              <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoAlAgregar}
+                  onChange={(e) => setAutoAlAgregar(e.target.checked)}
+                />
+                {`y capturarla sola 2 veces al día (~$${USD_MES_POR_CUENTA}/mes)`}
+              </label>
+            </div>
+            <p className="text-[10px] text-muted mt-1">
+              Se da de alta en Fuentes → Creadores IG y queda seleccionada aquí para capturarla al
+              momento. Agregarla es gratis; solo cuesta si la pones en automático.
+            </p>
           </div>
 
           <p className="text-[10px] text-muted mt-2">
