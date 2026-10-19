@@ -186,10 +186,14 @@ export const config = {
   radarTable: process.env.SUPABASE_RADAR_TABLE || 'radar',
   radarTemasTable: process.env.SUPABASE_RADAR_TEMAS_TABLE || 'radar_temas',
   radarBusquedasTable: process.env.SUPABASE_RADAR_BUSQUEDAS_TABLE || 'radar_busquedas',
-  // Ventana del radar de YouTube. Es CORTA a propósito: descubrir es ver lo reciente. La ventana
-  // del pipeline orgánico (youtubeRecentLookback) sirve para rellenar el histórico de un canal;
-  // usarla aquí traería videos viejos y pagaría por cada uno.
-  radarYoutubeLookback: process.env.RADAR_YT_LOOKBACK || '7 days',
+  // Ventana del radar de YouTube: el filtro de fecha de YouTube, aplicado en la BÚSQUEDA.
+  //
+  // Tiene que ser `dateFilter` (hour|today|week|month|year) y NO `oldestPostDate`: medido el 19 oct
+  // 2026, con `oldestPostDate: '7 days'` el actor devolvió videos de 24, 70, 84, 151 y 172 días —
+  // ese campo es para raspar un canal, no para la búsqueda. Y el problema no era solo tener ruido
+  // viejo: al cobrarse por resultado, cada corrida diaria habría pagado otra vez por los mismos
+  // videos populares de siempre.
+  radarYoutubeDateFilter: process.env.RADAR_YT_DATE_FILTER || 'week',
   radarYoutubeMaxResults: Number(process.env.RADAR_YT_MAX || 10),
 
   // --- Frenos de gasto del radar (aprobados por Dante el 19 oct 2026) ---

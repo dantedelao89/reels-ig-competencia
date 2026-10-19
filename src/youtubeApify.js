@@ -35,7 +35,7 @@ const subtitleOpts = {
 // Varias búsquedas (palabras clave) en una sola corrida.
 // `maxUsd`: tope duro de gasto de la corrida, que impone Apify. Solo lo manda el radar; el
 // pipeline orgánico sigue sin tope, como antes.
-export async function scrapeSearches({ queries, maxResults, maxShorts, onlyNewerThan, maxUsd }) {
+export async function scrapeSearches({ queries, maxResults, maxShorts, onlyNewerThan, dateFilter, maxUsd }) {
   const input = {
     searchQueries: queries,
     maxResults,
@@ -45,6 +45,9 @@ export async function scrapeSearches({ queries, maxResults, maxShorts, onlyNewer
     ...subtitleOpts,
   };
   if (onlyNewerThan) input.oldestPostDate = onlyNewerThan;
+  // El filtro de fecha de YouTube, el único que de verdad acota una BÚSQUEDA: `oldestPostDate` no
+  // hace nada en este modo (medido: devolvió videos de hasta 172 días pidiendo 7).
+  if (dateFilter) input.dateFilter = dateFilter;
   const items = await runActorItems(config.youtubeActorId, input, {
     maxTotalChargeUsd: maxUsd || undefined,
   });

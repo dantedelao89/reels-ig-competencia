@@ -81,7 +81,7 @@ async function correrUna(busqueda, existing, temas, startedAt) {
     queries: [busqueda.consulta],
     maxResults: busqueda.maxPorCorrida || config.radarYoutubeMaxResults,
     maxShorts: 0,
-    onlyNewerThan: config.radarYoutubeLookback,
+    dateFilter: config.radarYoutubeDateFilter,
     maxUsd: config.radarMaxUsdPorCorrida,
   });
   const posts = crudos.map((it) => normalizar(it, startedAt));
