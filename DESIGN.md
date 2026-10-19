@@ -239,12 +239,42 @@ El panel se usa en escritorio, pero debe sobrevivir al iPhone: Dante manda links
 
 ---
 
-## 8. Decisiones pendientes de aprobación
+## 8. Temas: son datos, no código
 
-- [x] Tarjeta por tema como unidad principal (aprobado por Dante, 19 oct 2026)
+Decidido por Dante el 19 oct 2026: **los temas se editan desde la interfaz**, no se hornean en el
+código. Su lista de arranque lo explica mejor que cualquier categoría abstracta:
+
+> claude · claude code · openai · chatgpt · nano banana · gpt image · seedance · ai videos ·
+> influencer AI · …
+
+**Son nombres de modelos y herramientas, no categorías.** De ahí sale la decisión barata del
+sistema: un tema es **una etiqueta más una lista de alias**, y clasificar un hallazgo es buscar sus
+alias en el texto.
+
+- **Determinista y gratis.** "nano banana" aparece o no aparece; no hace falta preguntarle a una IA
+  ni pagar por cada fila clasificada.
+- **Los alias resuelven el mismo modelo con varios nombres**: `gpt image` / `gpt-image` /
+  `gpt image 2.5`, o `seedance` / `bytedance seedance`.
+- **Un hallazgo puede llevar varios temas.** Un video de "Seedance vs Veo" es de `seedance` y de
+  `ai videos`.
+- **La IA entra solo después**, para dos cosas que no se pueden resolver con `LIKE`: agrupar posts
+  del mismo suceso en una tarjeta y escribir la línea ÁNGULO.
+- Un tema sin alias es solo un filtro vacío: la UI lo advierte al guardarlo.
+
+Los temas se administran **en Fuentes**, junto a las consultas, porque son la misma clase de
+decisión: qué se rastrea. Columnas: etiqueta, alias, activo.
+
+**En la cabecera del Radar**, los temas son fichas conmutables que se envuelven en varias líneas,
+ordenadas por cuántos hallazgos tiene cada uno hoy. Pasando de 8 fichas visibles, el resto se
+colapsa en `+N más` — con 15 temas, una fila de fichas es ruido, no navegación.
+
+---
+
+## 9. Decisiones
+
+- [x] Tarjeta por tema como unidad principal (Dante, 19 oct 2026)
 - [x] Tabla `radar` única con columna `plataforma`, migrando los 80 hallazgos de `x_radar`
 - [x] Sacar las búsquedas de YouTube de `yt_videos` a la tabla del Radar
-- [ ] **Instagram fuera de la v1** — supuesto mío; confirmar o pedir que se mida primero
-- [ ] Los cinco temas fijos (Claude Code · ChatGPT · Anuncios IA · Video IA · Modelos nuevos) o
-      editables desde Fuentes como las consultas
-- [ ] Cuántas tarjetas por día antes de paginar (propuesta: 10)
+- [x] **Instagram fuera de la v1** (Dante, 19 oct 2026). Entra por las cuentas de Fuentes
+- [x] **Temas editables desde Fuentes**, con alias (Dante, 19 oct 2026)
+- [x] 10 tarjetas por día antes de paginar — valor por defecto, se cambia en un sitio
