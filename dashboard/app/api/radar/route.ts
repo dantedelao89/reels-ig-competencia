@@ -3,9 +3,10 @@ import { getSupabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-const RADAR_TABLE = 'x_radar';
+// Tabla única de las tres plataformas (X / YouTube / LinkedIn), con `plataforma` para separarlas.
+const RADAR_TABLE = 'radar';
 const COLS =
-  'id,post_id,busqueda_id,busqueda_etiqueta,creador,creador_nombre,creador_url,creador_seguidores,url,caption,respuestas_autor,fecha_publicacion,dia,views,likes,comentarios,retweets,guardados,duracion_seg,tipo,hashtags,links_externos,idioma,conversation_id,thumbnail_original,video_original,promovido,descartado,guardado,scrapeado_en';
+  'id,plataforma,external_id,busqueda_id,busqueda_etiqueta,creador,creador_nombre,creador_url,creador_seguidores,url,caption,respuestas_autor,fecha_publicacion,dia,views,likes,comentarios,compartidos,guardados,velocidad,duracion_seg,tipo,hashtags,links_externos,idioma,hilo_id,thumbnail_original,video_original,temas,promovido,descartado,guardado,scrapeado_en';
 
 // Lo que trajeron las consultas del radar. Devuelve PLANO y ordenado; la vista agrupa por día
 // (mismo criterio que las historias: agrupar aquí obligaría a paginar por día y un día partido
@@ -13,6 +14,9 @@ const COLS =
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const busqueda = sp.get('busqueda') || '';
+  const plataforma = sp.get('plataforma') || '';
+  const tema = sp.get('tema') || '';
+  const orden = sp.get('orden') || '';
   const q = sp.get('q')?.trim() || '';
   const desde = sp.get('desde') || '';
   const minLikes = Number(sp.get('minLikes') || 0);
@@ -23,13 +27,22 @@ export async function GET(req: NextRequest) {
   let query = getSupabase()
     .from(RADAR_TABLE)
     .select(COLS, { count: 'exact' })
-    // Día más reciente arriba y, dentro del día, lo más reaccionado primero: en un radar lo que
-    // importa no es el orden en que se publicó sino qué pegó.
-    .order('dia', { ascending: false, nullsFirst: false })
-    .order('likes', { ascending: false, nullsFirst: false })
-    .range((page - 1) * pageSize, page * pageSize - 1);
+    .order('dia', { ascending: false, nullsFirst: false });
+
+  // Dentro del día: por velocidad (lo que está explotando AHORA) o por reacciones totales. El
+  // total absoluto es el orden histórico y se conserva como opción, pero no detecta tendencias:
+  // 2 M de vistas en dos años le gana a 40 mil en seis horas y eso es justo lo que no interesa.
+  query =
+    orden === 'velocidad'
+      ? query.order('velocidad', { ascending: false, nullsFirst: false })
+      : query.order('likes', { ascending: false, nullsFirst: false });
+
+  query = query.range((page - 1) * pageSize, page * pageSize - 1);
 
   if (busqueda) query = query.eq('busqueda_id', busqueda);
+  if (plataforma) query = query.eq('plataforma', plataforma);
+  // `temas` es un array: contains() exige que el tema esté entre los que se le detectaron.
+  if (tema) query = query.contains('temas', [tema]);
   if (desde) query = query.gte('dia', desde);
   if (minLikes) query = query.gte('likes', minLikes);
   // Lo descartado se esconde por defecto: el radar sirve si lo que queda a la vista es lo que
@@ -42,11 +55,15 @@ export async function GET(req: NextRequest) {
 
   const items = (data || []).map((r: any) => ({
     id: r.id,
-    postId: r.post_id,
+    plataforma: r.plataforma,
+    // Se sigue llamando postId hacia la vista: el nombre de la columna cambió a `external_id` al
+    // unificar las plataformas, pero renombrarlo también en la UI no aportaba nada.
+    postId: r.external_id,
     busquedaId: r.busqueda_id,
     busqueda: r.busqueda_etiqueta,
     creador: r.creador,
     creadorNombre: r.creador_nombre,
+    creadorUrl: r.creador_url,
     seguidores: r.creador_seguidores,
     url: r.url,
     caption: r.caption,
@@ -56,8 +73,11 @@ export async function GET(req: NextRequest) {
     views: r.views,
     likes: r.likes,
     comentarios: r.comentarios,
-    retweets: r.retweets,
+    retweets: r.compartidos,
+    velocidad: r.velocidad,
+    temas: Array.isArray(r.temas) ? r.temas : [],
     tipo: r.tipo,
+    duracionSeg: r.duracion_seg,
     hashtags: r.hashtags,
     linksExternos: r.links_externos,
     thumbnail: r.thumbnail_original,

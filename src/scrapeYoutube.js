@@ -162,7 +162,10 @@ export async function runScrapeYoutubeVideo(videoUrl) {
   const it = items[0];
   const handle = (it.channelUsername || handleFromUrl(it.channelUrl || '')).toLowerCase();
   let canalNuevo = false;
-  if (handle && !projByHandle.has(handle) && it.channelUrl) {
+  // `altaFuente:false` lo manda el radar al guardar un hallazgo: quedarse con ESTE video no debe
+  // meter a su canal en Fuentes. Son dos intenciones distintas y en el radar son dos botones
+  // (💾 Guardar vs ＋ Fuentes). Mismo criterio que `runScrapeXUrl`.
+  if (altaFuente && handle && !projByHandle.has(handle) && it.channelUrl) {
     try {
       const existingChannel = await getChannelByUrl(it.channelUrl);
       if (existingChannel) {

@@ -86,6 +86,46 @@ export async function getCreatorsConHistoriasAuto() {
   }));
 }
 
+// ---- Radar multiplataforma (temas y consultas) ----
+
+// Los temas se editan desde la interfaz, no viven en el código: en tres meses los modelos que
+// interesan serán otros.
+export async function getRadarTemas() {
+  const c = await getClient();
+  const { data, error } = await c.from(config.radarTemasTable).select('*').eq('activo', true);
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => ({
+    recordId: r.id,
+    etiqueta: r.etiqueta,
+    alias: Array.isArray(r.alias) ? r.alias : [],
+  }));
+}
+
+// Consultas activas del radar. Sin `plataforma` devuelve las de todas, para la corrida completa.
+export async function getActiveRadarBusquedas(plataforma = null) {
+  const c = await getClient();
+  let q = c.from(config.radarBusquedasTable).select('*').eq('activo', true);
+  if (plataforma) q = q.eq('plataforma', plataforma);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => ({
+    recordId: r.id,
+    plataforma: r.plataforma,
+    consulta: r.consulta,
+    etiqueta: r.etiqueta || r.consulta,
+    maxPorCorrida: r.max_por_corrida || null,
+  }));
+}
+
+export async function updateRadarBusquedaLastRun(recordId, isoDate) {
+  const c = await getClient();
+  const { error } = await c
+    .from(config.radarBusquedasTable)
+    .update({ ultima_corrida: isoDate })
+    .eq('id', recordId);
+  if (error) throw new Error(error.message);
+}
+
 // ---- TikTok (cuentas) ----
 
 export async function getActiveTiktokCreators() {
@@ -423,39 +463,9 @@ export async function createXCreator(username) {
 }
 
 // ---- Radar de X (consultas guardadas) ----
+//
+// Los lectores de `x_busquedas` se quitaron el 19 oct 2026: las consultas de las tres plataformas
+// viven en `radar_busquedas` y se leen con getActiveRadarBusquedas(). La tabla vieja sigue en la
+// base como respaldo hasta que el radar nuevo esté probado, pero ya nadie debe leerla — dejar las
+// funciones aquí era dejar una trampa que devolvía datos que ya no se actualizan.
 
-export async function getActiveXBusquedas() {
-  const c = await getClient();
-  const { data, error } = await c.from(config.xBusquedasTable).select('*').eq('activo', true);
-  if (error) throw new Error(error.message);
-  return (data || []).map((r) => ({
-    recordId: r.id,
-    consulta: r.consulta,
-    etiqueta: r.etiqueta || r.consulta.slice(0, 40),
-    maxPosts: r.posts_por_corrida || config.xRadarMaxPosts,
-    lastRun: r.ultima_corrida || null,
-  }));
-}
-
-export async function getXBusquedaById(id) {
-  const c = await getClient();
-  const { data, error } = await c.from(config.xBusquedasTable).select('*').eq('id', id).maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) return null;
-  return {
-    recordId: data.id,
-    consulta: data.consulta,
-    etiqueta: data.etiqueta || data.consulta.slice(0, 40),
-    maxPosts: data.posts_por_corrida || config.xRadarMaxPosts,
-    lastRun: data.ultima_corrida || null,
-  };
-}
-
-export async function updateXBusquedaLastRun(recordId, isoDate) {
-  const c = await getClient();
-  const { error } = await c
-    .from(config.xBusquedasTable)
-    .update({ ultima_corrida: isoDate })
-    .eq('id', recordId);
-  if (error) throw new Error(error.message);
-}

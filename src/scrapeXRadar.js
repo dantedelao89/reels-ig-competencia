@@ -9,21 +9,39 @@
 // (`"just released" (AI OR LLM) min_faves:300`) dio mediana 773 y contenido real.
 // Los hashtags se pueden guardar igual: la UI muestra la señal de cada consulta para que se vea
 // cuál rinde. Lo que NO se puede es asumir que un hashtag equivale a un tema.
+//
+// Desde el 19 oct 2026 escribe en la tabla `radar` (común a X, YouTube y LinkedIn) y lee sus
+// consultas de `radar_busquedas`.
 
-import { config } from './config.js';
-import { getActiveXBusquedas, getXBusquedaById, updateXBusquedaLastRun } from './sources.js';
+import {
+  getActiveRadarBusquedas,
+  getRadarTemas,
+  updateRadarBusquedaLastRun,
+} from './sources.js';
 import { scrapeXQuery, agruparHilos } from './xApify.js';
-import { syncXRadar, getExistingRadarIds } from './supabase.js';
+import { clasificar, velocidadPorHora } from './radarTemas.js';
+import { syncRadar, getExistingRadarIds } from './supabase.js';
 
-async function correrUna(busqueda, existing, startedAt) {
+async function correrUna(busqueda, existing, temas, startedAt) {
   const posts = agruparHilos(
-    await scrapeXQuery(busqueda.consulta, { maxPosts: busqueda.maxPosts })
+    await scrapeXQuery(busqueda.consulta, { maxPosts: busqueda.maxPorCorrida })
   );
+  // En X la señal son los LIKES por hora: es la métrica que todo post tiene y la que se mueve
+  // primero. Las vistas las esconde la mitad de las cuentas.
+  posts.forEach((p) => {
+    p.velocidad = velocidadPorHora(p.likes, p.fecha ? new Date(p.fecha).getTime() : null, startedAt);
+  });
+
   // Dedup contra lo ya descubierto: el actor cobra por resultado devuelto, pero al menos no se
   // reescribe la base entera en cada corrida.
   const nuevos = posts.filter((p) => !existing.has(String(p.id)));
   if (nuevos.length) {
-    await syncXRadar(nuevos, { busqueda, scrapedAtIso: startedAt });
+    await syncRadar(nuevos, {
+      plataforma: 'x',
+      busqueda,
+      scrapedAtIso: startedAt,
+      clasificar: (texto) => clasificar(texto, temas),
+    });
     nuevos.forEach((p) => existing.add(String(p.id)));
   }
 
@@ -52,9 +70,11 @@ export async function runRadarX() {
 
   let busquedas;
   let existing;
+  let temas;
   try {
-    busquedas = await getActiveXBusquedas();
-    existing = await getExistingRadarIds();
+    busquedas = await getActiveRadarBusquedas('x');
+    existing = await getExistingRadarIds('x');
+    temas = await getRadarTemas();
   } catch (err) {
     console.error('[radar] no se pudieron leer las consultas:', err.message);
     return { ok: false, error: err.message, consultas: 0, nuevos: 0, details: [] };
@@ -65,7 +85,7 @@ export async function runRadarX() {
   let nuevos = 0;
   for (const b of busquedas) {
     try {
-      const r = await correrUna(b, existing, startedAt);
+      const r = await correrUna(b, existing, temas, startedAt);
       nuevos += r.nuevos;
       details.push(r);
     } catch (err) {
@@ -73,7 +93,7 @@ export async function runRadarX() {
       details.push({ busqueda: b.etiqueta, error: err.message });
     }
     try {
-      await updateXBusquedaLastRun(b.recordId, startedAt);
+      await updateRadarBusquedaLastRun(b.recordId, startedAt);
     } catch (e) {
       console.error(`[radar lastRun] ${e.message}`);
     }
@@ -86,18 +106,21 @@ export async function runRadarXBusqueda(id) {
   const startedAt = new Date().toISOString();
   let busqueda;
   let existing;
+  let temas;
   try {
-    busqueda = await getXBusquedaById(id);
-    existing = await getExistingRadarIds();
+    const todas = await getActiveRadarBusquedas('x');
+    busqueda = todas.find((b) => b.recordId === id);
+    existing = await getExistingRadarIds('x');
+    temas = await getRadarTemas();
   } catch (err) {
     return { ok: false, error: err.message, nuevos: 0 };
   }
   if (!busqueda) return { ok: false, error: 'No se encontró esa consulta', nuevos: 0 };
 
   try {
-    const r = await correrUna(busqueda, existing, startedAt);
+    const r = await correrUna(busqueda, existing, temas, startedAt);
     try {
-      await updateXBusquedaLastRun(busqueda.recordId, startedAt);
+      await updateRadarBusquedaLastRun(busqueda.recordId, startedAt);
     } catch (e) {
       console.error(`[radar lastRun] ${e.message}`);
     }

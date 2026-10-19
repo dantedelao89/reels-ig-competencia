@@ -804,18 +804,32 @@ export async function syncX(posts, ctx = {}) {
 
 // --- Radar de X (descubrimiento por consultas) ---
 
-export async function getExistingRadarIds() {
-  return getExistingColumn(config.xRadarTable, 'post_id');
+// Dedup del radar, por plataforma: el mismo id numérico puede existir en dos redes distintas, así
+// que la clave es (plataforma, external_id) y el set tiene que filtrarse por plataforma.
+export async function getExistingRadarIds(plataforma = null) {
+  return getExistingColumn(
+    config.radarTable,
+    'external_id',
+    plataforma ? { eq: ['plataforma', plataforma] } : null
+  );
 }
 
-function radarRow(p, { busqueda, scrapedAtIso }) {
+// Fila del radar, COMÚN a las tres plataformas: `p` ya viene normalizado por el adaptador de cada
+// red (xApify, el de YouTube…), así que aquí no se decide nada por plataforma. Lo único que queda
+// con sabor a X es el respaldo de la URL del autor, porque esa se arma desde el handle.
+//
+// `velocidad` la calcula el runner y no esta función: cada red mide con lo suyo (X por likes/hora,
+// YouTube por vistas/hora) y meter ese `if` aquí volvería a ensuciar la capa común.
+function radarRow(p, { plataforma, busqueda, scrapedAtIso, clasificar }) {
+  const paraClasificar = `${p.texto || ''} ${(p.hashtags || []).join(' ')}`;
   return {
-    post_id: String(p.id),
+    plataforma,
+    external_id: String(p.id),
     busqueda_id: busqueda?.recordId || null,
     busqueda_etiqueta: busqueda?.etiqueta || null,
     creador: p.handle || null,
     creador_nombre: p.nombre || null,
-    creador_url: p.handle ? `https://x.com/${p.handle}` : null,
+    creador_url: p.creadorUrl || (plataforma === 'x' && p.handle ? `https://x.com/${p.handle}` : null),
     creador_seguidores: p.seguidores ?? null,
     url: p.url || null,
     caption: p.texto || null,
@@ -826,31 +840,36 @@ function radarRow(p, { busqueda, scrapedAtIso }) {
     // El día en CDMX, resuelto AQUÍ: como columna generada no se puede (`at time zone` es STABLE),
     // y resolverlo en el navegador haría que el radar cambiara de día según quién lo mire.
     dia: p.fecha ? diaDe(new Date(p.fecha).getTime() / 1000) : null,
-    views: p.views,
-    likes: p.likes,
-    comentarios: p.respuestas,
-    retweets: p.retweets,
-    guardados: p.guardados,
-    duracion_seg: p.duracionSeg,
-    tipo: p.videoUrl ? 'Video' : p.fotos.length ? 'Imagen' : 'Texto',
-    hashtags: (p.hashtags || []).map((h) => `#${h}`).join(' ') || null,
+    views: p.views ?? null,
+    likes: p.likes ?? null,
+    comentarios: p.respuestas ?? p.comentarios ?? null,
+    compartidos: p.retweets ?? p.compartidos ?? null,
+    guardados: p.guardados ?? null,
+    velocidad: p.velocidad ?? null,
+    duracion_seg: p.duracionSeg ?? null,
+    // `fotos` solo existe en X: con `?.` un item de YouTube no revienta aquí.
+    tipo: p.tipo || (p.videoUrl ? 'Video' : p.fotos?.length ? 'Imagen' : 'Texto'),
+    hashtags: (p.hashtags || []).map((h) => `#${String(h).replace(/^#/, '')}`).join(' ') || null,
     links_externos: (p.linksExternos || []).join(' ') || null,
     idioma: p.idioma || null,
-    conversation_id: p.conversationId || null,
+    hilo_id: p.conversationId || null,
+    temas: clasificar ? clasificar(paraClasificar) : [],
     // Solo la URL original: el radar NO archiva a R2. Es un firehose del que casi todo se descarta;
     // lo que valga la pena se promueve a Fuentes y entra por el pipeline orgánico, que sí archiva.
-    thumbnail_original: p.videoThumb || p.fotos[0] || null,
+    thumbnail_original: p.videoThumb || p.fotos?.[0] || null,
     video_original: p.videoUrl || null,
     scrapeado_en: scrapedAtIso,
   };
 }
 
-// Inserta lo que trajo una consulta. No toca `promovido`/`descartado`: son la capa de decisión.
-export async function syncXRadar(posts, ctx = {}) {
+// Inserta lo que trajo una consulta, de cualquier plataforma. No toca `promovido`/`descartado`/
+// `guardado`: esos son la capa de decisión de Dante y una corrida nueva no debe pisarlos.
+export async function syncRadar(posts, ctx = {}) {
   if (!enabled) throw new Error('Supabase no está configurado');
   if (!posts?.length) return { synced: 0 };
+  if (!ctx.plataforma) throw new Error('syncRadar necesita ctx.plataforma');
   const rows = posts.filter((p) => p.id).map((p) => radarRow(p, ctx));
-  const synced = await upsert(config.xRadarTable, rows, 'post_id');
+  const synced = await upsert(config.radarTable, rows, 'plataforma,external_id');
   return { synced };
 }
 

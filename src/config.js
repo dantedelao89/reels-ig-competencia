@@ -181,6 +181,17 @@ export const config = {
   xRadarTable: process.env.SUPABASE_X_RADAR_TABLE || 'x_radar',
   xBusquedasTable: process.env.SUPABASE_X_BUSQUEDAS_TABLE || 'x_busquedas',
 
+  // Radar multiplataforma (X / YouTube / LinkedIn). Tabla única con columna `plataforma`: con una
+  // tabla por red hacían falta cuatro pantallas y cuatro crons para la misma decisión.
+  radarTable: process.env.SUPABASE_RADAR_TABLE || 'radar',
+  radarTemasTable: process.env.SUPABASE_RADAR_TEMAS_TABLE || 'radar_temas',
+  radarBusquedasTable: process.env.SUPABASE_RADAR_BUSQUEDAS_TABLE || 'radar_busquedas',
+  // Ventana del radar de YouTube. Es CORTA a propósito: descubrir es ver lo reciente. La ventana
+  // del pipeline orgánico (youtubeRecentLookback) sirve para rellenar el histórico de un canal;
+  // usarla aquí traería videos viejos y pagaría por cada uno.
+  radarYoutubeLookback: process.env.RADAR_YT_LOOKBACK || '7 days',
+  radarYoutubeMaxResults: Number(process.env.RADAR_YT_MAX || 15),
+
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
   ytChannelsTable: process.env.SUPABASE_YT_CHANNELS_TABLE || 'yt_channels',

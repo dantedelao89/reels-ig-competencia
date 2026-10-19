@@ -20,6 +20,7 @@ import { getCreatorsConHistoriasAuto } from './sources.js';
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
 import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
+import { runRadarYoutube, runRadarYoutubeBusqueda } from './scrapeRadarYoutube.js';
 import { getTiktokMediaUrl } from './tiktokApify.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
@@ -267,7 +268,9 @@ app.post('/scrape-yt-url', async (req, res) => {
   const url = req.body?.url;
   if (!url) return res.status(400).json({ ok: false, error: 'url requerida' });
   try {
-    const result = await runScrapeYoutubeVideo(url);
+    // altaFuente=false lo manda el radar al guardar un hallazgo: quedarse con ESE video NO debe
+    // meter a su canal en Fuentes. Igual que en /scrape-x-url.
+    const result = await runScrapeYoutubeVideo(url, { altaFuente: req.body?.altaFuente !== false });
     res.json(result);
   } catch (err) {
     console.error('Error en /scrape-yt-url:', err);
@@ -582,6 +585,32 @@ app.post('/radar-x-busqueda', async (req, res) => {
     res.json(await runRadarXBusqueda(String(id).trim()));
   } catch (err) {
     console.error('[radar consulta] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Radar de YouTube (mismas consultas guardadas, tabla `radar`) ---
+
+// Corre TODAS las consultas activas de YouTube.
+app.post('/radar-yt', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  try {
+    res.json(await runRadarYoutube());
+  } catch (err) {
+    console.error('[radar-yt] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Corre UNA consulta de YouTube (botón por fila en Fuentes).
+app.post('/radar-yt-busqueda', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ ok: false, error: 'Falta id de la consulta' });
+  try {
+    res.json(await runRadarYoutubeBusqueda(String(id).trim()));
+  } catch (err) {
+    console.error('[radar-yt consulta] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

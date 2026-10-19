@@ -20,6 +20,10 @@ export interface SourceDef {
   nombreEditable?: boolean;
   // Columna booleana extra que se edita desde la tabla (IG: captura automática de historias).
   extraBool?: { column: string; label: string; title: string };
+  // Columnas con valor FIJO para esta fuente. Hacen falta cuando varias fuentes comparten tabla:
+  // las consultas del radar viven todas en `radar_busquedas` y se distinguen por `plataforma`.
+  // Se aplican al insertar Y al listar — sin el filtro, las Búsquedas X mostrarían las de YouTube.
+  fixed?: Record<string, string>;
 }
 
 export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
@@ -56,9 +60,13 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
   },
   x_search: {
     label: 'Búsquedas X',
-    table: 'x_busquedas',
+    // Desde el 19 oct 2026 las consultas de las tres plataformas viven en `radar_busquedas`, y
+    // `plataforma` las separa. Antes estaban en `x_busquedas`: si el radar leyera de la tabla nueva
+    // y Fuentes siguiera escribiendo en la vieja, una consulta recién agregada no correría nunca.
+    table: 'radar_busquedas',
+    fixed: { plataforma: 'x' },
     keyColumn: 'consulta',
-    numColumn: 'posts_por_corrida',
+    numColumn: 'max_por_corrida',
     // El actor devuelve en bloques de 20 y redondea HACIA ARRIBA (medido: pedir 10 da 20, pedir 30
     // da 40, pedir 60 da 60). Así que el número es un mínimo, no un tope, y el piso real es 20.
     numLabel: 'Posts/corrida (de 20 en 20)',
@@ -80,9 +88,17 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
   },
   yt_search: {
     label: 'Búsquedas YT',
-    table: 'yt_searches',
-    keyColumn: 'busqueda',
-    numColumn: 'videos_por_busqueda',
+    // Antes apuntaban a `yt_searches` y sus resultados caían en `yt_videos`, o sea en la MISMA
+    // galería que el contenido curado: el descubrimiento ensuciaba el archivo y cada video
+    // descubierto se archivaba aunque fuera a descartarse. Ahora son consultas del radar.
+    table: 'radar_busquedas',
+    fixed: { plataforma: 'yt' },
+    keyColumn: 'consulta',
+    numColumn: 'max_por_corrida',
+    numLabel: 'Videos/corrida',
+    sinProyecto: true,
+    nombreEditable: true,
+    nameColumn: 'etiqueta',
     keyLabel: 'Palabra clave',
     keyPlaceholder: 'ej. claude code',
   },

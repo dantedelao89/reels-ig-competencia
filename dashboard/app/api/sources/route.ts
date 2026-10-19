@@ -28,7 +28,11 @@ export async function GET(req: NextRequest) {
   if (!isValidType(type)) return NextResponse.json({ error: 'type inválido' }, { status: 400 });
   const d = SOURCE_DEFS[type];
   try {
-    const { data, error } = await getSupabase().from(d.table).select('*');
+    let q = getSupabase().from(d.table).select('*');
+    // Varias fuentes comparten tabla: las consultas del radar viven todas en `radar_busquedas`.
+    // Sin este filtro, "Búsquedas X" listaría también las de YouTube.
+    for (const [col, val] of Object.entries(d.fixed || {})) q = q.eq(col, val);
+    const { data, error } = await q;
     if (error) throw new Error(error.message);
     return NextResponse.json({ records: (data || []).map((r) => toRecord(type, r)) });
   } catch (e: any) {
@@ -48,7 +52,11 @@ export async function POST(req: NextRequest) {
     const c = getSupabase();
     // Candado anti-duplicados: comparamos la key normalizada contra lo que ya existe en Supabase.
     const norm = normalizeKey(type, body.key);
-    const { data: existing, error: selErr } = await c.from(d.table).select(`id, ${d.keyColumn}`);
+    let sel = c.from(d.table).select(`id, ${d.keyColumn}`);
+    // El candado se compara SOLO contra las de la misma fuente: con la tabla compartida del radar,
+    // una consulta de X idéntica a una de YouTube no es un duplicado.
+    for (const [col, val] of Object.entries(d.fixed || {})) sel = sel.eq(col, val);
+    const { data: existing, error: selErr } = await sel;
     if (selErr) throw new Error(selErr.message);
     const dup = (existing || []).find((r: any) => normalizeKey(type, (r[d.keyColumn] ?? '').toString()) === norm);
     if (dup) {
@@ -58,7 +66,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const row: Record<string, any> = { [d.keyColumn]: body.key.trim(), activo: body.activo !== false };
+    // `fixed` va primero para que nunca lo sobreescriba el cuerpo de la petición: es lo que decide
+    // a qué plataforma pertenece la consulta.
+    const row: Record<string, any> = {
+      ...(d.fixed || {}),
+      [d.keyColumn]: body.key.trim(),
+      activo: body.activo !== false,
+    };
     // Solo donde la tabla lo tiene: x_busquedas no tiene columna `proyecto` y el insert fallaría.
     if (body.proyecto && !d.sinProyecto) row.proyecto = body.proyecto;
     // Etiqueta legible que escribe el usuario (las búsquedas del radar: "Lanzamientos IA").
