@@ -21,6 +21,7 @@ import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './s
 import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
 import { runRadarYoutube, runRadarYoutubeBusqueda } from './scrapeRadarYoutube.js';
+import { reclasificarRadar } from './reclasificarRadar.js';
 import { getTiktokMediaUrl } from './tiktokApify.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
@@ -585,6 +586,19 @@ app.post('/radar-x-busqueda', async (req, res) => {
     res.json(await runRadarXBusqueda(String(id).trim()));
   } catch (err) {
     console.error('[radar consulta] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Vuelve a etiquetar por tema TODO el radar. Se corre después de editar los temas: sin esto,
+// cambiar un alias solo afectaría a los hallazgos futuros y el filtro mentiría sobre los de ayer.
+// No gasta en Apify, solo lee y escribe en Supabase.
+app.post('/radar-reclasificar', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  try {
+    res.json(await reclasificarRadar());
+  } catch (err) {
+    console.error('[reclasificar] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

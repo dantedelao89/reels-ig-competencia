@@ -873,6 +873,32 @@ export async function syncRadar(posts, ctx = {}) {
   return { synced };
 }
 
+// Lo mínimo para volver a clasificar: id, texto y hashtags. Pagina porque un `select` sin rango se
+// queda en las 1000 primeras filas y el radar crece todos los días.
+export async function getRadarParaClasificar() {
+  if (!enabled) return [];
+  const c = await getClient();
+  const out = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await c
+      .from(config.radarTable)
+      .select('id,caption,hashtags,temas')
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    if (!data?.length) break;
+    out.push(...data);
+    if (data.length < PAGE) break;
+  }
+  return out;
+}
+
+export async function updateRadarTemas(id, temas) {
+  const c = await getClient();
+  const { error } = await c.from(config.radarTable).update({ temas }).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // --- Historias de Instagram (archivo permanente) ---
 
 // El día al que pertenece una historia, en horario de CDMX. Se resuelve AQUÍ y no en el navegador
