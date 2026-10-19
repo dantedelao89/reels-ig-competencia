@@ -21,10 +21,30 @@ import {
 import { scrapeXQuery, agruparHilos } from './xApify.js';
 import { clasificar, velocidadPorHora } from './radarTemas.js';
 import { syncRadar, getExistingRadarIds } from './supabase.js';
+import { puedeCorrerRadar } from './apifyPresupuesto.js';
+import { config } from './config.js';
 
 async function correrUna(busqueda, existing, temas, startedAt) {
+  // El freno va AQUÍ y no en el runner: así protege los tres caminos (cron, botón de rastrear y
+  // prueba de una consulta) y además corta a mitad de corrida si el presupuesto se agota con las
+  // primeras consultas, en vez de gastarlo todo porque al empezar había margen.
+  const presupuesto = await puedeCorrerRadar();
+  if (!presupuesto.puede) {
+    return {
+      busqueda: busqueda.etiqueta,
+      detenido: 'presupuesto',
+      gastado: presupuesto.gastado,
+      tope: presupuesto.tope,
+      traidos: 0,
+      nuevos: 0,
+    };
+  }
+
   const posts = agruparHilos(
-    await scrapeXQuery(busqueda.consulta, { maxPosts: busqueda.maxPorCorrida })
+    await scrapeXQuery(busqueda.consulta, {
+      maxPosts: busqueda.maxPorCorrida,
+      maxUsd: config.radarMaxUsdPorCorrida,
+    })
   );
   // En X la señal son los LIKES por hora: es la métrica que todo post tiene y la que se mueve
   // primero. Las vistas las esconde la mitad de las cuentas.

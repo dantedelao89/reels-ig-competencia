@@ -22,6 +22,7 @@ import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
 import { runRadarYoutube, runRadarYoutubeBusqueda } from './scrapeRadarYoutube.js';
 import { reclasificarRadar } from './reclasificarRadar.js';
+import { gastoMensualUsd } from './apifyPresupuesto.js';
 import { getTiktokMediaUrl } from './tiktokApify.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
@@ -159,6 +160,18 @@ app.get('/crons', async (req, res) => {
     // Los otros dos siguen bajo el interruptor global CRONS_PAUSED del arranque.
     organico: { habilitado: config.enableCron, horario: config.cronSchedule, pausadoGlobalmente: true },
     ads: { habilitado: config.enableAds && config.enableAdsCron, horario: config.adsCronSchedule, pausadoGlobalmente: true },
+    radar: {
+      activo: config.enableRadarCron,
+      horario: config.radarCronSchedule,
+      zona: config.cronTimezone,
+      valido: cron.validate(config.radarCronSchedule),
+      variableRecibida: process.env.ENABLE_RADAR_CRON ?? null,
+      // Los frenos de gasto, visibles aquí: el estado de lo que cuesta dinero no debe vivir solo
+      // en una variable de Railway que nadie ve.
+      topePorCorridaUsd: config.radarMaxUsdPorCorrida,
+      presupuestoMensualUsd: config.radarPresupuestoMensualUsd,
+      gastadoEsteMesUsd: await gastoMensualUsd(),
+    },
   });
 });
 
@@ -1093,6 +1106,37 @@ app.listen(config.port, () => {
       console.log(`📖 Cron de historias ACTIVO: ${config.storiesCronSchedule} (${config.cronTimezone})`);
     } else {
       console.error(`STORIES_CRON_SCHEDULE inválido: "${config.storiesCronSchedule}" — cron de historias desactivado`);
+    }
+  }
+
+  // Cron del RADAR: una vez al día, deliberadamente fuera de CRONS_PAUSED (ese interruptor pausa
+  // el orgánico y los ads, que archivan a R2 y cuestan mucho más). El radar se gobierna solo con
+  // sus tres frenos: las consultas activas, el tope por corrida y el presupuesto mensual, que se
+  // comprueba contra el gasto real de Apify antes de cada consulta. Sin consultas activas no gasta
+  // nada, así que el cron encendido por defecto no es un cheque en blanco.
+  if (config.enableRadarCron) {
+    if (cron.validate(config.radarCronSchedule)) {
+      cron.schedule(
+        config.radarCronSchedule,
+        async () => {
+          console.log(`[cron-radar] rastreando (${config.radarCronSchedule} ${config.cronTimezone})`);
+          for (const [nombre, fn] of [
+            ['X', runRadarX],
+            ['YouTube', runRadarYoutube],
+          ]) {
+            try {
+              const r = await fn();
+              console.log(`[cron-radar] ${nombre}:`, JSON.stringify(r));
+            } catch (err) {
+              console.error(`[cron-radar] ${nombre} error:`, err.message);
+            }
+          }
+        },
+        { timezone: config.cronTimezone }
+      );
+      console.log(`📡 Cron del radar ACTIVO: ${config.radarCronSchedule} (${config.cronTimezone})`);
+    } else {
+      console.error(`RADAR_CRON_SCHEDULE inválido: "${config.radarCronSchedule}" — cron del radar desactivado`);
     }
   }
 

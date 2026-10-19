@@ -16,6 +16,7 @@ import {
 import { scrapeSearches } from './youtubeApify.js';
 import { clasificar, velocidadPorHora } from './radarTemas.js';
 import { getExistingRadarIds, syncRadar } from './supabase.js';
+import { puedeCorrerRadar } from './apifyPresupuesto.js';
 
 function num(v) {
   const n = Number(v);
@@ -61,11 +62,27 @@ function normalizar(it, scrapedAtIso) {
 }
 
 async function correrUna(busqueda, existing, temas, startedAt) {
+  // El freno va AQUÍ y no en el runner: protege los tres caminos (cron, botón de rastrear y prueba
+  // de una consulta) y corta a mitad de corrida si el presupuesto se agota con las primeras
+  // consultas, en vez de gastarlo entero porque al empezar había margen.
+  const presupuesto = await puedeCorrerRadar();
+  if (!presupuesto.puede) {
+    return {
+      busqueda: busqueda.etiqueta,
+      detenido: 'presupuesto',
+      gastado: presupuesto.gastado,
+      tope: presupuesto.tope,
+      traidos: 0,
+      nuevos: 0,
+    };
+  }
+
   const crudos = await scrapeSearches({
     queries: [busqueda.consulta],
     maxResults: busqueda.maxPorCorrida || config.radarYoutubeMaxResults,
     maxShorts: 0,
     onlyNewerThan: config.radarYoutubeLookback,
+    maxUsd: config.radarMaxUsdPorCorrida,
   });
   const posts = crudos.map((it) => normalizar(it, startedAt));
 

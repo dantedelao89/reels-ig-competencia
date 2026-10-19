@@ -31,9 +31,21 @@ function isMemoryError(err) {
 
 // Corre un actor, espera a que termine y devuelve los items del dataset.
 // Reintenta con espera si Apify rechaza por falta de memoria disponible en la cuenta.
-export async function runActorItems(actorId, input) {
+export async function runActorItems(actorId, input, opts = {}) {
   const callOpts = {};
   if (config.apifyRunMemoryMb) callOpts.memory = config.apifyRunMemoryMb;
+  // Tope DURO de gasto por corrida, impuesto por Apify del lado del servidor.
+  //
+  // Hace falta porque el número que se le pide a un actor es una PETICIÓN, no una garantía, y está
+  // medido en este proyecto: `danek/twitter-scraper` IGNORA `max_posts` (pedimos 8 y devolvió 20) y
+  // el buscador de X redondea hacia arriba de 20 en 20. Con esto, pase lo que pase dentro del
+  // actor, Apify corta la corrida al llegar al monto.
+  //
+  // `maxTotalChargeUsd` aplica a los actores PAY_PER_EVENT (los tres del radar lo son) y `maxItems`
+  // a los de pago por resultado. Se mandan solo si quien llama los pide: el resto del pipeline
+  // sigue corriendo sin tope, igual que antes.
+  if (opts.maxTotalChargeUsd) callOpts.maxTotalChargeUsd = opts.maxTotalChargeUsd;
+  if (opts.maxItems) callOpts.maxItems = opts.maxItems;
 
   let lastErr;
   for (let attempt = 1; attempt <= config.apifyMaxRetries; attempt++) {

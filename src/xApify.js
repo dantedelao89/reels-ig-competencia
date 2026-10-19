@@ -130,12 +130,18 @@ export async function scrapeXPosts(postIds) {
 //
 // `search_type: 'Latest'` y no 'Top': el radar quiere lo que está saliendo AHORA. Con 'Top' salen
 // los virales de siempre, que ya se vieron.
-export async function scrapeXQuery(consulta, { maxPosts } = {}) {
-  const items = await runActorItems(config.xActorId, {
-    query: consulta,
-    search_type: 'Latest',
-    max_posts: maxPosts || config.xRadarMaxPosts,
-  });
+// `maxUsd` es el tope duro de la corrida: este actor IGNORA `max_posts` (medido: pedimos 8 y
+// devolvió 20), así que sin él el número de abajo es solo una sugerencia.
+export async function scrapeXQuery(consulta, { maxPosts, maxUsd } = {}) {
+  const items = await runActorItems(
+    config.xActorId,
+    {
+      query: consulta,
+      search_type: 'Latest',
+      max_posts: maxPosts || config.xRadarMaxPosts,
+    },
+    { maxTotalChargeUsd: maxUsd || undefined }
+  );
   return normalizarLista(items, '');
 }
 

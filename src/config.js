@@ -190,7 +190,18 @@ export const config = {
   // del pipeline orgánico (youtubeRecentLookback) sirve para rellenar el histórico de un canal;
   // usarla aquí traería videos viejos y pagaría por cada uno.
   radarYoutubeLookback: process.env.RADAR_YT_LOOKBACK || '7 days',
-  radarYoutubeMaxResults: Number(process.env.RADAR_YT_MAX || 15),
+  radarYoutubeMaxResults: Number(process.env.RADAR_YT_MAX || 10),
+
+  // --- Frenos de gasto del radar (aprobados por Dante el 19 oct 2026) ---
+  // Tope duro POR CORRIDA de consulta, que impone Apify: ver el comentario de runActorItems sobre
+  // por qué el número que se le pide al actor no basta.
+  radarMaxUsdPorCorrida: Number(process.env.RADAR_MAX_USD_CORRIDA || 0.05),
+  // Presupuesto mensual del radar, de los $29 que incluye el plan STARTER. Antes de cada corrida se
+  // compara contra el gasto REAL que reporta Apify; si ya se pasó, el radar no corre.
+  radarPresupuestoMensualUsd: Number(process.env.RADAR_PRESUPUESTO_USD || 8),
+  // Una vez al día: para tendencias de IA, con un día basta y cuesta la mitad que dos.
+  enableRadarCron: flag(process.env.ENABLE_RADAR_CRON, true),
+  radarCronSchedule: process.env.RADAR_CRON_SCHEDULE || '0 7 * * *',
 
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
