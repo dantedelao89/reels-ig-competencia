@@ -118,6 +118,32 @@ function textOf(v) {
   return v.text || null; // premiumscraper devuelve message como { text, __typename }
 }
 
+// clappi devuelve el caption YA ESCAPADO como si fuera JSON: `imágenes` en vez de `imágenes`,
+// `https:\/\/sitio.com` en vez de `https://sitio.com` y `👇` en vez del emoji. Se guardaba
+// tal cual, y el daño real no era estético: **el enlace que el anunciante pone en el texto quedaba
+// roto** (con `\/` no se puede clicar ni copiar) y la búsqueda no encontraba esas palabras.
+// Medido el 21 oct 2026: 81 filas afectadas, todas de la vía del link suelto.
+// Se desescapa a mano y NO con JSON.parse: el caption trae saltos de línea reales, que dentro de
+// una cadena JSON son inválidos, así que el parse siempre lanzaba y el verdadero trabajo lo hacía
+// el respaldo. Probado contra las 95 filas reales, incluidos los pares surrogados de los emojis.
+function desescapar(s) {
+  if (!s || !/\\u[0-9a-fA-F]{4}|\\\//.test(s)) return s; // ya viene limpio: no se toca
+  return s
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/\\\//g, '/');
+}
+
+// Último recurso para el enlace de destino: el que el anunciante escribió DENTRO del texto.
+// Muchos posts no llevan botón de CTA —ahí no hay `attachment_target_url` que leer— pero sí dejan
+// el link en el copy. Medido: 4 de los 25 que estaban sin enlace lo tenían ahí.
+function linkDelTexto(texto) {
+  const urls = String(texto || '').match(/https?:\/\/[^\s)\]"<]+/g) || [];
+  const util = urls
+    .map((u) => u.replace(/[.,;:!?)\]]+$/, '')) // la puntuación final no es parte del link
+    .find((u) => !/facebook\.com|fb\.me|fb\.watch|instagram\.com/i.test(u));
+  return util || null;
+}
+
 // Scrapea un solo contenido por URL. Devuelve el objeto normalizado o null si no se pudo extraer.
 export async function scrapeFacebookPostByUrl(url) {
   const resolved = await resolveLink(url);
@@ -150,11 +176,16 @@ export async function scrapeFacebookPostByUrl(url) {
     pageId,
     pageName: resolved.authorName || media?.profile_name || null,
     pageUrl: resolved.authorUrl || media?.profile_url || (pageId ? `https://www.facebook.com/profile.php?id=${pageId}` : null),
-    message: resolved.caption || textOf(media?.message) || null,
-    title: media?.title || media?.seo_title || null,
+    // premiumscraper PRIMERO, y no al revés: su `message` viene limpio, mientras que el caption de
+    // clappi llega escapado como JSON. Se prefería el escapado, y por eso 85 de 95 filas quedaron
+    // con `imágenes` y con los enlaces del texto roídos a `https:\/\/`. El desescapado se
+    // aplica igual, porque clappi sigue siendo el respaldo cuando premiumscraper no llega.
+    message: textOf(media?.message) || desescapar(resolved.caption) || null,
+    title: desescapar(media?.title || media?.seo_title || null),
     videoHd,
     imageUrl,
-    destino: destinoDe(media),
+    // El botón de CTA primero; si el post no tiene botón, el link que el autor dejó en el texto.
+    destino: destinoDe(media) || linkDelTexto(textOf(media?.message) || desescapar(resolved.caption)),
     views: resolved.views ?? media?.video_view_count_total ?? null,
     permalink: resolved.url || media?.permalink_url || url,
     datePosted: resolved.datePosted || null,
