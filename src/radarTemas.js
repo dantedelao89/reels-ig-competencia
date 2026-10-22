@@ -42,16 +42,41 @@ function variantes(alias) {
 // Devuelve las etiquetas de los temas que aparecen en el texto. Un hallazgo puede llevar varios:
 // un video de "Seedance vs Veo" es de `Seedance` y de `AI videos`, y forzarlo a uno solo perdería
 // la mitad de su utilidad al filtrar.
+// Un alias que empieza con `-` es una EXCLUSIÓN: se borra del texto antes de buscar los demás.
+// Hace falta porque el límite de palabra no alcanza cuando el alias es parte de un nombre propio.
+// Medido el 22 oct 2026: dos películas completas de **Jean-Claude** Van Damme («Until Death»,
+// «6 balas») entraron al top 5 del nicho de IA porque ` claude ` SÍ es una palabra entera dentro de
+// ` jean claude `. Con `-jean claude` en el tema Claude dejan de colarse.
+//
+// Se borra la exclusión del texto en vez de descartar el tema entero, que es la diferencia entre
+// filtrar ruido y perder señal: un video de «Claude Duet» que de paso mencione a Jean-Claude sigue
+// siendo del tema, porque después de quitar el nombre todavía queda el `claude` bueno.
+// Va en la MISMA columna `alias` a propósito: no hace falta migrar la tabla ni tocar la UI, y las
+// exclusiones se editan donde se editan los temas.
+function partirAlias(alias) {
+  const positivos = [];
+  const negativos = [];
+  for (const a of alias || []) {
+    const s = String(a ?? '').trim();
+    if (s.startsWith('-')) negativos.push(...variantes(s.slice(1)));
+    else positivos.push(...variantes(s));
+  }
+  return { positivos, negativos };
+}
+
 export function clasificar(texto, temas) {
   const t = normalizar(texto);
   if (t.trim() === '') return [];
   const out = [];
   for (const tema of temas || []) {
     if (!tema?.etiqueta) continue;
-    const alias = (tema.alias || []).flatMap(variantes);
-    // Un tema sin alias no puede coincidir con nada: se salta en vez de etiquetar todo.
-    if (!alias.length) continue;
-    if (alias.some((a) => t.includes(a))) out.push(tema.etiqueta);
+    const { positivos, negativos } = partirAlias(tema.alias);
+    // Un tema sin alias positivos no puede coincidir con nada: se salta en vez de etiquetar todo.
+    if (!positivos.length) continue;
+    // Las exclusiones se reemplazan por UN espacio, no por nada: pegar las palabras vecinas
+    // inventaría coincidencias que el texto no tenía.
+    const limpio = negativos.reduce((acc, n) => acc.split(n).join(' '), t);
+    if (positivos.some((a) => limpio.includes(a))) out.push(tema.etiqueta);
   }
   return out;
 }
