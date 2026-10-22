@@ -176,3 +176,110 @@ export function aHallazgo(f, refIso) {
 }
 
 export { clasificar };
+
+// Corre N tareas en paralelo con un tope, para no abrir 200 peticiones a YouTube de golpe.
+async function enTandas(items, limite, fn) {
+  const salida = [];
+  for (let i = 0; i < items.length; i += limite) {
+    salida.push(...(await Promise.all(items.slice(i, i + limite).map(fn))));
+  }
+  return salida;
+}
+
+// UNA pasada completa: busca con todas las consultas, pide la ficha de cada video, clasifica por
+// tema y guarda en `radar`. Devuelve los hallazgos para poder enseñárselos a Dante en el chat, que
+// es la mitad del trato del MVP (DESIGN.md 5.8): se entrega Y se guarda.
+//
+// `porConsulta` acota cuántos resultados se miran de cada consulta. No es un tope de gasto —aquí no
+// se paga— sino de tiempo y de ruido: más abajo de los primeros, YouTube empieza a rellenar con
+// cosas que no tienen que ver.
+export async function correrRadarLibre({
+  ventana = 'hoy',
+  porConsulta = 10,
+  deps,
+} = {}) {
+  const { getRadarBusquedas, getRadarTemas, getExistingRadarIds, syncRadar } = deps;
+  const refIso = new Date().toISOString();
+
+  const busquedas = (await getRadarBusquedas('yt')).sort((a, b) =>
+    a.etiqueta.localeCompare(b.etiqueta)
+  );
+  const temas = await getRadarTemas();
+  const yaEstaban = await getExistingRadarIds('yt');
+
+  // 1. Los IDs que devuelve cada consulta, con su consulta pegada.
+  const porId = new Map();
+  const problemas = [];
+  await enTandas(busquedas, 6, async (b) => {
+    try {
+      const ids = await buscarIds({
+        consulta: b.consulta,
+        idioma: idiomaDeEtiqueta(b.etiqueta),
+        ventana,
+      });
+      for (const id of ids.slice(0, porConsulta)) {
+        // El primero que lo encuentra se queda con la autoría: así un video que sale en la consulta
+        // en español no se reetiqueta como inglés por aparecer también allí.
+        if (!porId.has(id)) porId.set(id, b);
+      }
+    } catch (e) {
+      problemas.push({ busqueda: b.etiqueta, error: e.message });
+    }
+  });
+
+  // 2. La ficha de cada video: fecha y vistas EXACTAS, que la página de resultados no da.
+  const ids = [...porId.keys()];
+  const fichas = (
+    await enTandas(ids, 8, async (id) => {
+      try {
+        return await ficha(id);
+      } catch (e) {
+        problemas.push({ video: id, error: e.message });
+        return null;
+      }
+    })
+  ).filter((f) => f && f.fecha);
+
+  // 3. Clasificar y quedarse con lo que cae en algún tema de Dante. Lo que no tiene tema no entra:
+  // el radar es para decidir qué publicar, y una lista con películas de Jean-Claude Van Damme
+  // dentro no sirve para eso.
+  const conTema = [];
+  for (const f of fichas) {
+    const h = aHallazgo(f, refIso);
+    const temasDe = clasificar(`${h.texto || ''} ${(h.hashtags || []).join(' ')}`, temas);
+    if (!temasDe.length) continue;
+    h.temas = temasDe;
+    h.busqueda = porId.get(f.id);
+    h.nuevo = !yaEstaban.has(String(f.id));
+    conTema.push(h);
+  }
+
+  // 4. Guardar, agrupando por consulta para que cada fila lleve SU `busqueda_id`.
+  const grupos = new Map();
+  for (const h of conTema) {
+    const k = h.busqueda.recordId;
+    if (!grupos.has(k)) grupos.set(k, []);
+    grupos.get(k).push(h);
+  }
+  for (const [, grupo] of grupos) {
+    await syncRadar(grupo, {
+      plataforma: 'yt',
+      busqueda: grupo[0].busqueda,
+      scrapedAtIso: refIso,
+      clasificar: (texto) => clasificar(texto, temas),
+    });
+  }
+
+  conTema.sort((a, b) => (b.velocidad || 0) - (a.velocidad || 0));
+  return {
+    ok: true,
+    ventana,
+    consultas: busquedas.length,
+    vistos: ids.length,
+    conFicha: fichas.length,
+    guardados: conTema.length,
+    nuevos: conTema.filter((h) => h.nuevo).length,
+    problemas,
+    hallazgos: conTema,
+  };
+}
