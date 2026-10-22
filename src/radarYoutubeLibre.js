@@ -18,7 +18,8 @@
 
 import { clasificar, velocidadPorHora } from './radarTemas.js';
 import { getRadarBusquedas, getRadarTemas } from './sources.js';
-import { getExistingRadarIds, getRadarVelocidades, syncRadar } from './supabase.js';
+import { getExistingRadarIds, getRadarVelocidades, getCaptionsAnteriores, syncRadar } from './supabase.js';
+import { candidatas, palabrasDe, formatearBrote } from './radarBrote.js';
 import { elegirAvisos, formatearAviso, enviarSlack } from './radarAviso.js';
 
 const UA =
@@ -377,6 +378,7 @@ export async function correrRadarLibre({
   // 5. Avisar, si toca. Va al final y con su propio try: los hallazgos ya están guardados, y que
   // WhatsApp falle no debe convertir una corrida buena en una corrida fallida.
   let aviso = null;
+  let brote = null;
   if (avisar) {
     try {
       const elegidos = elegirAvisos(conTema, velocidadesPrevias);
@@ -389,12 +391,34 @@ export async function correrRadarLibre({
     } catch (e) {
       aviso = { enviados: 0, ok: false, motivo: e.message };
     }
+
+    // 6. Los BROTES, que son otra señal y van en su propio mensaje: la velocidad apunta a UN
+    // video, el brote nombra el SUCESO. Mezclarlos en un aviso obligaría a leer para distinguir
+    // cuál es cuál.
+    try {
+      const cands = candidatas(conTema, { ahoraMs: refMs });
+      if (cands.length) {
+        const corte = new Date(refMs - 3 * 3_600_000).toISOString();
+        const previos = new Set();
+        for (const c of await getCaptionsAnteriores('yt', corte)) {
+          for (const w of palabrasDe(c)) previos.add(w);
+        }
+        const nuevasPalabras = cands.filter((c) => !previos.has(c.palabra));
+        if (nuevasPalabras.length) {
+          const r = await enviarSlack(formatearBrote(nuevasPalabras, refMs));
+          brote = { palabras: nuevasPalabras.map((c) => c.palabra), ok: r.ok };
+        }
+      }
+    } catch (e) {
+      brote = { palabras: [], ok: false, motivo: e.message };
+    }
   }
 
   return {
     ok: true,
     ventana,
     aviso,
+    brote,
     consultas: busquedas.length,
     vistos: porId.size,
     conFicha: exactas.size,

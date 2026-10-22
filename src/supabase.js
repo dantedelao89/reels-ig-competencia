@@ -837,6 +837,26 @@ export async function getRadarVelocidades(plataforma = null) {
   return mapa;
 }
 
+// Los títulos ya guardados ANTES de un momento dado. Es lo que convierte «esta palabra sale
+// mucho» en «esta palabra es NUEVA», que es la diferencia entre detectar un lanzamiento y avisar
+// de que la gente sigue hablando de Claude.
+//
+// Se limita a los más recientes porque para decidir si una palabra es nueva no hace falta el
+// archivo entero: si no salió en los últimos cientos de títulos, es nueva a efectos prácticos.
+export async function getCaptionsAnteriores(plataforma, antesIso, limite = 2000) {
+  const c = await getClient();
+  let q = c
+    .from(config.radarTable)
+    .select('caption')
+    .lt('fecha_publicacion', antesIso)
+    .order('fecha_publicacion', { ascending: false })
+    .limit(limite);
+  if (plataforma) q = q.eq('plataforma', plataforma);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => r.caption).filter(Boolean);
+}
+
 // Fila del radar, COMÚN a las tres plataformas: `p` ya viene normalizado por el adaptador de cada
 // red (xApify, el de YouTube…), así que aquí no se decide nada por plataforma. Lo único que queda
 // con sabor a X es el respaldo de la URL del autor, porque esa se arma desde el handle.
