@@ -17,6 +17,8 @@
 // sesgada al español.
 
 import { clasificar, velocidadPorHora } from './radarTemas.js';
+import { getRadarBusquedas, getRadarTemas } from './sources.js';
+import { getExistingRadarIds, syncRadar } from './supabase.js';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
@@ -193,12 +195,7 @@ async function enTandas(items, limite, fn) {
 // `porConsulta` acota cuántos resultados se miran de cada consulta. No es un tope de gasto —aquí no
 // se paga— sino de tiempo y de ruido: más abajo de los primeros, YouTube empieza a rellenar con
 // cosas que no tienen que ver.
-export async function correrRadarLibre({
-  ventana = 'hoy',
-  porConsulta = 10,
-  deps,
-} = {}) {
-  const { getRadarBusquedas, getRadarTemas, getExistingRadarIds, syncRadar } = deps;
+export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10 } = {}) {
   const refIso = new Date().toISOString();
 
   const busquedas = (await getRadarBusquedas('yt')).sort((a, b) =>

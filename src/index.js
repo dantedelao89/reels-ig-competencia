@@ -11,6 +11,7 @@ import { config } from './config.js';
 import { runScrape, runScrapeInstagramCreator, runScrapeInstagramUrl } from './scrape.js';
 import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch, runScrapeYoutubeVideo } from './scrapeYoutube.js';
 import { descargarYoutube } from './youtubeDescarga.js';
+import { correrRadarLibre } from './radarYoutubeLibre.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
 import { runScrapeAds, runScrapeAdvertiserUrl } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
@@ -290,6 +291,34 @@ app.post('/scrape-search', async (req, res) => {
 // dice el propio script que Dante tenía en AGENTE_TRADUCTOR_VIDEOS, que corre desde su Mac por eso
 // mismo— y Railway es un datacenter. Si devuelve 403, la salida es `scripts/bajar-youtube.mjs`,
 // que corre en local y sí funciona. El error lo dice con esas palabras en vez de un 500 mudo.
+// Corre el radar de YouTube SIN Apify, leyendo la pagina de resultados. Ver radarYoutubeLibre.js.
+//
+// Existe como endpoint y no solo como script porque es lo que tiene que correr el cron. Y la
+// pregunta que responde la PRIMERA llamada es si YouTube acepta peticiones desde el datacenter de
+// Railway o las corta: desde la Mac funciona, pero una IP residencial y una de datacenter no son
+// lo mismo para YouTube. Si las corta, el error lo dice y el cron se queda en Apify.
+app.post('/radar-libre', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  try {
+    const r = await correrRadarLibre({
+      ventana: req.body?.ventana || 'hoy',
+      porConsulta: Number(req.body?.porConsulta) || 10,
+    });
+    // Los hallazgos no van en la respuesta: ya quedaron en `radar` y devolverlos serian cientos de
+    // KB por cada corrida del cron. Lo que importa aqui es si funciono y cuanto trajo.
+    const { hallazgos, ...resumen } = r;
+    res.json(resumen);
+  } catch (err) {
+    console.error('Error en /radar-libre:', err.message);
+    res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/descargar-yt', async (req, res) => {
   if (config.triggerSecret) {
     const provided = req.get('x-trigger-secret') || req.query.secret;
