@@ -84,11 +84,19 @@ export async function buscarIds({ consulta, idioma = 'en', ventana = 'hoy' }) {
   const url =
     `https://www.youtube.com/results?search_query=${encodeURIComponent(consulta)}` +
     `&sp=${encodeURIComponent(SP[ventana] || SP.hoy)}&hl=${loc.hl}&gl=${loc.gl}`;
-  const html = await pedir(url, loc.accept);
-  const m = /var ytInitialData = (\{.*?\});<\/script>/s.exec(html);
-  // Sin `ytInitialData` no hay resultados que leer: casi siempre es un muro de consentimiento o un
+  // Se reintenta porque la respuesta vacía es INTERMITENTE, no determinista: medido el 22 oct 2026,
+  // una corrida de 20 consultas desde Railway devolvió 19 buenas y 1 sin `ytInitialData`. Con una
+  // sola oportunidad, un cron cada hora acumularía ~1 hueco por pasada en una consulta distinta
+  // cada vez, y eso no se distingue de "hoy no hubo nada" en ese tema.
+  let m = null;
+  for (let intento = 1; intento <= 3 && !m; intento++) {
+    if (intento > 1) await new Promise((r) => setTimeout(r, 1500 * intento));
+    const html = await pedir(url, loc.accept);
+    m = /var ytInitialData = (\{.*?\});<\/script>/s.exec(html);
+  }
+  // Sin `ytInitialData` tras tres intentos ya no es un parpadeo: es un muro de consentimiento o un
   // bloqueo. Se avisa en vez de devolver una lista vacía, que parecería «no hay nada hoy».
-  if (!m) throw new Error(`sin ytInitialData para "${consulta}" (¿bloqueo o consentimiento?)`);
+  if (!m) throw new Error(`sin ytInitialData para "${consulta}" tras 3 intentos (¿bloqueo o consentimiento?)`);
   const ids = [];
   for (const v of recorrer(JSON.parse(m[1]))) {
     if (v.videoId && !ids.includes(v.videoId)) ids.push(v.videoId);
@@ -142,11 +150,15 @@ export function seguidoresANumero(txt) {
   const s = String(txt || '').toLowerCase().replace(/ /g, ' ');
   // Las alternativas largas van PRIMERO: con `mil` delante, "2.21 millones" casaba el prefijo
   // `mil` y devolvía 2.210 en vez de 2.210.000.
-  const m = /([\d.,]+)\s*(millones|milh[õo]es|mill[oó]n|milh[ãa]o|mil|k|m|b)?/.exec(s);
+  // `million` va ANTES que `mil` porque empieza por "mil" y si no se lo come el prefijo. Las
+  // palabras en INGLÉS hacen falta porque la ficha del video se pide con Accept-Language en-US,
+  // donde la etiqueta dice "665 thousand subscribers" y no "665K": sin ellas el multiplicador se
+  // perdía y 665 mil quedaban guardados como 665. Medido el 22 oct 2026 sobre el canal de Claude.
+  const m = /([\d.,]+)\s*(millones|milh[õo]es|mill[oó]n|milh[ãa]o|million|billion|thousand|mil|k|m|b)?/.exec(s);
   if (!m) return null;
   // Separador decimal: "93.8 mil" y "2,21 milhões" usan punto o coma para decimales cuando hay
   // sufijo; sin sufijo, la coma es de miles ("4,575").
-  const factor = { mil: 1e3, k: 1e3, millones: 1e6, 'milhões': 1e6, milhoes: 1e6, millon: 1e6, 'millón': 1e6, 'milhão': 1e6, milhao: 1e6, m: 1e6, b: 1e9 }[m[2]] || 1;
+  const factor = { mil: 1e3, k: 1e3, thousand: 1e3, millones: 1e6, 'milhões': 1e6, milhoes: 1e6, millon: 1e6, 'millón': 1e6, 'milhão': 1e6, milhao: 1e6, million: 1e6, m: 1e6, b: 1e9, billion: 1e9 }[m[2]] || 1;
   const bruto = factor === 1 ? m[1].replace(/[.,]/g, '') : m[1].replace(',', '.');
   const n = Number(bruto);
   return Number.isFinite(n) ? Math.round(n * factor) : null;
