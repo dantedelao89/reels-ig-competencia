@@ -69,6 +69,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dlCarousel, setDlCarousel] = useState(false);
+  const [dlYoutube, setDlYoutube] = useState(false);
 
   // Copiado individual de cada respuesta del autor (el prompt suele estar en una sola de ellas).
   const [copiadoId, setCopiadoId] = useState<string | null>(null);
@@ -297,6 +298,45 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
       toast.error(err.message || 'No se pudo scrapear');
     } finally {
       setRescraping(false);
+      doneAct();
+    }
+  }
+
+  // Baja el MP4 de un video de YouTube, que es la única red donde el actor NO nos da el archivo:
+  // solo devuelve la URL de la página, la de la miniatura y la del canal. El scraper lo resuelve
+  // con la API de RapidAPI y une video y audio con ffmpeg, porque YouTube los sirve separados
+  // salvo en una pista de 360p.
+  //
+  // Tarda: son decenas de MB y hay que bajarlos y unirlos antes de poder mandar nada. Por eso el
+  // botón se bloquea y lo dice, en vez de parecer que no pasó nada.
+  async function descargarYoutube() {
+    if (dlYoutube || !item.url) return;
+    setDlYoutube(true);
+    const doneAct = activity.begin('Bajando el video de YouTube…');
+    try {
+      const res = await fetch('/api/descargar-yt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: item.url, altura: 1080 }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo bajar');
+      // El nombre lo decide el servidor (sale del título real del video); aquí solo se respeta.
+      const cd = res.headers.get('content-disposition') || '';
+      const m = /filename\*=UTF-8''([^;]+)/.exec(cd) || /filename="([^"]+)"/.exec(cd);
+      const nombre = m ? decodeURIComponent(m[1]) : `${item.externalId}.mp4`;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo bajar el video');
+    } finally {
+      setDlYoutube(false);
       doneAct();
     }
   }
@@ -534,6 +574,18 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 </>
               )}
               <div className="grid grid-cols-2 gap-1.5 mb-3">
+                {/* YouTube es la única red sin `mediaUrl`: su video no se archiva, se baja a
+                    petición. Por eso aquí va un botón y no el enlace de las demás. */}
+                {item.platform === 'yt' && item.url && (
+                  <button
+                    onClick={descargarYoutube}
+                    disabled={dlYoutube}
+                    className="col-span-2 text-xs h-8 rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-60"
+                    title="Baja el MP4 en la mejor calidad disponible hasta 1080p, con audio"
+                  >
+                    {dlYoutube ? 'Bajando… (tarda, son decenas de MB)' : '⬇️ Descargar video'}
+                  </button>
+                )}
                 {/* El medio completo (video o imagen), ya archivado en R2. Va por /api/download
                     porque el atributo `download` de un <a> lo IGNORA el navegador cuando el
                     archivo es de otro origen: sin el proxy esto abría el archivo en vez de

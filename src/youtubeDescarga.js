@@ -1,0 +1,132 @@
+// Descarga el MP4 de un video de YouTube, que es lo único que el pipeline de YouTube NO tenía.
+//
+// Por qué hace falta un servicio aparte: `streamers/youtube-scraper` devuelve metadatos,
+// miniatura y subtítulos, pero ningún enlace al archivo — comprobado sobre un item real, sus
+// únicas URLs son la de la página, la de la miniatura y la del canal. En Instagram, TikTok,
+// Facebook y X el actor sí entrega el MP4 del CDN y por eso allí la descarga ya existía.
+//
+// Se usa la API de RapidAPI que Dante ya tenía montada en AGENTE_TRADUCTOR_VIDEOS.
+//
+// ## El detalle que decide la calidad
+//
+// YouTube sirve el video y el audio por SEPARADO salvo en una pista "progresiva" de baja
+// resolución. Medido sobre un video real: 42 medios, de los cuales el único mp4 con audio
+// incluido era de **360p**, mientras que sin audio llegaba a 2160p. Así que bajar "el mp4 con
+// audio" y ya, condena cada descarga a 360p. Por eso se bajan las dos pistas y se unen con
+// ffmpeg copiando los flujos (`-c copy`), que no recodifica: es casi instantáneo y no pierde
+// calidad.
+
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createWriteStream } from 'node:fs';
+import { rm, stat, mkdtemp } from 'node:fs/promises';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+const ejecutar = promisify(execFile);
+
+const HOST = 'auto-download-all-in-one.p.rapidapi.com';
+const URL_API = `https://${HOST}/v1/social/autolink`;
+
+function llave() {
+  const k = process.env.RAPIDAPI_KEY;
+  // Se comprueba AQUÍ y no al arrancar: sin esta variable el resto del scraper funciona igual, y
+  // tumbar el arranque entero por una función opcional sería peor que fallar al usarla.
+  if (!k) throw new Error('Falta RAPIDAPI_KEY: sin ella no se puede resolver el MP4 de YouTube');
+  return k;
+}
+
+// Pregunta a la API por las pistas disponibles. Devuelve { titulo, duracion, medios }.
+export async function resolver(urlVideo) {
+  const res = await fetch(URL_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-rapidapi-host': HOST,
+      'x-rapidapi-key': llave(),
+    },
+    body: JSON.stringify({ url: urlVideo }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) throw new Error(`RapidAPI devolvió ${res.status}`);
+  const d = await res.json();
+  if (d?.error || !Array.isArray(d?.medias) || !d.medias.length) {
+    throw new Error(`La API no devolvió medios${d?.error ? `: ${d.error}` : ''}`);
+  }
+  return { titulo: d.title || null, duracion: d.duration ?? null, medios: d.medias };
+}
+
+// Elige qué bajar. `altura` es un TECHO, no una petición: si el video no llega a 1080 se coge la
+// mayor que haya, en vez de fallar o traer la más pequeña.
+export function elegirPistas(medios, altura = 1080) {
+  const conUrl = medios.filter((m) => m?.url);
+  const videos = conUrl.filter((m) => m.type === 'video' && m.ext === 'mp4' && m.height);
+  const soloVideo = videos.filter((m) => !m.audioQuality);
+  const progresivos = videos.filter((m) => m.audioQuality);
+  const audios = conUrl.filter((m) => m.type === 'audio' && m.ext === 'm4a');
+
+  const bajoTecho = (lista) => {
+    const cabe = lista.filter((m) => m.height <= altura);
+    return cabe.length
+      ? cabe.reduce((a, b) => (a.height >= b.height ? a : b))
+      : lista.reduce((a, b) => (a.height <= b.height ? a : b), lista[0]);
+  };
+
+  if (soloVideo.length && audios.length) {
+    return {
+      modo: 'unir',
+      video: bajoTecho(soloVideo),
+      audio: audios.reduce((a, b) => ((a.bitrate || 0) >= (b.bitrate || 0) ? a : b)),
+    };
+  }
+  // Sin pistas separadas solo queda el progresivo, con su resolución baja. Se dice en `modo` para
+  // que quien llame pueda avisar en vez de entregar 360p como si fuera lo mejor disponible.
+  if (progresivos.length) return { modo: 'progresivo', video: bajoTecho(progresivos), audio: null };
+  throw new Error('La API no devolvió ninguna pista de video utilizable');
+}
+
+async function bajarA(url, destino) {
+  const res = await fetch(url, { signal: AbortSignal.timeout(600_000) });
+  // El CDN de YouTube (googlevideo.com) responde 403 a muchas IP de datacenter. Se distingue del
+  // resto de errores porque la solución es distinta: no es reintentar, es bajarlo desde otra red.
+  if (res.status === 403) {
+    throw new Error('googlevideo devolvió 403 (el CDN bloquea esta IP; hay que bajarlo desde otra red)');
+  }
+  if (!res.ok || !res.body) throw new Error(`el CDN devolvió ${res.status}`);
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(destino));
+  const { size } = await stat(destino);
+  // Un "archivo" de 10 KB es una página de error, no un video.
+  if (size < 10_000) throw new Error(`la descarga salió vacía (${size} bytes)`);
+  return size;
+}
+
+// Baja el video a `destino` (.mp4). Devuelve qué se hizo, para poder reportarlo con honestidad.
+export async function descargarYoutube(urlVideo, destino, { altura = 1080 } = {}) {
+  const { titulo, duracion, medios } = await resolver(urlVideo);
+  const pistas = elegirPistas(medios, altura);
+  const temp = await mkdtemp(path.join(tmpdir(), 'yt-'));
+  try {
+    if (pistas.modo === 'progresivo') {
+      const bytes = await bajarA(pistas.video.url, destino);
+      return { ok: true, titulo, duracion, altura: pistas.video.height, modo: 'progresivo', bytes };
+    }
+    const v = path.join(temp, 'v.m4v');
+    const a = path.join(temp, 'a.m4a');
+    await bajarA(pistas.video.url, v);
+    await bajarA(pistas.audio.url, a);
+    // `-c copy` no recodifica: une los dos flujos tal cual. `+faststart` mueve el índice al
+    // principio para que el archivo se pueda reproducir sin haberlo descargado entero.
+    await ejecutar('ffmpeg', [
+      '-y', '-loglevel', 'error',
+      '-i', v, '-i', a,
+      '-c', 'copy', '-movflags', '+faststart',
+      destino,
+    ]);
+    const { size } = await stat(destino);
+    return { ok: true, titulo, duracion, altura: pistas.video.height, modo: 'unido', bytes: size };
+  } finally {
+    await rm(temp, { recursive: true, force: true });
+  }
+}

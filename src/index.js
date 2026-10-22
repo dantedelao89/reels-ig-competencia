@@ -2,9 +2,15 @@
 
 import express from 'express';
 import cron from 'node-cron';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { config } from './config.js';
 import { runScrape, runScrapeInstagramCreator, runScrapeInstagramUrl } from './scrape.js';
 import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch, runScrapeYoutubeVideo } from './scrapeYoutube.js';
+import { descargarYoutube } from './youtubeDescarga.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
 import { runScrapeAds, runScrapeAdvertiserUrl } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
@@ -274,6 +280,50 @@ app.post('/scrape-search', async (req, res) => {
 });
 
 // Agrega UN video de YouTube por su URL, pegada en DISECTA. Protegido con el secreto.
+// Baja el MP4 de un video de YouTube y lo DEVUELVE en la respuesta, sin archivarlo.
+//
+// No pasa por R2 a propósito: esto no es archivar, es llevarse el archivo. Guardar en R2 cada
+// video que Dante quiera ver una vez llenaría el bucket de cosas de un solo uso, que es justo el
+// criterio que ya sigue el radar.
+//
+// ⚠️ Sin verificar en producción: el CDN de YouTube responde 403 a muchas IP de datacenter —lo
+// dice el propio script que Dante tenía en AGENTE_TRADUCTOR_VIDEOS, que corre desde su Mac por eso
+// mismo— y Railway es un datacenter. Si devuelve 403, la salida es `scripts/bajar-youtube.mjs`,
+// que corre en local y sí funciona. El error lo dice con esas palabras en vez de un 500 mudo.
+app.post('/descargar-yt', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  const url = req.body?.url;
+  if (!url) return res.status(400).json({ ok: false, error: 'url requerida' });
+  const altura = Number(req.body?.altura) || 1080;
+
+  const dir = await mkdtemp(join(tmpdir(), 'ytdl-'));
+  const destino = join(dir, 'video.mp4');
+  try {
+    const r = await descargarYoutube(url, destino, { altura });
+    const nombre = `${(r.titulo || 'video').replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 90) || 'video'}.mp4`;
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Length', String(r.bytes));
+    // El nombre va en las dos formas: la simple para navegadores viejos y la UTF-8 para que no se
+    // pierdan los acentos de un título en español.
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${nombre.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(nombre)}`
+    );
+    res.setHeader('X-Resolucion', `${r.altura}p`);
+    await pipeline(createReadStream(destino), res);
+  } catch (err) {
+    console.error('Error en /descargar-yt:', err.message);
+    if (!res.headersSent) res.status(502).json({ ok: false, error: err.message });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 app.post('/scrape-yt-url', async (req, res) => {
   if (config.triggerSecret) {
     const provided = req.get('x-trigger-secret') || req.query.secret;
