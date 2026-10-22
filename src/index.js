@@ -19,6 +19,7 @@ import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
 import { verifySlackSignature, slackReply } from './slack.js';
+import { formatearAviso } from './radarAviso.js';
 import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
@@ -966,6 +967,38 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
 
 // Slash command de Slack: /scrape <url de Instagram o YouTube>. Responde rápido (ACK) y el
 // resultado real llega después vía response_url, igual que la barra "＋ Agregar por URL" de DISECTA.
+// `/radar` en Slack: corre el radar AHORA y devuelve lo de arriba, sin esperar al cron.
+//
+// Existe porque el aviso automático solo salta cuando algo cruza el umbral, y a veces lo que hace
+// falta es mirar el estado actual aunque nada esté explotando — antes de grabar, por ejemplo.
+// Como la vía sin Apify no cuesta nada, pedirlo a mano no tiene contrapartida.
+app.post('/slack/radar', slackFormParser, async (req, res) => {
+  if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
+  const responseUrl = req.body?.response_url;
+  const cuantos = Math.min(Math.max(Number((req.body?.text || '').trim()) || 5, 1), 15);
+
+  // Slack corta a los 3 segundos, y una pasada tarda unos 10-15. Se acusa recibo primero y el
+  // resultado llega después por response_url; sin este ACK el comando sale con "operation_timeout"
+  // aunque por detrás funcione.
+  res.json({ response_type: 'in_channel', text: `🔎 Buscando lo de ahora… (unos 15 s)` });
+
+  try {
+    const r = await correrRadarLibre({ ventana: 'hoy', porConsulta: 5, avisar: false });
+    const top = (r.hallazgos || []).slice(0, cuantos);
+    if (!top.length) {
+      await slackReply(responseUrl, '🔎 Nada en tus temas con los filtros de hoy. Puede ser un día tranquilo.');
+      return;
+    }
+    await slackReply(responseUrl, {
+      ...formatearAviso(top, r.hallazgos, Date.now(), `🔎 Top ${top.length} de ahora · por vistas/hora`),
+      response_type: 'in_channel',
+    });
+  } catch (err) {
+    console.error('[slack /radar] error:', err.message);
+    await slackReply(responseUrl, `❌ No se pudo: ${err.message}`);
+  }
+});
+
 app.post('/slack/scrape', slackFormParser, async (req, res) => {
   if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
 

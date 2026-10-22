@@ -89,7 +89,7 @@ function edad(h, ahoraMs) {
 // párrafo de texto plano, mientras que aquí cada hallazgo es su propio bloque, el título es un
 // enlace y la métrica se puede barrer con la vista en vertical. Además deja comentar en hilo sin
 // perder el aviso original.
-export function formatearAviso(avisos, todos, ahoraMs = Date.now()) {
+export function formatearAviso(avisos, todos, ahoraMs = Date.now(), titulo = null) {
   const conteos = conteoPorIdioma(todos);
   const bloques = [
     {
@@ -97,9 +97,10 @@ export function formatearAviso(avisos, todos, ahoraMs = Date.now()) {
       text: {
         type: 'plain_text',
         text:
-          avisos.length === 1
+          titulo ||
+          (avisos.length === 1
             ? '🔥 Despegando ahora'
-            : `🔥 ${avisos.length} despegando ahora · por vistas/hora`,
+            : `🔥 ${avisos.length} despegando ahora · por vistas/hora`),
         emoji: true,
       },
     },
