@@ -80,15 +80,53 @@ async function pedir(url, accept) {
 }
 
 // Los IDs de video que devuelve una consulta, en el orden en que YouTube los pone.
-export async function buscarIds({ consulta, idioma = 'en', ventana = 'hoy' }) {
+// Edad en horas a partir del texto relativo de YouTube, en los tres idiomas. Hay que cubrirlos
+// porque la página se pide con el locale de cada consulta: "hace 4 h" (es), "há 4 horas" (pt) y
+// "4 hours ago" (en). Ojo con el español, que ABREVIA: escribe «hace 4 h», no «hace 4 horas», y un
+// parser que solo espere la palabra completa tira justo los videos frescos, que son los únicos que
+// importan aquí.
+const UNIDADES = [
+  [/^min/i, 1 / 60],
+  [/^h(ora|our)?s?$/i, 1],
+  [/^d([ií]a|ay)s?$/i, 24],
+  [/^(sem|week)/i, 168],
+  [/^(mes|m[êe]s|month)/i, 720],
+  [/^(a[ñn]o|year)/i, 8760],
+];
+export function horasDeTexto(txt) {
+  const m = /(\d+)\s*([a-zà-ÿ]+)/i.exec(String(txt || ''));
+  if (!m) return null;
+  const n = Number(m[1]);
+  for (const [re, mult] of UNIDADES) if (re.test(m[2])) return n * mult;
+  return null;
+}
+
+// "507,481 vistas" / "4.575 visualizações" / "507,481 views" → número. Se usa SOLO el contador
+// largo y nunca el abreviado: en el corto, "4.5 K" se convertiría en 45 al quitar los separadores.
+export function vistasDeTexto(txt) {
+  const s = String(txt || '');
+  if (!/\d/.test(s)) return null;
+  const n = Number(s.replace(/[^\d]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+// Los resultados de una consulta, con lo que la propia página de búsqueda ya trae: título, canal,
+// vistas y antigüedad. Aproximados —YouTube redondea la edad a «hace 1 día»— pero GRATIS y en una
+// sola petición por consulta.
+//
+// Esto existe porque pedir la ficha de los ~85 videos de una corrida hace que YouTube devuelva
+// 429 desde un datacenter. Medido el 22 oct 2026 en tres corridas seguidas desde Railway: la
+// primera trajo 82 fichas de 82, la segunda 1 de 87, y la tercera 0 de 83. El límite no es por
+// corrida, se va apretando con el uso — justo la forma de romper un cron horario sin que se note.
+export async function buscarResultados({ consulta, idioma = 'en', ventana = 'hoy' }) {
   const loc = LOCALES[idioma] || LOCALES.en;
   const url =
     `https://www.youtube.com/results?search_query=${encodeURIComponent(consulta)}` +
     `&sp=${encodeURIComponent(SP[ventana] || SP.hoy)}&hl=${loc.hl}&gl=${loc.gl}`;
-  // Se reintenta porque la respuesta vacía es INTERMITENTE, no determinista: medido el 22 oct 2026,
-  // una corrida de 20 consultas desde Railway devolvió 19 buenas y 1 sin `ytInitialData`. Con una
-  // sola oportunidad, un cron cada hora acumularía ~1 hueco por pasada en una consulta distinta
-  // cada vez, y eso no se distingue de "hoy no hubo nada" en ese tema.
+  // Se reintenta porque la respuesta vacía es INTERMITENTE, no determinista: medido, una corrida de
+  // 20 consultas devolvió 19 buenas y 1 sin `ytInitialData`. Con una sola oportunidad, un cron
+  // cada hora acumularía ~1 hueco por pasada en una consulta distinta cada vez, y eso no se
+  // distingue de "hoy no hubo nada" en ese tema.
   let m = null;
   for (let intento = 1; intento <= 3 && !m; intento++) {
     if (intento > 1) await new Promise((r) => setTimeout(r, 1500 * intento));
@@ -98,14 +136,29 @@ export async function buscarIds({ consulta, idioma = 'en', ventana = 'hoy' }) {
   // Sin `ytInitialData` tras tres intentos ya no es un parpadeo: es un muro de consentimiento o un
   // bloqueo. Se avisa en vez de devolver una lista vacía, que parecería «no hay nada hoy».
   if (!m) throw new Error(`sin ytInitialData para "${consulta}" tras 3 intentos (¿bloqueo o consentimiento?)`);
-  const ids = [];
+
+  const salida = [];
+  const vistos = new Set();
   for (const v of recorrer(JSON.parse(m[1]))) {
-    if (v.videoId && !ids.includes(v.videoId)) ids.push(v.videoId);
+    if (!v.videoId || vistos.has(v.videoId)) continue;
+    vistos.add(v.videoId);
+    const horas = horasDeTexto(textoDe(v.publishedTimeText));
+    const vistas = vistasDeTexto(textoDe(v.viewCountText));
+    salida.push({
+      id: v.videoId,
+      titulo: textoDe(v.title) || null,
+      canal: textoDe(v.longBylineText) || null,
+      horasAprox: horas,
+      vistasAprox: vistas,
+      // El orden del radar. Aproximado, pero suficiente para decidir de CUÁLES vale la pena pedir
+      // la ficha exacta: equivocarse por un 10% no cambia quién va arriba.
+      velocidadAprox: horas != null && vistas != null ? vistas / Math.max(horas, 1) : null,
+    });
   }
-  return ids;
+  return salida;
 }
 
-// La ficha de UN video, desde su página. De aquí salen la fecha y las vistas EXACTAS, que la página
+// La ficha de UN video// La ficha de UN video, desde su página. De aquí salen la fecha y las vistas EXACTAS, que la página
 // de resultados solo da redondeadas y en relativo («hace 4 h», «4.5 K»). Guardar una fecha
 // aproximada envenenaría `dia` y `velocidad`, que es justo lo que ordena la pantalla.
 export async function ficha(id) {
@@ -193,9 +246,10 @@ export function aHallazgo(f, refIso) {
 export { clasificar };
 
 // Corre N tareas en paralelo con un tope, para no abrir 200 peticiones a YouTube de golpe.
-async function enTandas(items, limite, fn) {
+async function enTandas(items, limite, fn, pausaMs = 0) {
   const salida = [];
   for (let i = 0; i < items.length; i += limite) {
+    if (i && pausaMs) await new Promise((r) => setTimeout(r, pausaMs));
     salida.push(...(await Promise.all(items.slice(i, i + limite).map(fn))));
   }
   return salida;
@@ -208,8 +262,14 @@ async function enTandas(items, limite, fn) {
 // `porConsulta` acota cuántos resultados se miran de cada consulta. No es un tope de gasto —aquí no
 // se paga— sino de tiempo y de ruido: más abajo de los primeros, YouTube empieza a rellenar con
 // cosas que no tienen que ver.
-export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10, avisar = false } = {}) {
-  const refIso = new Date().toISOString();
+export async function correrRadarLibre({
+  ventana = 'hoy',
+  porConsulta = 10,
+  avisar = false,
+  maxFichas = 15,
+} = {}) {
+  const refMs = Date.now();
+  const refIso = new Date(refMs).toISOString();
 
   const busquedas = (await getRadarBusquedas('yt')).sort((a, b) =>
     a.etiqueta.localeCompare(b.etiqueta)
@@ -220,38 +280,67 @@ export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10, avis
   // si un video acaba de CRUZAR el umbral o si ya estaba arriba desde la pasada pasada.
   const velocidadesPrevias = avisar ? await getRadarVelocidades('yt') : new Map();
 
-  // 1. Los IDs que devuelve cada consulta, con su consulta pegada.
+  // 1. Lo que devuelve cada consulta, con lo aproximado que la propia búsqueda ya trae.
   const porId = new Map();
   const problemas = [];
   await enTandas(busquedas, 6, async (b) => {
     try {
-      const ids = await buscarIds({
+      const res = await buscarResultados({
         consulta: b.consulta,
         idioma: idiomaDeEtiqueta(b.etiqueta),
         ventana,
       });
-      for (const id of ids.slice(0, porConsulta)) {
+      for (const r of res.slice(0, porConsulta)) {
         // El primero que lo encuentra se queda con la autoría: así un video que sale en la consulta
         // en español no se reetiqueta como inglés por aparecer también allí.
-        if (!porId.has(id)) porId.set(id, b);
+        if (!porId.has(r.id)) porId.set(r.id, { ...r, busqueda: b });
       }
     } catch (e) {
       problemas.push({ busqueda: b.etiqueta, error: e.message });
     }
   });
 
-  // 2. La ficha de cada video: fecha y vistas EXACTAS, que la página de resultados no da.
-  const ids = [...porId.keys()];
-  const fichas = (
-    await enTandas(ids, 8, async (id) => {
-      try {
-        return await ficha(id);
-      } catch (e) {
-        problemas.push({ video: id, error: e.message });
-        return null;
-      }
-    })
-  ).filter((f) => f && f.fecha);
+  // 2. La ficha EXACTA, pero solo de los candidatos. Pedirla de los ~85 hace que YouTube devuelva
+  // 429 desde un datacenter, y el límite se aprieta con el uso: tres corridas seguidas dieron 82
+  // fichas de 82, luego 1 de 87, luego 0 de 83. Con los de arriba basta, porque la fecha y las
+  // vistas exactas solo cambian una decisión en los que pueden disparar un aviso; para el resto,
+  // el redondeo de la búsqueda ya ordena igual de bien.
+  const candidatos = [...porId.values()]
+    .filter((r) => r.velocidadAprox != null)
+    .sort((a, b) => b.velocidadAprox - a.velocidadAprox)
+    .slice(0, maxFichas)
+    .map((r) => r.id);
+  const exactas = new Map();
+  // Menos a la vez y con pausa entre tandas: lo que disparó el 429 fue el ritmo, no el total.
+  await enTandas(candidatos, 3, async (id) => {
+    try {
+      exactas.set(id, await ficha(id));
+    } catch (e) {
+      problemas.push({ video: id, error: e.message });
+    }
+  }, 400);
+
+  // Cada hallazgo con lo mejor que se tenga: exacto si se pudo pedir la ficha, aproximado si no.
+  // Un aproximado es mejor que una ausencia: el video igual se descubre y se puede abrir.
+  const fichas = [...porId.values()].map((r) => {
+    const f = exactas.get(r.id);
+    if (f && f.fecha) return { ...f, aprox: false };
+    if (r.horasAprox == null || r.vistasAprox == null) return null;
+    return {
+      id: r.id,
+      titulo: r.titulo,
+      canal: r.canal,
+      canalId: null,
+      vistas: r.vistasAprox,
+      // La fecha se reconstruye desde el «hace N h» de la búsqueda. Es aproximada —YouTube redondea
+      // a «hace 1 día» todo lo de 24 a 47 h— y por eso solo se usa cuando no hay ficha.
+      fecha: new Date(refMs - r.horasAprox * 3_600_000).toISOString(),
+      duracionSeg: null,
+      seguidores: null,
+      keywords: [],
+      aprox: true,
+    };
+  }).filter(Boolean);
 
   // 3. Clasificar y quedarse con lo que cae en algún tema de Dante. Lo que no tiene tema no entra:
   // el radar es para decidir qué publicar, y una lista con películas de Jean-Claude Van Damme
@@ -307,8 +396,9 @@ export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10, avis
     ventana,
     aviso,
     consultas: busquedas.length,
-    vistos: ids.length,
-    conFicha: fichas.length,
+    vistos: porId.size,
+    conFicha: exactas.size,
+    aproximados: fichas.filter((f) => f.aprox).length,
     guardados: conTema.length,
     nuevos: conTema.filter((h) => h.nuevo).length,
     problemas,
