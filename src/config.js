@@ -193,6 +193,17 @@ export const config = {
   // ese campo es para raspar un canal, no para la búsqueda. Y el problema no era solo tener ruido
   // viejo: al cobrarse por resultado, cada corrida diaria habría pagado otra vez por los mismos
   // videos populares de siempre.
+  // Idiomas de subtítulos, EN ORDEN DE PREFERENCIA. El actor devuelve una pista por cada idioma
+  // que el video tenga (medido: 20 pistas en un video en inglés, porque YouTube autogenera y
+  // autotraduce), y antes nos quedábamos con la PRIMERA de la lista: un video en inglés quedó
+  // guardado con la transcripción en ÁRABE, y otro de la base en hindi.
+  // `en` va primero porque la pista en el idioma original es ASR de verdad y las demás son
+  // traducciones automáticas de ella, y la mayoría de este nicho se publica en inglés. Si Dante
+  // prefiere leerlas en español, se cambia el orden aquí y ya.
+  youtubeSubtitleLangs: (process.env.YT_SUBTITLE_LANGS || 'en,es,pt')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean),
   radarYoutubeDateFilter: process.env.RADAR_YT_DATE_FILTER || 'week',
   radarYoutubeMaxResults: Number(process.env.RADAR_YT_MAX || 10),
 

@@ -102,6 +102,27 @@ export async function getRadarTemas() {
 }
 
 // Consultas activas del radar. Sin `plataforma` devuelve las de todas, para la corrida completa.
+// TODAS las consultas del radar, encendidas o no. Hace falta desde que el radar dejó de ser
+// automático (DESIGN.md 5.8): las 22 consultas quedaron APAGADAS para que el cron no gaste, pero
+// siguen siendo el registro de qué se busca y la referencia (`busqueda_id`) de cada hallazgo que
+// entra a pedido. Un lector que filtre por `activo` no las vería y los hallazgos quedarían
+// huérfanos de su consulta.
+export async function getRadarBusquedas(plataforma = null) {
+  const c = await getClient();
+  let q = c.from(config.radarBusquedasTable).select('*');
+  if (plataforma) q = q.eq('plataforma', plataforma);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data || []).map((r) => ({
+    recordId: r.id,
+    plataforma: r.plataforma,
+    consulta: r.consulta,
+    etiqueta: r.etiqueta || r.consulta,
+    maxPorCorrida: r.max_por_corrida || null,
+    activo: r.activo === true,
+  }));
+}
+
 export async function getActiveRadarBusquedas(plataforma = null) {
   const c = await getClient();
   let q = c.from(config.radarBusquedasTable).select('*').eq('activo', true);

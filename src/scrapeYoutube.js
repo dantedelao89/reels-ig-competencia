@@ -20,11 +20,20 @@ import { syncVideos, getExistingVideoIds } from './supabase.js';
 // se sube para no cortar transcripciones de videos largos.
 const MAX_SUBTITLE_CHARS = 1_000_000;
 
-export function extractSubtitles(subs) {
+// Elige la pista por IDIOMA, no la primera que traiga texto. El actor devuelve una pista por cada
+// idioma del video —medido: 20 en un video en inglés— y la lista no viene en ningún orden útil: la
+// primera era árabe, así que «Anthropic Just Dropped Claude Duet» se guardó con la transcripción en
+// árabe, inservible para escribir contenido y además ensuciando `search_tsv`.
+export function extractSubtitles(subs, preferidos = config.youtubeSubtitleLangs) {
   if (!subs) return '';
-  const tracks = Array.isArray(subs) ? subs : [subs];
-  const withText = tracks.find((t) => t && t.plaintext) || tracks[0];
-  let text = (withText && withText.plaintext) || '';
+  const tracks = (Array.isArray(subs) ? subs : [subs]).filter((t) => t && t.plaintext);
+  if (!tracks.length) return '';
+  const deIdioma = (lang) =>
+    tracks.find((t) => String(t.language || '').toLowerCase().split('-')[0] === lang);
+  // Si el video no tiene ninguno de los idiomas preferidos, se guarda la primera pista con texto:
+  // una transcripción en un idioma raro sigue siendo mejor que ninguna, y el idioma se ve al leerla.
+  const elegida = (preferidos || []).map(deIdioma).find(Boolean) || tracks[0];
+  let text = elegida.plaintext || '';
   if (text.length > MAX_SUBTITLE_CHARS) text = text.slice(0, MAX_SUBTITLE_CHARS) + '… [recortado]';
   return text;
 }
@@ -134,7 +143,7 @@ export async function runScrapeYoutube() {
 // Agrega UN video de YouTube por su URL directa, pegada en DISECTA. Reutiliza el mismo pipeline:
 // mapeo, subtítulos, rehost de thumbnail a R2 y espejo a Supabase. Hereda proyecto si el canal ya
 // es una fuente nuestra.
-export async function runScrapeYoutubeVideo(videoUrl) {
+export async function runScrapeYoutubeVideo(videoUrl, { altaFuente = true } = {}) {
   const startedAt = new Date().toISOString();
   const url = (videoUrl || '').trim();
   if (!/youtu\.?be/i.test(url)) {

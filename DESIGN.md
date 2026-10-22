@@ -167,12 +167,13 @@ En este orden, reutilizando los patrones que ya existen:
 1. `📡 Radar` — título
 2. **Temas**: fichas conmutables · Claude Code · ChatGPT · Anuncios IA · Video IA · Modelos nuevos
 3. **Plataforma**: segmentado · Todo / X / YT / LI
-4. **Rango**: segmentado · Hoy / 7 días / 30 días
-5. **Orden**: segmentado · Velocidad / Reciente
-6. Búsqueda de texto libre
-7. `Ver descartados` — conmutador
-8. `⚙ Consultas` — secundario, lleva a Fuentes
-9. `Rastrear ahora` — `AsyncButton`, dice el costo estimado en su `title`
+4. **Idioma**: segmentado · Todo / ES / EN / PT — ver 5.7
+5. **Rango**: segmentado · Hoy / 7 días / 30 días
+6. **Orden**: segmentado · Velocidad / Reciente
+7. Búsqueda de texto libre
+8. `Ver descartados` — conmutador
+9. `⚙ Consultas` — secundario, lleva a Fuentes
+10. `Rastrear ahora` — `AsyncButton`, dice el costo estimado en su `title`
 
 ### 5.4 Divulgación progresiva
 
@@ -202,7 +203,61 @@ ya está medido que un hashtag puede ser 100% basura (`#ia` en X resultó ser un
 Vocaloid). Cada consulta reporta su mediana y su conteo de flojos, para poder matar las que no
 rinden.
 
-### 5.7 Instagram
+### 5.7 Idioma: tres columnas de señal, no una
+
+El Radar busca en **inglés, español y portugués de Brasil** (Dante, 21 oct 2026). No es un
+parámetro del actor —`streamers/youtube-scraper` no tiene idioma ni país, y ni `hl`/`gl` ni el país
+del proxy cambian nada, medido— sino el **idioma del texto de cada consulta**, así que cada tema
+vive como tres consultas.
+
+Eso convierte el idioma en una dimensión de filtro tan importante como la plataforma, porque la
+decisión de contenido es distinta en cada una. Medido el 22 oct 2026, 16 horas después del
+lanzamiento de Claude Duet: en inglés el tema iba en **medio millón de vistas**; en español había
+**tres videos de dos dígitos de vistas**. Ese contraste es la señal más valiosa de la pantalla y se
+pierde si los tres idiomas se mezclan en una sola lista.
+
+El control va como **segmentado · Todo / ES / EN / PT**, junto al de plataforma. Se resuelve
+filtrando por el sufijo de la etiqueta de la consulta (`claude · es`), que es la convención con la
+que quedaron nombradas. Es un filtro de la vista, no estado guardado: por eso no hace falta una
+columna de idioma que haya que mantener de acuerdo con el texto de la consulta.
+
+**Ojo con el título**: en modo español YouTube traduce los títulos, así que el título NO dice el
+idioma del video. Lo que no se traduce es la descripción. La pantalla muestra el idioma de la
+CONSULTA que encontró el hallazgo, que es un hecho, y no presume el del video.
+
+### 5.8 Cómo entra la información: a pedido, nada automático
+
+**MVP decidido por Dante el 22 oct 2026: «no lo quiero automático».** El Radar no se llena solo.
+Dante pide los hallazgos por chat, se le entregan en la conversación y **la misma pasada los guarda
+en la base**, que es lo que la pantalla lee después.
+
+Consecuencias de diseño, no detalles de implementación:
+
+- **El cron queda apagado** desactivando las 22 consultas de `radar_busquedas`. Se apagan, no se
+  borran: siguen siendo el registro de qué se busca y con qué texto, y encenderlas es un
+  interruptor, no volver a escribirlas.
+- **Las consultas apagadas siguen siendo la referencia** de cada hallazgo (`busqueda_id`), así que
+  la pantalla puede agrupar y filtrar por consulta e idioma igual que si el cron las hubiera
+  corrido. Apagado no significa huérfano.
+- **`Rastrear ahora` sigue existiendo** en la cabecera, pero deja de ser el camino principal: es el
+  botón para cuando Dante quiera disparar una consulta concreta desde la pantalla.
+- La pantalla **no miente sobre su frescura**: dice cuándo fue la última vez que entró algo, porque
+  sin cron no hay garantía de que sea de hoy.
+
+### 5.9 Primera versión sin IA
+
+La tarjeta por tema de 5.2 se construye **agrupando por la columna `temas`**, que ya se calcula al
+insertar, es determinista y gratis. El título de la tarjeta es **el tema**, y dentro van los
+hallazgos ordenados por velocidad.
+
+El **título escrito por IA y el ÁNGULO de 5.2 quedan para la segunda versión** (Dante, 22 oct
+2026). Son lo que convierte «esto pasó» en «esto puedo publicar», pero cuestan por uso y exigen
+agrupar por suceso, no por tema. Se añaden **encima** de esta versión: la tarjeta ya es el
+contenedor correcto, así que el ángulo se mete como una línea más y nada se rehace.
+
+Mientras no haya ángulo, la tarjeta no finge tenerlo: no se pone un resumen automático en su lugar.
+
+### 5.10 Instagram
 
 **Fuera de la v1, a propósito.** Instagram no tiene búsqueda por palabra clave, solo hashtags, y los
 hashtags de IA ya se midieron como ruido. Instagram entra por las **cuentas que ya están en
@@ -278,3 +333,6 @@ colapsa en `+N más` — con 15 temas, una fila de fichas es ruido, no navegaci�
 - [x] **Instagram fuera de la v1** (Dante, 19 oct 2026). Entra por las cuentas de Fuentes
 - [x] **Temas editables desde Fuentes**, con alias (Dante, 19 oct 2026)
 - [x] 10 tarjetas por día antes de paginar — valor por defecto, se cambia en un sitio
+- [x] **Buscar siempre en inglés, español y portugués de Brasil** (Dante, 21 oct 2026)
+- [x] **Nada automático: Dante pide por chat, se entrega y se guarda en la base** (Dante, 22 oct 2026)
+- [x] **Primera versión sin IA**: tarjeta por tema agrupando por `temas`; el ángulo va después (Dante, 22 oct 2026)
