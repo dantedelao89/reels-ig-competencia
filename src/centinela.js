@@ -181,7 +181,10 @@ export function formatearAvisoCentinela(nuevos, ahoraMs = Date.now()) {
 
 // Una pasada: lee los feeds, se queda con lo publicado en las últimas `maxHoras` que no hubiera
 // visto antes, lo guarda y avisa.
-export async function correrCentinela({ maxHoras = 6, avisar = true } = {}) {
+// `soloNuevos`: el cron quiere lo que no ha visto; una consulta a mano quiere ver lo que HAY,
+// aunque ya se haya guardado. Sin esta distinción, preguntar dos veces seguidas devolvería vacío
+// la segunda y parecería que los canales no han publicado nada.
+export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos = true } = {}) {
   const refMs = Date.now();
   const refIso = new Date(refMs).toISOString();
   const problemas = [];
@@ -204,20 +207,22 @@ export async function correrCentinela({ maxHoras = 6, avisar = true } = {}) {
         // La ventana evita que un reinicio del servicio avise de los 15 videos del feed: sin
         // ella, cada despliegue dispararía una ráfaga de avisos viejos.
         if (!(horas >= 0 && horas <= maxHoras)) continue;
-        if (yaEstaban.has(String(v.id))) continue;
+        if (soloNuevos && yaEstaban.has(String(v.id))) continue;
+        const yaLoTenia = yaEstaban.has(String(v.id));
         yaEstaban.add(String(v.id));
         const hallazgo = aHallazgo(v, canal, refIso);
         // Se GUARDA siempre, se AVISA según el canal: que algo no merezca un mensaje no quiere
         // decir que no merezca estar en el radar cuando Dante lo mire.
         const avisable = !canal.soloAnuncios || pareceAnuncio(v.titulo);
-        nuevos.push({ hallazgo, canal, avisable });
+        nuevos.push({ hallazgo, canal, avisable, yaLoTenia });
       }
     } catch (e) {
       problemas.push({ canal: canal.nombre, error: e.message });
     }
   }
 
-  for (const { hallazgo, canal } of nuevos) {
+  for (const { hallazgo, canal, yaLoTenia } of nuevos) {
+    if (yaLoTenia) continue;
     try {
       await syncRadar([hallazgo], {
         plataforma: 'yt',
@@ -243,6 +248,9 @@ export async function correrCentinela({ maxHoras = 6, avisar = true } = {}) {
     nuevos: nuevos.length,
     avisables: avisables.length,
     titulos: nuevos.map(({ hallazgo, avisable }) => `${avisable ? '🔔' : '  '} ${hallazgo.texto}`),
+    // Los objetos completos, para que quien consulte a mano pueda formatearlos igual que el aviso
+    // automático en vez de recibir una lista de títulos sueltos.
+    detalle: nuevos,
     aviso,
     problemas,
   };

@@ -20,6 +20,9 @@ import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
 import { verifySlackSignature, slackReply } from './slack.js';
 import { formatearAviso } from './radarAviso.js';
+import { candidatas, palabrasDe, formatearBrote } from './radarBrote.js';
+import { getCaptionsAnteriores } from './supabase.js';
+import { formatearAvisoCentinela } from './centinela.js';
 import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
@@ -975,15 +978,62 @@ app.post('/slack/recurso', slackFormParser, async (req, res) => {
 app.post('/slack/radar', slackFormParser, async (req, res) => {
   if (!verifySlackSignature(req)) return res.status(401).send('No autorizado');
   const responseUrl = req.body?.response_url;
-  const cuantos = Math.min(Math.max(Number((req.body?.text || '').trim()) || 5, 1), 15);
+  const arg = (req.body?.text || '').trim().toLowerCase();
+  const cuantos = Math.min(Math.max(Number(arg) || 5, 1), 15);
+  // Un solo comando con argumentos en vez de tres comandos: cada comando nuevo hay que darlo de
+  // alta a mano en la app de Slack, y las tres señales son la misma pregunta hecha de tres formas.
+  const modo = /^canal/.test(arg) ? 'canales' : /^brote/.test(arg) ? 'brote' : /^ayuda|^help/.test(arg) ? 'ayuda' : 'velocidad';
 
   // Slack corta a los 3 segundos, y una pasada tarda unos 10-15. Se acusa recibo primero y el
   // resultado llega después por response_url; sin este ACK el comando sale con "operation_timeout"
   // aunque por detrás funcione.
-  res.json({ response_type: 'in_channel', text: `🔎 Buscando lo de ahora… (unos 15 s)` });
+  if (modo === 'ayuda') {
+    return res.json({
+      response_type: 'ephemeral',
+      text:
+        '`/radar` — lo que más corre ahora (top 5)\n' +
+        '`/radar 10` — lo mismo, con los que quieras (máx 15)\n' +
+        '`/radar canales` — qué han publicado los canales oficiales\n' +
+        '`/radar brote` — si hay alguna palabra nueva repitiéndose',
+    });
+  }
+
+  res.json({
+    response_type: 'in_channel',
+    text: modo === 'canales' ? '🔎 Mirando los canales oficiales…' : '🔎 Buscando lo de ahora… (unos 15 s)',
+  });
 
   try {
+    if (modo === 'canales') {
+      const c = await correrCentinela({ maxHoras: 24, avisar: false, soloNuevos: false });
+      const lista = c.titulos || [];
+      await slackReply(
+        responseUrl,
+        lista.length
+          ? { ...formatearAvisoCentinela(c.detalle || [], Date.now()), response_type: 'in_channel' }
+          : '🔎 Ningún canal oficial ha publicado en las últimas 24 h.'
+      );
+      return;
+    }
+
     const r = await correrRadarLibre({ ventana: 'hoy', porConsulta: 5, avisar: false });
+
+    if (modo === 'brote') {
+      const cands = candidatas(r.hallazgos || [], { ahoraMs: Date.now() });
+      const corte = new Date(Date.now() - 3 * 3_600_000).toISOString();
+      const previos = new Set();
+      for (const cap of await getCaptionsAnteriores('yt', corte)) {
+        for (const w of palabrasDe(cap)) previos.add(w);
+      }
+      const nuevasPalabras = cands.filter((c) => !previos.has(c.palabra));
+      await slackReply(
+        responseUrl,
+        nuevasPalabras.length
+          ? { ...formatearBrote(nuevasPalabras, Date.now()), response_type: 'in_channel' }
+          : '🌱 Ninguna palabra nueva repitiéndose ahora. Es lo normal: en todo el histórico solo ha pasado dos veces.'
+      );
+      return;
+    }
     const top = (r.hallazgos || []).slice(0, cuantos);
     if (!top.length) {
       await slackReply(responseUrl, '🔎 Nada en tus temas con los filtros de hoy. Puede ser un día tranquilo.');
