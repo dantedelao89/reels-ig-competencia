@@ -242,6 +242,15 @@ export const config = {
   // para otra cosa si la URL se filtra.
   slackWebhookUrl: process.env.SLACK_WEBHOOK_URL || '',
 
+  // --- Centinela: los canales oficiales ---
+  // Cada 15 minutos. Puede serlo porque son diez feeds RSS de unos pocos KB, uno por canal: no es
+  // el patrón que acabó en 429 (muchas páginas del mismo dominio de golpe).
+  enableCentinelaCron: flag(process.env.ENABLE_CENTINELA_CRON, false),
+  centinelaCronSchedule: process.env.CENTINELA_CRON_SCHEDULE || '*/15 * * * *',
+  // Ventana de lo que se considera "recién publicado". Evita que un reinicio del servicio avise de
+  // los 15 videos que trae cada feed: sin ella, cada despliegue sería una ráfaga de avisos viejos.
+  centinelaMaxHoras: Number(process.env.CENTINELA_MAX_HORAS || 6),
+
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
   ytChannelsTable: process.env.SUPABASE_YT_CHANNELS_TABLE || 'yt_channels',

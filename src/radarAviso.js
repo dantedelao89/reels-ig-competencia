@@ -96,13 +96,18 @@ export function formatearAviso(avisos, todos, ahoraMs = Date.now()) {
       type: 'header',
       text: {
         type: 'plain_text',
-        text: avisos.length === 1 ? '🔥 Despegando ahora' : `🔥 ${avisos.length} despegando ahora`,
+        text:
+          avisos.length === 1
+            ? '🔥 Despegando ahora'
+            : `🔥 ${avisos.length} despegando ahora · por vistas/hora`,
         emoji: true,
       },
     },
   ];
 
+  let n = 0;
   for (const h of avisos) {
+    n += 1;
     const idi = idiomaDe(h).toUpperCase();
     const tema = (h.temas || [])[0];
     const c = tema ? conteos.get(tema) : null;
@@ -128,7 +133,9 @@ export function formatearAviso(avisos, todos, ahoraMs = Date.now()) {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*<${h.url}|${(h.texto || 'sin título').replace(/[<>&]/g, ' ')}>*\n${ficha}`,
+        // El número delante porque el orden por velocidad no se ve: dos bloques seguidos parecen
+        // una lista cualquiera, y lo que decide cuál grabar es justo cuál va primero.
+        text: `*${n}. <${h.url}|${(h.texto || 'sin título').replace(/[<>&]/g, ' ')}>*\n${ficha}`,
       },
     });
     bloques.push({
@@ -158,7 +165,15 @@ export function formatearAviso(avisos, todos, ahoraMs = Date.now()) {
     .slice(0, 2)
     .map((h) => `${Math.round(h.velocidad).toLocaleString('es-MX')}/h ${h.texto || ''}`.slice(0, 80))
     .join(' · ');
-  return { text: `🔥 ${resumen}`, blocks: bloques };
+  return {
+    text: `🔥 ${resumen}`,
+    blocks: bloques,
+    // Sin vista previa de los enlaces. Slack despliega una tarjeta con miniatura por cada link y
+    // con dos hallazgos ya ocupan más pantalla que el aviso entero: el título ya es enlace, así
+    // que la tarjeta no añade nada y entierra lo que sí decide (la velocidad y el hueco).
+    unfurl_links: false,
+    unfurl_media: false,
+  };
 }
 
 // Manda el aviso a Slack por un webhook entrante. Devuelve si Slack lo aceptó, sin lanzar: un fallo

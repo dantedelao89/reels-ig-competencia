@@ -12,6 +12,7 @@ import { runScrape, runScrapeInstagramCreator, runScrapeInstagramUrl } from './s
 import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch, runScrapeYoutubeVideo } from './scrapeYoutube.js';
 import { descargarYoutube } from './youtubeDescarga.js';
 import { correrRadarLibre } from './radarYoutubeLibre.js';
+import { correrCentinela } from './centinela.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
 import { runScrapeAds, runScrapeAdvertiserUrl } from './scrapeAds.js';
 import { backfillSubtitles } from './backfill.js';
@@ -297,6 +298,27 @@ app.post('/scrape-search', async (req, res) => {
 // pregunta que responde la PRIMERA llamada es si YouTube acepta peticiones desde el datacenter de
 // Railway o las corta: desde la Mac funciona, pero una IP residencial y una de datacenter no son
 // lo mismo para YouTube. Si las corta, el error lo dice y el cron se queda en Apify.
+// Una pasada del centinela: lee los feeds de los canales oficiales y avisa de lo recién salido.
+app.post('/centinela', async (req, res) => {
+  if (config.triggerSecret) {
+    const provided = req.get('x-trigger-secret') || req.query.secret;
+    if (provided !== config.triggerSecret) {
+      return res.status(401).json({ ok: false, error: 'No autorizado' });
+    }
+  }
+  try {
+    res.json(
+      await correrCentinela({
+        maxHoras: Number(req.body?.maxHoras) || config.centinelaMaxHoras,
+        avisar: req.body?.avisar !== false,
+      })
+    );
+  } catch (err) {
+    console.error('Error en /centinela:', err.message);
+    res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/radar-libre', async (req, res) => {
   if (config.triggerSecret) {
     const provided = req.get('x-trigger-secret') || req.query.secret;
@@ -1188,6 +1210,36 @@ app.listen(config.port, () => {
       console.log(`📖 Cron de historias ACTIVO: ${config.storiesCronSchedule} (${config.cronTimezone})`);
     } else {
       console.error(`STORIES_CRON_SCHEDULE inválido: "${config.storiesCronSchedule}" — cron de historias desactivado`);
+    }
+  }
+
+  // Cron del CENTINELA: cada 15 min. Apagado por defecto, como todo lo que escribe a Slack.
+  //
+  // Va tan seguido porque lo que vigila no acumula vistas: un anuncio oficial vale justo cuando
+  // sale. Medido: el canal de Claude publicó a las 13:35 y el primero en español salió a las 16:36
+  // con 22 mil vistas; los que salieron 15 horas después se quedaron en dos dígitos.
+  if (config.enableCentinelaCron) {
+    if (cron.validate(config.centinelaCronSchedule)) {
+      cron.schedule(
+        config.centinelaCronSchedule,
+        async () => {
+          try {
+            const r = await correrCentinela({ maxHoras: config.centinelaMaxHoras, avisar: true });
+            // Solo se escribe en el log cuando hay algo o algo falla: cada 15 minutos, una línea
+            // de "0 nuevos" son 96 líneas diarias que entierran lo que sí importa.
+            if (r.nuevos || r.problemas.length) console.log('[centinela]', JSON.stringify(r));
+          } catch (err) {
+            console.error('[centinela] error:', err.message);
+          }
+        },
+        { timezone: config.cronTimezone }
+      );
+      console.log(
+        `🚨 Centinela ACTIVO: ${config.centinelaCronSchedule}` +
+          `${config.slackWebhookUrl ? ' · avisa por Slack' : ' · SIN SLACK_WEBHOOK_URL: no avisará'}`
+      );
+    } else {
+      console.error(`CENTINELA_CRON_SCHEDULE inválido: "${config.centinelaCronSchedule}"`);
     }
   }
 
