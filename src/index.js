@@ -169,6 +169,8 @@ app.get('/crons', async (req, res) => {
       // Los frenos de gasto, visibles aquí: el estado de lo que cuesta dinero no debe vivir solo
       // en una variable de Railway que nadie ve.
       topePorCorridaUsd: config.radarMaxUsdPorCorrida,
+      // YouTube corre sus consultas en lote, así que su tope es el del lote, no el de una consulta.
+      topeLoteYoutubeUsd: config.radarYoutubeMaxUsdPorCorrida,
       presupuestoMensualUsd: config.radarPresupuestoMensualUsd,
       gastadoEsteMesUsd: await gastoMensualUsd(),
     },

@@ -100,7 +100,11 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
     nombreEditable: true,
     nameColumn: 'etiqueta',
     keyLabel: 'Palabra clave',
-    keyPlaceholder: 'ej. claude code',
+    // El idioma de la consulta ES el idioma en que se busca: el actor no tiene parámetro de idioma
+    // ni de país, y pasarle hl/gl o un proxy de MX/BR no cambia nada (medido el 21 oct 2026). Cada
+    // tema vive como tres consultas, una por idioma; el ejemplo lo recuerda para que nadie añada
+    // una sola en inglés y se pierda lo de español y portugués sin darse cuenta.
+    keyPlaceholder: 'ej. claude code · claude code en español · claude code em português',
   },
   fb_advertiser: {
     label: 'Anunciantes',

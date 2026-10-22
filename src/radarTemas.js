@@ -30,7 +30,13 @@ function variantes(alias) {
   const n = normalizar(alias);
   if (!n.trim()) return [];
   const pegado = ` ${n.trim().replace(/ /g, '')} `;
-  return pegado === n ? [n] : [n, pegado];
+  const base = pegado === n ? [n] : [n, pegado];
+  // Y en PLURAL. Exigir límite de palabra es lo que evita que "claude" encuentre "claudette", pero
+  // de paso tira los plurales: el alias ` ai influencer ` no está dentro de ` ai influencers `.
+  // Medido el 21 oct 2026: «EXACTLY How AI Influencers Are Getting INSANELY Rich» quedó sin tema
+  // teniendo el alias. Una `s` al final es suficiente — los temas son nombres de modelos y
+  // herramientas, no verbos, así que no hay plurales irregulares que perseguir.
+  return [...new Set(base.flatMap((v) => [v, `${v.slice(0, -1)}s `]))];
 }
 
 // Devuelve las etiquetas de los temas que aparecen en el texto. Un hallazgo puede llevar varios:

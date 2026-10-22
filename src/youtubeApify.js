@@ -35,14 +35,18 @@ const subtitleOpts = {
 // Varias búsquedas (palabras clave) en una sola corrida.
 // `maxUsd`: tope duro de gasto de la corrida, que impone Apify. Solo lo manda el radar; el
 // pipeline orgánico sigue sin tope, como antes.
-export async function scrapeSearches({ queries, maxResults, maxShorts, onlyNewerThan, dateFilter, maxUsd }) {
+// `sinSubtitulos`: lo manda el radar, que NO guarda subtítulos en ninguna columna. Sin esto el
+// actor los bajaba en todos los idiomas que el video tuviera — medido en una corrida de 20
+// consultas: subtítulos en malayo, bengalí, francés, alemán y neerlandés dentro de 440 peticiones
+// y 189 segundos. No se cobran aparte, pero alargaban cada corrida para tirar el resultado.
+export async function scrapeSearches({ queries, maxResults, maxShorts, onlyNewerThan, dateFilter, maxUsd, sinSubtitulos }) {
   const input = {
     searchQueries: queries,
     maxResults,
     maxResultsShorts: maxShorts || 0,
     maxResultStreams: 0,
     sortingOrder: 'date',
-    ...subtitleOpts,
+    ...(sinSubtitulos ? { transcriptionAndSubtitle: 'NONE' } : subtitleOpts),
   };
   if (onlyNewerThan) input.oldestPostDate = onlyNewerThan;
   // El filtro de fecha de YouTube, el único que de verdad acota una BÚSQUEDA: `oldestPostDate` no

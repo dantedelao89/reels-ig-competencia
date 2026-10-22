@@ -200,6 +200,11 @@ export const config = {
   // Tope duro POR CORRIDA de consulta, que impone Apify: ver el comentario de runActorItems sobre
   // por qué el número que se le pide al actor no basta.
   radarMaxUsdPorCorrida: Number(process.env.RADAR_MAX_USD_CORRIDA || 0.05),
+  // YouTube corre TODAS sus consultas en una sola corrida (ver scrapeRadarYoutube.js), así que su
+  // tope es el del lote completo, no el de una consulta: 21 consultas × 3 videos × $0.003 = $0.19.
+  // $0.30 deja margen para que un tema de más no corte el lote, y sigue siendo un freno real si el
+  // actor ignorara `maxResults`.
+  radarYoutubeMaxUsdPorCorrida: Number(process.env.RADAR_YT_MAX_USD_CORRIDA || 0.3),
   // Presupuesto mensual del radar, de los $29 que incluye el plan STARTER. Antes de cada corrida se
   // compara contra el gasto REAL que reporta Apify; si ya se pasó, el radar no corre.
   radarPresupuestoMensualUsd: Number(process.env.RADAR_PRESUPUESTO_USD || 8),
