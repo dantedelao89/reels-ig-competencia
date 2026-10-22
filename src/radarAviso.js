@@ -1,4 +1,4 @@
-// Avisa por WhatsApp cuando algo del nicho despega, para poder grabar dentro de la ventana.
+// Avisa por Slack cuando algo del nicho despega, para poder grabar dentro de la ventana.
 //
 // ## Por qué hay un umbral y no "avísame de todo"
 //
@@ -82,61 +82,112 @@ function edad(h, ahoraMs) {
   return horas < 1 ? `${Math.round(horas * 60)} min` : `${horas.toFixed(1)} h`;
 }
 
-// El mensaje. Corto a propósito: se lee en el teléfono, de pie, para decidir en cinco segundos si
-// se graba. Todo lo que no ayude a esa decisión sobra.
+// El mensaje, en bloques de Slack.
+//
+// Va a Slack y no a WhatsApp por decisión de Dante (22 oct 2026): «es mucha información para que
+// vaya en un whatsapp». Tiene razón y no es solo estética — en WhatsApp todo acaba siendo un
+// párrafo de texto plano, mientras que aquí cada hallazgo es su propio bloque, el título es un
+// enlace y la métrica se puede barrer con la vista en vertical. Además deja comentar en hilo sin
+// perder el aviso original.
 export function formatearAviso(avisos, todos, ahoraMs = Date.now()) {
   const conteos = conteoPorIdioma(todos);
-  const partes = avisos.map((h) => {
+  const bloques = [
+    {
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: avisos.length === 1 ? '🔥 Despegando ahora' : `🔥 ${avisos.length} despegando ahora`,
+        emoji: true,
+      },
+    },
+  ];
+
+  for (const h of avisos) {
     const idi = idiomaDe(h).toUpperCase();
     const tema = (h.temas || [])[0];
     const c = tema ? conteos.get(tema) : null;
+    // La línea que convierte el dato en decisión: no es "esto explotó", es "el hueco sigue
+    // abierto". En la ola de Claude Duet los cinco primeros fueron en inglés y el español no
+    // apareció hasta la hora 3.
     const hueco = c
       ? c.es === 0
-        ? `nadie lo ha hecho en español todavía (${c.en} en inglés)`
-        : `ya hay ${c.es} en español y ${c.en} en inglés`
+        ? `🟢 *Nadie lo ha hecho en español todavía* · ${c.en} en inglés`
+        : `🟡 Ya hay ${c.es} en español · ${c.en} en inglés`
       : null;
-    return [
-      `*${Math.round(h.velocidad).toLocaleString('es-MX')} vistas/h* · hace ${edad(h, ahoraMs)} · ${idi}`,
-      h.texto,
-      `${h.nombre || '?'} · ${miles(h.seguidores)} subs · ${(h.views || 0).toLocaleString('es-MX')} vistas`,
-      hueco ? `→ ${hueco}` : null,
-      h.url,
+    // Los suscriptores pueden faltar: desde Railway, YouTube devuelve 429 al pedir la página del
+    // video, así que ese dato solo está cuando se pudo. Se omite en vez de escribir "? subs".
+    const ficha = [
+      h.nombre,
+      h.seguidores ? `${miles(h.seguidores)} subs` : null,
+      `${(h.views || 0).toLocaleString('es-MX')} vistas`,
     ]
       .filter(Boolean)
-      .join('\n');
-  });
-  const cabecera = avisos.length === 1 ? '🔥 Despegando ahora' : `🔥 ${avisos.length} despegando ahora`;
-  return [cabecera, ...partes].join('\n\n');
+      .join(' · ');
+
+    bloques.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*<${h.url}|${(h.texto || 'sin título').replace(/[<>&]/g, ' ')}>*\n${ficha}`,
+      },
+    });
+    bloques.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: [
+            `⚡ *${Math.round(h.velocidad).toLocaleString('es-MX')} vistas/h*`,
+            `hace ${edad(h, ahoraMs)}`,
+            idi,
+            tema || null,
+            hueco,
+          ]
+            .filter(Boolean)
+            .join('  ·  '),
+        },
+      ],
+    });
+    bloques.push({ type: 'divider' });
+  }
+  bloques.pop(); // el último divider sobra
+
+  // `text` es lo que Slack enseña en la notificación del teléfono y en la lista de canales. Sin
+  // esto el aviso llegaría como "mensaje sin texto" justo donde más falta hace leerlo de un vistazo.
+  const resumen = avisos
+    .slice(0, 2)
+    .map((h) => `${Math.round(h.velocidad).toLocaleString('es-MX')}/h ${h.texto || ''}`.slice(0, 80))
+    .join(' · ');
+  return { text: `🔥 ${resumen}`, blocks: bloques };
 }
 
-// Manda el mensaje por Whapi. Devuelve si Whapi lo aceptó, sin lanzar: un fallo del aviso NO debe
-// tumbar la corrida del radar, que ya hizo su trabajo guardando los hallazgos.
-export async function enviarWhatsapp(texto) {
-  const token = config.whapiToken;
-  const to = config.whapiDestino;
-  if (!token || !to) {
-    console.warn('[aviso] falta WHAPI_TOKEN o WHAPI_TO: el hallazgo se guardó, pero no se avisó');
+// Manda el aviso a Slack por un webhook entrante. Devuelve si Slack lo aceptó, sin lanzar: un fallo
+// del aviso NO debe tumbar la corrida del radar, que ya hizo su trabajo guardando los hallazgos.
+//
+// Webhook y no token de bot a propósito: es una URL que solo sabe escribir en UN canal, así que si
+// se filtra no se puede hacer nada más con ella. Para un aviso de una sola dirección, los permisos
+// de un bot serían pagar de más.
+export async function enviarSlack(mensaje) {
+  const url = config.slackWebhookUrl;
+  if (!url) {
+    console.warn('[aviso] falta SLACK_WEBHOOK_URL: el hallazgo se guardó, pero no se avisó');
     return { ok: false, motivo: 'sin configurar' };
   }
   try {
-    const res = await fetch('https://gate.whapi.cloud/messages/text', {
+    const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ to, body: texto }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mensaje),
       signal: AbortSignal.timeout(30_000),
     });
-    const d = await res.json().catch(() => ({}));
-    // Se mira el cuerpo y no solo el código: Whapi responde 200 con `sent:false` cuando el número
-    // no está conectado, y dar eso por enviado es el mismo error que dar un push por desplegado.
-    const ok = res.ok && d?.sent !== false;
-    if (!ok) console.error(`[aviso] Whapi no lo mandó: ${res.status} ${JSON.stringify(d).slice(0, 200)}`);
-    return { ok, estado: res.status, respuesta: d };
+    // Un webhook de Slack responde el texto "ok" en crudo, no JSON. Cualquier otra cosa
+    // ("invalid_payload", "channel_not_found") viene con 400 y explica qué pasó.
+    const cuerpo = (await res.text()).trim();
+    const ok = res.ok && cuerpo === 'ok';
+    if (!ok) console.error(`[aviso] Slack no lo aceptó: ${res.status} ${cuerpo.slice(0, 200)}`);
+    return { ok, estado: res.status, respuesta: cuerpo.slice(0, 200) };
   } catch (e) {
-    console.error(`[aviso] no se pudo llamar a Whapi: ${e.message}`);
+    console.error(`[aviso] no se pudo llamar a Slack: ${e.message}`);
     return { ok: false, motivo: e.message };
   }
 }

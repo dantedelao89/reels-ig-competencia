@@ -19,7 +19,7 @@
 import { clasificar, velocidadPorHora } from './radarTemas.js';
 import { getRadarBusquedas, getRadarTemas } from './sources.js';
 import { getExistingRadarIds, getRadarVelocidades, syncRadar } from './supabase.js';
-import { elegirAvisos, formatearAviso, enviarWhatsapp } from './radarAviso.js';
+import { elegirAvisos, formatearAviso, enviarSlack } from './radarAviso.js';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
@@ -381,7 +381,7 @@ export async function correrRadarLibre({
     try {
       const elegidos = elegirAvisos(conTema, velocidadesPrevias);
       if (elegidos.length) {
-        const r = await enviarWhatsapp(formatearAviso(elegidos, conTema));
+        const r = await enviarSlack(formatearAviso(elegidos, conTema));
         aviso = { enviados: elegidos.length, ok: r.ok, motivo: r.motivo || null };
       } else {
         aviso = { enviados: 0, ok: true };

@@ -1220,7 +1220,7 @@ app.listen(config.port, () => {
       );
       console.log(
         `⚡ Cron del radar libre ACTIVO: ${config.radarLibreCronSchedule} (${config.cronTimezone})` +
-          `${config.whapiDestino ? ` · avisa a ${config.whapiDestino}` : ' · SIN WHAPI_TO: no avisará'}`
+          `${config.slackWebhookUrl ? ' · avisa por Slack' : ' · SIN SLACK_WEBHOOK_URL: no avisará'}`
       );
     } else {
       console.error(`RADAR_LIBRE_CRON_SCHEDULE inválido: "${config.radarLibreCronSchedule}"`);

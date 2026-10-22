@@ -237,8 +237,10 @@ export const config = {
   // La ventana de edad es lo que hace que el umbral signifique algo: un video de ayer a 2.000
   // vistas/h ya no se puede aprovechar.
   radarAvisoMaxHoras: Number(process.env.RADAR_AVISO_MAX_HORAS || 6),
-  whapiToken: process.env.WHAPI_TOKEN || '',
-  whapiDestino: process.env.WHAPI_TO || '',
+  // Webhook entrante de Slack: una URL que solo sabe escribir en un canal. Se eligió sobre un
+  // token de bot porque el aviso es de una sola dirección y así no hay permisos que puedan usarse
+  // para otra cosa si la URL se filtra.
+  slackWebhookUrl: process.env.SLACK_WEBHOOK_URL || '',
 
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
