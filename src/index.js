@@ -308,6 +308,7 @@ app.post('/radar-libre', async (req, res) => {
     const r = await correrRadarLibre({
       ventana: req.body?.ventana || 'hoy',
       porConsulta: Number(req.body?.porConsulta) || 10,
+      avisar: req.body?.avisar === true,
     });
     // Los hallazgos no van en la respuesta: ya quedaron en `radar` y devolverlos serian cientos de
     // KB por cada corrida del cron. Lo que importa aqui es si funciono y cuanto trajo.
@@ -1187,6 +1188,42 @@ app.listen(config.port, () => {
       console.log(`📖 Cron de historias ACTIVO: ${config.storiesCronSchedule} (${config.cronTimezone})`);
     } else {
       console.error(`STORIES_CRON_SCHEDULE inválido: "${config.storiesCronSchedule}" — cron de historias desactivado`);
+    }
+  }
+
+  // Cron del RADAR LIBRE: cada hora de 7 a 23, sin Apify y sin coste. Apagado por defecto
+  // (`ENABLE_RADAR_LIBRE_CRON`) porque manda WhatsApp: un cron que escribe al teléfono de alguien
+  // no debe encenderse solo al desplegar.
+  //
+  // Puede ser horario precisamente porque es gratis. Medido: la ventana para publicar sobre un
+  // lanzamiento son ~3 horas (quien publicó a las +3 h tiene 22 mil vistas; quienes publicaron a
+  // las +15 h, dos dígitos), así que para actuar dentro de esa ventana hay que enterarse en menos
+  // de una hora. Con Apify, 16 pasadas al día costarían $86 al mes.
+  if (config.enableRadarLibreCron) {
+    if (cron.validate(config.radarLibreCronSchedule)) {
+      cron.schedule(
+        config.radarLibreCronSchedule,
+        async () => {
+          try {
+            const r = await correrRadarLibre({
+              ventana: 'hoy',
+              porConsulta: config.radarLibrePorConsulta,
+              avisar: true,
+            });
+            const { hallazgos, ...resumen } = r;
+            console.log('[cron-radar-libre]', JSON.stringify(resumen));
+          } catch (err) {
+            console.error('[cron-radar-libre] error:', err.message);
+          }
+        },
+        { timezone: config.cronTimezone }
+      );
+      console.log(
+        `⚡ Cron del radar libre ACTIVO: ${config.radarLibreCronSchedule} (${config.cronTimezone})` +
+          `${config.whapiDestino ? ` · avisa a ${config.whapiDestino}` : ' · SIN WHAPI_TO: no avisará'}`
+      );
+    } else {
+      console.error(`RADAR_LIBRE_CRON_SCHEDULE inválido: "${config.radarLibreCronSchedule}"`);
     }
   }
 

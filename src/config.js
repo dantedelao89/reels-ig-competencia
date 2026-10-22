@@ -223,6 +223,23 @@ export const config = {
   enableRadarCron: flag(process.env.ENABLE_RADAR_CRON, true),
   radarCronSchedule: process.env.RADAR_CRON_SCHEDULE || '0 7 * * *',
 
+  // --- Radar sin Apify + aviso por WhatsApp ---
+  // Cada hora de 7 a 23. Puede ser cada hora porque no cuesta nada: una pasada son ~18 segundos
+  // leyendo la página de resultados de YouTube. Con Apify a $0.18 por pasada serían $86 al mes y
+  // la cadencia honesta bajaría a 2 o 3 al día, que es justo la que llega tarde.
+  // De noche no corre: el lanzamiento que se midió fue a las 13:35, horario de oficina en EUA.
+  enableRadarLibreCron: flag(process.env.ENABLE_RADAR_LIBRE_CRON, false),
+  radarLibreCronSchedule: process.env.RADAR_LIBRE_CRON_SCHEDULE || '0 7-23 * * *',
+  radarLibrePorConsulta: Number(process.env.RADAR_LIBRE_POR_CONSULTA || 5),
+  // Umbral del aviso, calibrado sobre 115 hallazgos reales de un día: con 1.000 vistas/h salieron
+  // 2 avisos; con 300, cuatro; sin umbral, 115. 88 de los 115 iban por debajo de 300.
+  radarAvisoMinVelocidad: Number(process.env.RADAR_AVISO_MIN_VELOCIDAD || 1000),
+  // La ventana de edad es lo que hace que el umbral signifique algo: un video de ayer a 2.000
+  // vistas/h ya no se puede aprovechar.
+  radarAvisoMaxHoras: Number(process.env.RADAR_AVISO_MAX_HORAS || 6),
+  whapiToken: process.env.WHAPI_TOKEN || '',
+  whapiDestino: process.env.WHAPI_TO || '',
+
   // --- Fuentes (Supabase, reemplaza a Airtable Creadores/Canales YT/Búsquedas YT/Anunciantes) ---
   igCreatorsTable: process.env.SUPABASE_IG_CREATORS_TABLE || 'ig_creators',
   ytChannelsTable: process.env.SUPABASE_YT_CHANNELS_TABLE || 'yt_channels',

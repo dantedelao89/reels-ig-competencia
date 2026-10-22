@@ -18,7 +18,8 @@
 
 import { clasificar, velocidadPorHora } from './radarTemas.js';
 import { getRadarBusquedas, getRadarTemas } from './sources.js';
-import { getExistingRadarIds, syncRadar } from './supabase.js';
+import { getExistingRadarIds, getRadarVelocidades, syncRadar } from './supabase.js';
+import { elegirAvisos, formatearAviso, enviarWhatsapp } from './radarAviso.js';
 
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
@@ -207,7 +208,7 @@ async function enTandas(items, limite, fn) {
 // `porConsulta` acota cuántos resultados se miran de cada consulta. No es un tope de gasto —aquí no
 // se paga— sino de tiempo y de ruido: más abajo de los primeros, YouTube empieza a rellenar con
 // cosas que no tienen que ver.
-export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10 } = {}) {
+export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10, avisar = false } = {}) {
   const refIso = new Date().toISOString();
 
   const busquedas = (await getRadarBusquedas('yt')).sort((a, b) =>
@@ -215,6 +216,9 @@ export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10 } = {
   );
   const temas = await getRadarTemas();
   const yaEstaban = await getExistingRadarIds('yt');
+  // ANTES de sincronizar: `syncRadar` pisa la velocidad, y sin el valor anterior no se puede saber
+  // si un video acaba de CRUZAR el umbral o si ya estaba arriba desde la pasada pasada.
+  const velocidadesPrevias = avisar ? await getRadarVelocidades('yt') : new Map();
 
   // 1. Los IDs que devuelve cada consulta, con su consulta pegada.
   const porId = new Map();
@@ -280,9 +284,28 @@ export async function correrRadarLibre({ ventana = 'hoy', porConsulta = 10 } = {
   }
 
   conTema.sort((a, b) => (b.velocidad || 0) - (a.velocidad || 0));
+
+  // 5. Avisar, si toca. Va al final y con su propio try: los hallazgos ya están guardados, y que
+  // WhatsApp falle no debe convertir una corrida buena en una corrida fallida.
+  let aviso = null;
+  if (avisar) {
+    try {
+      const elegidos = elegirAvisos(conTema, velocidadesPrevias);
+      if (elegidos.length) {
+        const r = await enviarWhatsapp(formatearAviso(elegidos, conTema));
+        aviso = { enviados: elegidos.length, ok: r.ok, motivo: r.motivo || null };
+      } else {
+        aviso = { enviados: 0, ok: true };
+      }
+    } catch (e) {
+      aviso = { enviados: 0, ok: false, motivo: e.message };
+    }
+  }
+
   return {
     ok: true,
     ventana,
+    aviso,
     consultas: busquedas.length,
     vistos: ids.length,
     conFicha: fichas.length,

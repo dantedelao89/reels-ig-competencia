@@ -814,6 +814,29 @@ export async function getExistingRadarIds(plataforma = null) {
   );
 }
 
+// La velocidad que YA estaba guardada de cada hallazgo, antes de que esta corrida la pise.
+//
+// Es lo que permite avisar cuando un video CRUZA el umbral y no solo cuando se descubre. Un video
+// se ve por primera vez a los 30 minutos con 200 vistas/h —por debajo de cualquier umbral— y a las
+// dos horas va en 2.000. Si el aviso solo mirara los nuevos, ese se perdería justo cuando empieza
+// a importar. Comparando contra el valor anterior, salta en la pasada en que despega.
+//
+// `syncRadar` sobrescribe la velocidad, así que esto hay que leerlo ANTES de sincronizar.
+export async function getRadarVelocidades(plataforma = null) {
+  const c = await getClient();
+  let q = c.from(config.radarTable).select('external_id,velocidad');
+  if (plataforma) q = q.eq('plataforma', plataforma);
+  const mapa = new Map();
+  const TAM = 1000;
+  for (let desde = 0; ; desde += TAM) {
+    const { data, error } = await q.range(desde, desde + TAM - 1);
+    if (error) throw new Error(error.message);
+    for (const r of data || []) mapa.set(String(r.external_id), r.velocidad);
+    if (!data || data.length < TAM) break;
+  }
+  return mapa;
+}
+
 // Fila del radar, COMÚN a las tres plataformas: `p` ya viene normalizado por el adaptador de cada
 // red (xApify, el de YouTube…), así que aquí no se decide nada por plataforma. Lo único que queda
 // con sabor a X es el respaldo de la URL del autor, porque esa se arma desde el handle.
