@@ -19,7 +19,7 @@ import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
 import { verifySlackSignature, slackReply } from './slack.js';
-import { formatearAviso } from './radarAviso.js';
+import { formatearAviso, repartirPorTema } from './radarAviso.js';
 import { candidatas, palabrasDe, formatearBrote } from './radarBrote.js';
 import { getCaptionsAnteriores } from './supabase.js';
 import { formatearAvisoCentinela } from './centinela.js';
@@ -1016,7 +1016,9 @@ app.post('/slack/radar', slackFormParser, async (req, res) => {
       return;
     }
 
-    const r = await correrRadarLibre({ ventana: 'hoy', porConsulta: 5, avisar: false });
+    // Más ligera que la del cron: con 36 consultas en varios idiomas son ~50 peticiones, y una
+    // pasada completa tardó 244 s. Quien escribe un comando está esperando delante de la pantalla.
+    const r = await correrRadarLibre({ ventana: 'hoy', porConsulta: 2, maxFichas: 8, avisar: false });
 
     if (modo === 'brote') {
       const cands = candidatas(r.hallazgos || [], { ahoraMs: Date.now() });
@@ -1034,7 +1036,9 @@ app.post('/slack/radar', slackFormParser, async (req, res) => {
       );
       return;
     }
-    const top = (r.hallazgos || []).slice(0, cuantos);
+    // Reparto por tema: sin esto, el tema que arde se come los cinco huecos y la lista parece
+    // siempre la misma. El más rápido de todos sigue saliendo, pero no sus cuatro hermanos.
+    const top = repartirPorTema(r.hallazgos || [], cuantos);
     if (!top.length) {
       await slackReply(responseUrl, '🔎 Nada en tus temas con los filtros de hoy. Puede ser un día tranquilo.');
       return;

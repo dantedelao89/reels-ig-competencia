@@ -51,6 +51,46 @@ export function elegirAvisos(hallazgos, velocidadesPrevias, opciones = {}) {
     .sort((a, b) => (b.velocidad || 0) - (a.velocidad || 0));
 }
 
+// Reparte los huecos entre temas en vez de dárselos al que más arde.
+//
+// Sin esto, un tema caliente se come la lista entera: medido el 22 oct 2026, DOCE de los quince
+// primeros por velocidad eran de Claude o Claude Code, y los otros nueve temas no aparecían. Dante
+// lo noto antes que yo: «siempre me entrega de los mismos temas».
+//
+// Se toman los mejores de cada tema por turnos (el 1º de Claude, el 1º de Seedance, el 1º de
+// Anuncios IA… y luego los segundos), así que el orden por velocidad se respeta DENTRO de cada
+// tema y la lista deja de ser monotemática. Si no hay suficientes temas distintos se rellena con
+// lo que quede, porque una lista corta es peor que una repetida.
+export function repartirPorTema(hallazgos, cuantos, porTema = 2) {
+  const colas = new Map();
+  for (const h of hallazgos) {
+    const t = (h.temas || [])[0] || '—';
+    if (!colas.has(t)) colas.set(t, []);
+    colas.get(t).push(h);
+  }
+  const salida = [];
+  const usados = new Set();
+  for (let vuelta = 0; vuelta < porTema && salida.length < cuantos; vuelta += 1) {
+    for (const cola of colas.values()) {
+      if (salida.length >= cuantos) break;
+      const h = cola[vuelta];
+      if (h && !usados.has(h.id)) {
+        usados.add(h.id);
+        salida.push(h);
+      }
+    }
+  }
+  // Relleno: si los temas no dan para `cuantos`, se completa con los más rápidos que falten.
+  for (const h of hallazgos) {
+    if (salida.length >= cuantos) break;
+    if (!usados.has(h.id)) {
+      usados.add(h.id);
+      salida.push(h);
+    }
+  }
+  return salida.sort((a, b) => (b.velocidad || 0) - (a.velocidad || 0));
+}
+
 // Cuántos videos hay YA de cada tema, por idioma de la consulta que los encontró. Es la señal de
 // si el hueco sigue abierto.
 export function conteoPorIdioma(hallazgos) {

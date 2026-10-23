@@ -91,12 +91,27 @@ function vistasDe(txt) {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
-async function pedir(url, accept) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': UA, 'Accept-Language': accept },
-  });
-  if (!res.ok) throw new Error(`YouTube devolvió ${res.status}`);
-  return res.text();
+// Se reintenta ante fallo de RED, que es distinto de la respuesta vacía. Medido al pasar de 20 a
+// 50 peticiones por pasada: 4 de 50 murieron con `fetch failed` —hailuo, kling y runway— sin que
+// YouTube llegara a responder. El reintento de más arriba cubre el caso «respondió pero sin
+// datos»; este cubre «no respondió». Un 404 o un 429 NO se reintentan: eso no mejora esperando.
+async function pedir(url, accept, intentos = 3) {
+  let ultimo;
+  for (let i = 1; i <= intentos; i += 1) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': UA, 'Accept-Language': accept },
+        signal: AbortSignal.timeout(25_000),
+      });
+      if (!res.ok) throw new Error(`YouTube devolvió ${res.status}`);
+      return await res.text();
+    } catch (e) {
+      ultimo = e;
+      if (/devolvió \d/.test(e.message)) throw e;
+      if (i < intentos) await new Promise((r) => setTimeout(r, 800 * i));
+    }
+  }
+  throw ultimo;
 }
 
 // Los IDs de video que devuelve una consulta, en el orden en que YouTube los pone.
