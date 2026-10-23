@@ -40,13 +40,32 @@ const LOCALES = {
   pt: { hl: 'pt', gl: 'BR', accept: 'pt-BR,pt;q=0.9' },
 };
 
-// El idioma sale del sufijo de la etiqueta (`claude · es`), que es la convención con la que
-// quedaron nombradas las 20 consultas. Se lee AQUÍ y en ningún otro sitio, y solo para elegir el
-// locale de la petición: no se guarda, así que no hay un estado que mantener de acuerdo con el
-// texto. Sin sufijo reconocible se usa inglés, que es el locale propio de YouTube.
+// Los idiomas en los que correr una consulta, sacados del sufijo de su etiqueta: `claude · es`
+// corre solo en español y `seedance · en,es` corre en los dos.
+//
+// Varios idiomas por FILA y no una fila por idioma porque la tabla tiene una restricción única
+// sobre (plataforma, consulta): `seedance` no puede existir dos veces. Y duplicar el texto para
+// esquivarla —«seedance español»— resultó poco fiable al medirlo: a `nano banana` le añade
+// resultados, pero `runway ai` pasa de 13 a 3. Lo que trae contenido en español es el LOCALE de la
+// petición, no la palabra: pidiendo «seedance» con hl=es&gl=MX ya salen creadores hispanos.
+//
+// Se lee AQUÍ y en ningún otro sitio, y solo para elegir el locale: no se guarda, así que no hay
+// un estado que mantener de acuerdo con el texto. Sin sufijo reconocible se usa inglés, que es el
+// locale propio de YouTube.
+export function idiomasDeEtiqueta(etiqueta) {
+  const m = /·\s*([a-z,\s]+)$/i.exec(String(etiqueta || ''));
+  if (!m) return ['en'];
+  const pedidos = m[1]
+    .toLowerCase()
+    .split(',')
+    .map((x) => x.trim())
+    .filter((x) => LOCALES[x]);
+  return pedidos.length ? pedidos : ['en'];
+}
+
+// Compatible con quien espere uno solo (el primero manda para atribuir el hallazgo).
 export function idiomaDeEtiqueta(etiqueta) {
-  const m = /·\s*(en|es|pt)\s*$/i.exec(String(etiqueta || ''));
-  return m ? m[1].toLowerCase() : 'en';
+  return idiomasDeEtiqueta(etiqueta)[0];
 }
 
 function textoDe(nodo) {
@@ -284,20 +303,19 @@ export async function correrRadarLibre({
   // 1. Lo que devuelve cada consulta, con lo aproximado que la propia búsqueda ya trae.
   const porId = new Map();
   const problemas = [];
-  await enTandas(busquedas, 6, async (b) => {
+  // Una tarea por (consulta × idioma): una consulta en dos idiomas son dos peticiones, y así el
+  // reparto en tandas sigue controlando cuántas van a la vez contra YouTube.
+  const tareas = busquedas.flatMap((b) => idiomasDeEtiqueta(b.etiqueta).map((idioma) => ({ b, idioma })));
+  await enTandas(tareas, 6, async ({ b, idioma }) => {
     try {
-      const res = await buscarResultados({
-        consulta: b.consulta,
-        idioma: idiomaDeEtiqueta(b.etiqueta),
-        ventana,
-      });
+      const res = await buscarResultados({ consulta: b.consulta, idioma, ventana });
       for (const r of res.slice(0, porConsulta)) {
         // El primero que lo encuentra se queda con la autoría: así un video que sale en la consulta
         // en español no se reetiqueta como inglés por aparecer también allí.
-        if (!porId.has(r.id)) porId.set(r.id, { ...r, busqueda: b });
+        if (!porId.has(r.id)) porId.set(r.id, { ...r, busqueda: b, idioma });
       }
     } catch (e) {
-      problemas.push({ busqueda: b.etiqueta, error: e.message });
+      problemas.push({ busqueda: `${b.etiqueta} [${idioma}]`, error: e.message });
     }
   });
 
@@ -420,6 +438,7 @@ export async function correrRadarLibre({
     aviso,
     brote,
     consultas: busquedas.length,
+    peticiones: tareas.length,
     vistos: porId.size,
     conFicha: exactas.size,
     aproximados: fichas.filter((f) => f.aprox).length,
