@@ -21,7 +21,7 @@ import { tgSend, isAllowed } from './telegram.js';
 import { verifySlackSignature, slackReply } from './slack.js';
 import { formatearAviso, repartirPorTema } from './radarAviso.js';
 import { candidatas, palabrasDe, formatearBrote } from './radarBrote.js';
-import { getCaptionsAnteriores } from './supabase.js';
+import { getCaptionsAnteriores, getRadarReciente } from './supabase.js';
 import { formatearAvisoCentinela } from './centinela.js';
 import { getYoutubeAudioUrl } from './youtubeAudio.js';
 import { transcribeAudio } from './transcribe.js';
@@ -982,7 +982,16 @@ app.post('/slack/radar', slackFormParser, async (req, res) => {
   const cuantos = Math.min(Math.max(Number(arg) || 5, 1), 15);
   // Un solo comando con argumentos en vez de tres comandos: cada comando nuevo hay que darlo de
   // alta a mano en la app de Slack, y las tres señales son la misma pregunta hecha de tres formas.
-  const modo = /^canal/.test(arg) ? 'canales' : /^brote/.test(arg) ? 'brote' : /^ayuda|^help/.test(arg) ? 'ayuda' : 'velocidad';
+  const modo = /^canal/.test(arg)
+    ? 'canales'
+    : /^brote/.test(arg)
+      ? 'brote'
+      : /^ayuda|^help/.test(arg)
+        ? 'ayuda'
+        : 'velocidad';
+  // `fresco` fuerza una pasada en vivo. Por defecto se lee lo guardado, que el cron refresca cada
+  // hora: una pasada completa tarda ~113 s y quien escribe un comando está esperando delante.
+  const enVivo = /fresco|ahora/.test(arg);
 
   // Slack corta a los 3 segundos, y una pasada tarda unos 10-15. Se acusa recibo primero y el
   // resultado llega después por response_url; sin este ACK el comando sale con "operation_timeout"
@@ -994,13 +1003,19 @@ app.post('/slack/radar', slackFormParser, async (req, res) => {
         '`/radar` — lo que más corre ahora (top 5)\n' +
         '`/radar 10` — lo mismo, con los que quieras (máx 15)\n' +
         '`/radar canales` — qué han publicado los canales oficiales\n' +
-        '`/radar brote` — si hay alguna palabra nueva repitiéndose',
+        '`/radar brote` — si hay alguna palabra nueva repitiéndose\n' +
+        '`/radar fresco` — fuerza una búsqueda nueva (tarda ~2 min)',
     });
   }
 
   res.json({
     response_type: 'in_channel',
-    text: modo === 'canales' ? '🔎 Mirando los canales oficiales…' : '🔎 Buscando lo de ahora… (unos 15 s)',
+    text:
+      modo === 'canales'
+        ? '🔎 Mirando los canales oficiales…'
+        : enVivo || modo === 'brote'
+          ? '🔎 Buscando en vivo… (un par de minutos)'
+          : '🔎 Un momento…',
   });
 
   try {
@@ -1016,9 +1031,12 @@ app.post('/slack/radar', slackFormParser, async (req, res) => {
       return;
     }
 
-    // Más ligera que la del cron: con 36 consultas en varios idiomas son ~50 peticiones, y una
-    // pasada completa tardó 244 s. Quien escribe un comando está esperando delante de la pantalla.
-    const r = await correrRadarLibre({ ventana: 'hoy', porConsulta: 2, maxFichas: 8, avisar: false });
+    // Por defecto se lee lo guardado —instantáneo, y el cron lo refresca cada hora— y solo se
+    // sale a YouTube si se pide en vivo o si hace falta el texto fresco para detectar un brote.
+    const r =
+      enVivo || modo === 'brote'
+        ? await correrRadarLibre({ ventana: 'hoy', porConsulta: 2, maxFichas: 8, avisar: false })
+        : { hallazgos: await getRadarReciente('yt', new Date(Date.now() - 24 * 3_600_000).toISOString()) };
 
     if (modo === 'brote') {
       const cands = candidatas(r.hallazgos || [], { ahoraMs: Date.now() });

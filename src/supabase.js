@@ -837,6 +837,45 @@ export async function getRadarVelocidades(plataforma = null) {
   return mapa;
 }
 
+// Lo que el radar ya tiene guardado de las últimas horas, listo para enseñar.
+//
+// Existe para que `/radar` responda al instante. Una pasada completa son 51 peticiones a YouTube y
+// tarda ~113 s: correcto para el cron, que tiene una hora, e inaceptable para alguien esperando
+// delante de Slack. Como el cron refresca cada hora, lo guardado nunca tiene más de una hora de
+// retraso, y esa diferencia no cambia ninguna decisión.
+export async function getRadarReciente(plataforma, desdeIso, limite = 200) {
+  const c = await getClient();
+  let q = c
+    .from(config.radarTable)
+    .select(
+      'external_id,caption,creador,creador_nombre,creador_seguidores,url,views,likes,velocidad,temas,busqueda_etiqueta,fecha_publicacion,scrapeado_en'
+    )
+    .gte('fecha_publicacion', desdeIso)
+    .eq('descartado', false)
+    .not('velocidad', 'is', null)
+    .order('velocidad', { ascending: false })
+    .limit(limite);
+  if (plataforma) q = q.eq('plataforma', plataforma);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  // Se devuelve con la MISMA forma que produce una pasada en vivo, para que quien lo pinte no
+  // tenga que saber de dónde vino.
+  return (data || []).map((r) => ({
+    id: r.external_id,
+    texto: r.caption,
+    nombre: r.creador_nombre || r.creador,
+    seguidores: r.creador_seguidores,
+    url: r.url,
+    views: r.views,
+    likes: r.likes,
+    velocidad: r.velocidad,
+    temas: Array.isArray(r.temas) ? r.temas : [],
+    fecha: r.fecha_publicacion,
+    scrapeadoEn: r.scrapeado_en,
+    busqueda: { etiqueta: r.busqueda_etiqueta },
+  }));
+}
+
 // Los títulos ya guardados ANTES de un momento dado. Es lo que convierte «esta palabra sale
 // mucho» en «esta palabra es NUEVA», que es la diferencia entre detectar un lanzamiento y avisar
 // de que la gente sigue hablando de Claude.

@@ -52,15 +52,18 @@ const LOCALES = {
 // Se lee AQUÍ y en ningún otro sitio, y solo para elegir el locale: no se guarda, así que no hay
 // un estado que mantener de acuerdo con el texto. Sin sufijo reconocible se usa inglés, que es el
 // locale propio de YouTube.
+// Sin sufijo se corre en INGLÉS Y ESPAÑOL, no solo inglés. Dante añadió `grokbot` desde Fuentes
+// —donde no hay forma de indicar el idioma— y quedó buscando solo en inglés, perdiéndose todo lo
+// hispano sin avisar. El valor por defecto silencioso tiene que ser el que menos sorprenda.
 export function idiomasDeEtiqueta(etiqueta) {
   const m = /·\s*([a-z,\s]+)$/i.exec(String(etiqueta || ''));
-  if (!m) return ['en'];
+  if (!m) return ['en', 'es'];
   const pedidos = m[1]
     .toLowerCase()
     .split(',')
     .map((x) => x.trim())
     .filter((x) => LOCALES[x]);
-  return pedidos.length ? pedidos : ['en'];
+  return pedidos.length ? pedidos : ['en', 'es'];
 }
 
 // Compatible con quien espere uno solo (el primero manda para atribuir el hallazgo).
@@ -95,7 +98,7 @@ function vistasDe(txt) {
 // 50 peticiones por pasada: 4 de 50 murieron con `fetch failed` —hailuo, kling y runway— sin que
 // YouTube llegara a responder. El reintento de más arriba cubre el caso «respondió pero sin
 // datos»; este cubre «no respondió». Un 404 o un 429 NO se reintentan: eso no mejora esperando.
-async function pedir(url, accept, intentos = 3) {
+async function pedir(url, accept, intentos = 4) {
   let ultimo;
   for (let i = 1; i <= intentos; i += 1) {
     try {
@@ -108,7 +111,9 @@ async function pedir(url, accept, intentos = 3) {
     } catch (e) {
       ultimo = e;
       if (/devolvió \d/.test(e.message)) throw e;
-      if (i < intentos) await new Promise((r) => setTimeout(r, 800 * i));
+      // Espera creciente y generosa: lo que corta la conexión es el RITMO, así que reintentar
+      // enseguida vuelve a chocar contra lo mismo. 2s, 4s, 8s.
+      if (i < intentos) await new Promise((r) => setTimeout(r, 2000 * 2 ** (i - 1)));
     }
   }
   throw ultimo;
@@ -321,7 +326,11 @@ export async function correrRadarLibre({
   // Una tarea por (consulta × idioma): una consulta en dos idiomas son dos peticiones, y así el
   // reparto en tandas sigue controlando cuántas van a la vez contra YouTube.
   const tareas = busquedas.flatMap((b) => idiomasDeEtiqueta(b.etiqueta).map((idioma) => ({ b, idioma })));
-  await enTandas(tareas, 6, async ({ b, idioma }) => {
+  // De 3 en 3 y con pausa, no de 6 en 6 a pelo. Al pasar de 20 a 51 peticiones por pasada, 18 de
+  // 51 BÚSQUEDAS murieron con `fetch failed` —ni siquiera un 429: la conexión no llegaba a
+  // abrirse— y se perdió el 35% de la cobertura en silencio, que es la peor forma de fallar.
+  // El cron tiene una hora entera para cada pasada; no hay ninguna prisa que justifique el ritmo.
+  await enTandas(tareas, 3, async ({ b, idioma }) => {
     try {
       const res = await buscarResultados({ consulta: b.consulta, idioma, ventana });
       for (const r of res.slice(0, porConsulta)) {
@@ -332,7 +341,7 @@ export async function correrRadarLibre({
     } catch (e) {
       problemas.push({ busqueda: `${b.etiqueta} [${idioma}]`, error: e.message });
     }
-  });
+  }, 700);
 
   // 2. La ficha EXACTA, pero solo de los candidatos. Pedirla de los ~85 hace que YouTube devuelva
   // 429 desde un datacenter, y el límite se aprieta con el uso: tres corridas seguidas dieron 82
