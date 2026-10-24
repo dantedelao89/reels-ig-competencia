@@ -140,7 +140,15 @@ function formatResult(r) {
   return `✅ *Corrida lista*\n\n${parts.join('\n\n')}`;
 }
 
-app.get('/health', (_req, res) => res.json({ ok: true }));
+// Lleva el commit vivo. Durante tres dias dije "ya se desplegó" sin poder
+// comprobarlo: Railway inyecta el SHA, solo habia que asomarlo.
+app.get('/health', (_req, res) =>
+  res.json({
+    ok: true,
+    commit: (process.env.RAILWAY_GIT_COMMIT_SHA || 'desconocido').slice(0, 7),
+    arranque: new Date(Date.now() - Math.round(process.uptime() * 1000)).toISOString(),
+  })
+);
 
 // Estado de los crons: responde "¿está encendido de verdad?" sin tener que leer los logs de
 // arranque de Railway. Hizo falta al activar la captura automática de historias — el endpoint
