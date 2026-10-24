@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { config } from './config.js';
 import { runScrape, runScrapeInstagramCreator, runScrapeInstagramUrl } from './scrape.js';
 import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch, runScrapeYoutubeVideo } from './scrapeYoutube.js';
-import { descargarYoutube } from './youtubeDescarga.js';
+import { descargarYoutube, flujoDeDescarga } from './youtubeDescarga.js';
 import { correrRadarLibre } from './radarYoutubeLibre.js';
 import { correrCentinela } from './centinela.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
@@ -357,26 +357,25 @@ app.post('/descargar-yt', async (req, res) => {
   if (!url) return res.status(400).json({ ok: false, error: 'url requerida' });
   const altura = Number(req.body?.altura) || 1080;
 
-  const dir = await mkdtemp(join(tmpdir(), 'ytdl-'));
-  const destino = join(dir, 'video.mp4');
   try {
-    const r = await descargarYoutube(url, destino, { altura });
+    const r = await flujoDeDescarga(url, { altura });
     const nombre = `${(r.titulo || 'video').replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 90) || 'video'}.mp4`;
     res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Length', String(r.bytes));
-    // El nombre va en las dos formas: la simple para navegadores viejos y la UTF-8 para que no se
-    // pierdan los acentos de un título en español.
+    // Sin Content-Length: el archivo se va generando y su tamaño no se sabe de antemano. Es el
+    // precio de emitir desde el primer segundo, y a cambio el navegador empieza a bajar enseguida
+    // en vez de esperar minutos sin señal de vida.
     res.setHeader(
       'Content-Disposition',
       `attachment; filename="${nombre.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(nombre)}`
     );
     res.setHeader('X-Resolucion', `${r.altura}p`);
-    await pipeline(createReadStream(destino), res);
+    // Si el cliente se va, se mata ffmpeg: si no, seguiría bajando el video entero para nadie.
+    res.on('close', () => r.proceso?.kill('SIGKILL'));
+    await pipeline(r.cuerpo, res);
   } catch (err) {
     console.error('Error en /descargar-yt:', err.message);
     if (!res.headersSent) res.status(502).json({ ok: false, error: err.message });
-  } finally {
-    await rm(dir, { recursive: true, force: true });
+    else res.end();
   }
 });
 

@@ -16,7 +16,7 @@
 // ffmpeg copiando los flujos (`-c copy`), que no recodifica: es casi instantáneo y no pierde
 // calidad.
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createWriteStream, readFileSync } from 'node:fs';
 import { rm, stat, mkdtemp } from 'node:fs/promises';
@@ -143,6 +143,60 @@ async function bajarA(url, destino) {
   // Un "archivo" de 10 KB es una página de error, no un video.
   if (size < 10_000) throw new Error(`la descarga salió vacía (${size} bytes)`);
   return size;
+}
+
+// Une video y audio y va escribiendo el resultado EN DIRECTO, sin fichero intermedio.
+//
+// Por qué así y no bajar, unir y luego mandar: medido el 24 oct 2026 desde Railway, tres intentos
+// seguidos se quedaron colgados los 90 segundos enteros devolviendo CERO bytes. El servidor estaba
+// trabajando —no hubo ningún error en los logs— pero como no emitía nada hasta tener el archivo
+// completo, por fuera era indistinguible de un cuelgue. El descargador que Dante ya tenía en
+// LAFRAGUA_STUDIO no sufre esto porque va pasando los bytes según llegan.
+//
+// ffmpeg lee las dos URL directamente (acepta HTTP como entrada) con las cabeceras que exige el
+// CDN, y escribe un MP4 fragmentado a su salida estándar. `frag_keyframe+empty_moov` es lo que
+// permite emitir sin saber el tamaño final; `+faststart` no sirve aquí porque necesita rebobinar.
+export function argsDeUnion(video, audio) {
+  const cab = (url) =>
+    Object.entries(cabecerasDe(url))
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('\r\n') + '\r\n';
+  return [
+    '-loglevel', 'error',
+    '-headers', cab(video.url), '-i', video.url,
+    '-headers', cab(audio.url), '-i', audio.url,
+    '-map', '0:v:0', '-map', '1:a:0',
+    '-c', 'copy',
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+    '-f', 'mp4',
+    'pipe:1',
+  ];
+}
+
+// Resuelve y devuelve un flujo listo para volcar en una respuesta HTTP, junto con lo que hace
+// falta para nombrarlo. No escribe nada en disco.
+export async function flujoDeDescarga(urlVideo, { altura = 1080 } = {}) {
+  const { titulo, duracion, medios } = await resolver(urlVideo);
+  const pistas = elegirPistas(medios, altura);
+
+  if (pistas.modo === 'progresivo') {
+    // Una sola pista que ya trae audio: se pasa tal cual, sin ffmpeg de por medio.
+    const res = await fetch(pistas.video.url, { headers: cabecerasDe(pistas.video.url) });
+    if (!res.ok || !res.body) throw new Error(`el CDN devolvió ${res.status}`);
+    return { titulo, duracion, altura: pistas.video.height, modo: 'progresivo', cuerpo: res.body, proceso: null };
+  }
+
+  const ff = spawn('ffmpeg', argsDeUnion(pistas.video, pistas.audio), { stdio: ['ignore', 'pipe', 'pipe'] });
+  // El stderr se guarda pero no se vuelca: si ffmpeg muere, su última línea explica por qué, y sin
+  // esto el fallo llega como «el flujo se cortó» sin más.
+  let err = '';
+  ff.stderr.on('data', (d) => {
+    err = (err + d.toString()).slice(-600);
+  });
+  ff.on('close', (code) => {
+    if (code) console.error(`[descargar-yt] ffmpeg salió con ${code}: ${err.trim().slice(0, 300)}`);
+  });
+  return { titulo, duracion, altura: pistas.video.height, modo: 'unido', cuerpo: ff.stdout, proceso: ff };
 }
 
 // Baja el video a `destino` (.mp4). Devuelve qué se hizo, para poder reportarlo con honestidad.
