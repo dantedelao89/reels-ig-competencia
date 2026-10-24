@@ -102,12 +102,40 @@ export function elegirPistas(medios, altura = 1080) {
   throw new Error('La API no devolvió ninguna pista de video utilizable');
 }
 
+// El User-Agent que exige cada URL firmada.
+//
+// RapidAPI firma las URLs de googlevideo con `c=<cliente>` y **el CDN comprueba que el User-Agent
+// corresponda a ese cliente**: si no coincide, responde 403. Esto se dio por un bloqueo por IP
+// durante un día entero —«googlevideo bloquea los datacenter»— y era falso: desde la Mac colaba
+// sin cabeceras por casualidad, y desde Railway no. Lo correcto estaba en el descargador que Dante
+// ya tenía en LAFRAGUA_STUDIO, que descarga desde Railway sin problema.
+const UA_POR_CLIENTE = {
+  ANDROID_VR: 'com.google.android.apps.youtube.vr.oculus/1.56.21 (Linux; U; Android 12; GB) gzip',
+  ANDROID: 'com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip',
+  ANDROID_EMBEDDED_PLAYER: 'com.google.android.youtube/19.09.37 (Linux; U; Android 12) gzip',
+  IOS: 'com.google.ios.youtube/19.09.3 (iPhone15,2; U; CPU iOS 17_3 like Mac OS X)',
+  IOS_MUSIC: 'com.google.ios.youtube/19.09.3 (iPhone15,2; U; CPU iOS 17_3 like Mac OS X)',
+};
+const UA_NAVEGADOR =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+
+export function cabecerasDe(url) {
+  const esGoogle = /googlevideo\.com|youtube\.com/i.test(url);
+  const cliente = (/[?&]c=([^&]+)/.exec(url) || [])[1];
+  return {
+    'User-Agent': (esGoogle && UA_POR_CLIENTE[decodeURIComponent(cliente || '')]) || UA_NAVEGADOR,
+    Referer: esGoogle ? 'https://www.youtube.com/' : new URL(url).origin,
+    Accept: '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+}
+
 async function bajarA(url, destino) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(600_000) });
-  // El CDN de YouTube (googlevideo.com) responde 403 a muchas IP de datacenter. Se distingue del
-  // resto de errores porque la solución es distinta: no es reintentar, es bajarlo desde otra red.
+  const res = await fetch(url, { headers: cabecerasDe(url), signal: AbortSignal.timeout(600_000) });
   if (res.status === 403) {
-    throw new Error('googlevideo devolvió 403 (el CDN bloquea esta IP; hay que bajarlo desde otra red)');
+    throw new Error(
+      `googlevideo devolvió 403 pese a mandar el User-Agent del cliente c=${(/[?&]c=([^&]+)/.exec(url) || [])[1] || '?'}`
+    );
   }
   if (!res.ok || !res.body) throw new Error(`el CDN devolvió ${res.status}`);
   await pipeline(Readable.fromWeb(res.body), createWriteStream(destino));
