@@ -1,0 +1,494 @@
+{
+ "AcademiaIAlab": {
+  "id": "UC_j6RqDBHE-G53Qjs8riHeg",
+  "nombre": "Academia IA Lab"
+ },
+ "aDevSays569": {
+  "id": "UCzEAOjx37rDPzvd3vWOuNYQ",
+  "nombre": "aDevSays"
+ },
+ "afsh4ck": {
+  "id": "UCmqC6JvEmGUXuK0t6I0ZXXg",
+  "nombre": "AFS H4CK"
+ },
+ "AILABS-393": {
+  "id": "UCelfWQr9sXVMTvBzviPGlFw",
+  "nombre": "AI LABS"
+ },
+ "AI-GPTWorkshop": {
+  "id": "UC2b2wgxm0vFjQfJJ0iRcFRw",
+  "nombre": "Zubair Trabzada | AI Workshop"
+ },
+ "agustinmedinaIA": {
+  "id": "UCDu7DnPnAfdwTg_bzDE1yKA",
+  "nombre": "Agustín Medina | IA Partner "
+ },
+ "AISyncClub": {
+  "id": "UCouEEn-xhyTN9K6wSXjBbVQ",
+  "nombre": "AI싱크클럽"
+ },
+ "AILearnersbyabhijeet": {
+  "id": "UCjECA8ZHP52yFjKyRW4-8Hw",
+  "nombre": "AI Learners India"
+ },
+ "andrewcodesmith": {
+  "id": "UCcgNiiErDGHICbNYtuyxW4A",
+  "nombre": "Andrew Codesmith"
+ },
+ "andylokcl": {
+  "id": "UCwT758Tjg0LPHSNmH0QqkhQ",
+  "nombre": "Andy Lo"
+ },
+ "ArtemXTech": {
+  "id": "UCeNt4ZUGajlELmfGeKyBtUg",
+  "nombre": "Artem Zhutov"
+ },
+ "anwarhermuche": {
+  "id": "UCdqoyAzMA89TKyGzC_GzAMQ",
+  "nombre": "Anwar Hermuche | Engenheiro de IA"
+ },
+ "artturijalliofficial": {
+  "id": "UCHypZnXHuljzvLY8lCPJREw",
+  "nombre": "Artturi Jalli"
+ },
+ "austin.marchese": {
+  "id": "UCFeFVytEkT8kaqPCJZGFswg",
+  "nombre": "Austin Marchese"
+ },
+ "AyushmanPandita": {
+  "id": "UCyWN-BnWSKeHEnNOYvvpNnA",
+  "nombre": "Ayushman Pandita"
+ },
+ "bradbonanno": {
+  "id": "UCLHfIq7P2CkA62ReystiOrw",
+  "nombre": "Brad Bonanno | AI Automation"
+ },
+ "bencord": {
+  "id": "UCpq8lHHliCS3oBt-gfL0bKQ",
+  "nombre": "Benjamín Cordero"
+ },
+ "beailabs_tech": {
+  "id": "UCc3UzaAQ2-RpzvgPRXEQWRQ",
+  "nombre": "beailabs"
+ },
+ "campusx-official": {
+  "id": "UCCWi3hpnq_Pe03nGxuS7isg",
+  "nombre": "CampusX"
+ },
+ "BrockMesarich": {
+  "id": "UCjc1vfduI7BhVMXBLJLDjmA",
+  "nombre": "Brock Mesarich | AI for Non Techies"
+ },
+ "Caktocanal": {
+  "id": "UCupIW_K2OzgL8iq8LTiGYyg",
+  "nombre": "Cakto"
+ },
+ "Chase-H-AI": {
+  "id": "UCoy6cTJ7Tg0dqS-DI-_REsA",
+  "nombre": "Chase AI"
+ },
+ "ClaridadArtificial": {
+  "id": "UCSEHeItlkomzU6RLIHlJ-ow",
+  "nombre": "Claridad Artificial"
+ },
+ "ChaseChappell": {
+  "id": "UCIGEBB32IQdzLOhEtlSP06g",
+  "nombre": "Chase Chappell"
+ },
+ "claude": {
+  "id": "UCV03SRZXJEz-hchIAogeJOg",
+  "nombre": "Claude"
+ },
+ "codewithbeto": {
+  "id": "UCh247h68vszOMA_OWpGEa5g",
+  "nombre": "Code with Beto"
+ },
+ "CodeWithHarry": {
+  "id": "UCeVMnSShP_Iviwkknt83cww",
+  "nombre": "CodeWithHarry"
+ },
+ "conorcreates123": {
+  "id": "UC-TCNuRc61HZTjYY81qRuew",
+  "nombre": "Creating with Conor"
+ },
+ "contact_addy": {
+  "id": "UCxSpczsOKNR-WJ0xYQrrNYw",
+  "nombre": "𝘈𝘋𝘋𝘠&#39;𝘚 𝘞𝘖𝘙𝘓𝘋"
+ },
+ "Conciencia_Artificial": {
+  "id": "UC41pcs5R3kQuwxNgd70zeow",
+  "nombre": "Conciencia Artificial"
+ },
+ "creatorkarro": {
+  "id": "UCWmZBsV8yiup9tqOs4s7tkg",
+  "nombre": "Karolis"
+ },
+ "danmartell": {
+  "id": "UCA-mWX9CvCTVFWRMb9bKc9w",
+  "nombre": "Dan Martell"
+ },
+ "danny_why": {
+  "id": "UC_ILSBQyvg-TlqVt9DJGWPQ",
+  "nombre": "Danny Why"
+ },
+ "deborahfolloni": {
+  "id": "UCta1sF9e9YzzNG4OlQgIlXw",
+  "nombre": "Deborah Folloni"
+ },
+ "DotCSVLab": {
+  "id": "UCOTko-zmnQTcOxSRdg5_uOQ",
+  "nombre": "Dot CSV Lab "
+ },
+ "duncanrogoff": {
+  "id": "UC37JpWP5PxLSma2lh79HU9A",
+  "nombre": "Duncan Rogoff | Learn Claude Code"
+ },
+ "edmundyong": {
+  "id": "UCuKVsDS3oVzTuNjnQ79pEEg",
+  "nombre": "Edmund Yong"
+ },
+ "EricWTech": {
+  "id": "UCOXRjenlq9PmlTqd_JhAbMQ",
+  "nombre": "Eric Tech"
+ },
+ "EthanNelsonAI": {
+  "id": "UCaC9B0wDQKkQpUGVjaNNkIQ",
+  "nombre": "Ethan Nelson"
+ },
+ "futurepedia_io": {
+  "id": "UC_RovKmk0OCbuZjA8f08opw",
+  "nombre": "Futurepedia"
+ },
+ "gilbertsahumada": {
+  "id": "UCZdVZ-KQ1IlPAXkGs4xWt8Q",
+  "nombre": "Gilberts Ahumada"
+ },
+ "Fireship": {
+  "id": "UCsBjURrPoezykLs9EqgamOA",
+  "nombre": "Fireship"
+ },
+ "griffinwdesigns": {
+  "id": "UCdPfG6El0NYgLdSOc8LfP4Q",
+  "nombre": "Griffin Wooldridge"
+ },
+ "go9x": {
+  "id": "UCKtumk72QC3XBb_VWSMQAHg",
+  "nombre": "9x"
+ },
+ "graceleungyl": {
+  "id": "UCrB7UFnkosBjAhOg3a9NdWw",
+  "nombre": "Grace Leung"
+ },
+ "haciendolajuntos": {
+  "id": "UCVwcnKHniDqKnmlRSkWyBKw",
+  "nombre": "Oski de Haciendola"
+ },
+ "growwithalex": {
+  "id": "UCVlckfXzc7OAp-bHsf76-TA",
+  "nombre": "Grow with Alex"
+ },
+ "HashtagTreinamentos": {
+  "id": "UCw0leRmeaX7R_9BDd3TvCzg",
+  "nombre": "Hashtag Treinamentos"
+ },
+ "HiteshCodeLab": {
+  "id": "UCXgGY0wkgOzynnHvSEVmE3A",
+  "nombre": "Hitesh Choudhary"
+ },
+ "HumanAcademy_AI": {
+  "id": "UCv9xE0MckLgW9XUn1EMx04g",
+  "nombre": "Human Academy"
+ },
+ "HobbieCode": {
+  "id": "UCeTrIxIoJhwSRGhw6n-jnpQ",
+  "nombre": "Hobbiecode"
+ },
+ "ItsLyraAi": {
+  "id": "UCtxLzgbFBr3j3UBmSC-BzHA",
+  "nombre": "Lyra Ai"
+ },
+ "iamseankochel": {
+  "id": "UCFig7skuwYrCIGy0tuZHA2Q",
+  "nombre": "Sean Kochel"
+ },
+ "indydevdan": {
+  "id": "UC_x36zCEGilGpB1m-V4gmjg",
+  "nombre": "IndyDevDan"
+ },
+ "jamesblueai": {
+  "id": "UCAIrvLzg19ny6ymCUjQ0Txg",
+  "nombre": "James Blue"
+ },
+ "jawed": {
+  "id": "UC4QobU6STFB0P71PMvOGN5A",
+  "nombre": "jawed"
+ },
+ "Itssssss_Jack": {
+  "id": "UCxVxcTULO9cFU6SB9qVaisQ",
+  "nombre": "Jack Roberts"
+ },
+ "jessecunninghamv": {
+  "id": "UC_DfvBDqCexXZ_xtEDKHVBA",
+  "nombre": "Jesse Cunningham"
+ },
+ "jessicafreireff": {
+  "id": "UCWa7GC6VF6M3GxHieUgMvSw",
+  "nombre": "Jessica Freire "
+ },
+ "jonyl6940": {
+  "id": "UCa7Z4ya1yY1YZjXLIdYG1tA",
+  "nombre": "jonyl"
+ },
+ "JohnKimLife": {
+  "id": "UCiZotp9tZ4uXgXEjHDUYzBQ",
+  "nombre": "John Kim"
+ },
+ "josemafernandezia": {
+  "id": "UCERX0a6PiDc3gDVZ1Vf_tBw",
+  "nombre": "Josema Fernández | IA"
+ },
+ "juanpe.divisual": {
+  "id": "UCh0yfHiqN7Rt0jKlOKYjYXA",
+  "nombre": "Juan Pe Navarro | IA y Automatización"
+ },
+ "KarineLago": {
+  "id": "UCsx_ZsgsX6BIFueejCDBLkg",
+  "nombre": "Karine Lago"
+ },
+ "JulianGoldieSEO": {
+  "id": "UCGpsgNbzdF7BECCVbB1COHw",
+  "nombre": "Julian Goldie SEO"
+ },
+ "LorenaBordonaba": {
+  "id": "UCO-eEx-ckzUnFJtEUvr7Nfg",
+  "nombre": "Lorena Bordonaba - Inteligencia Artificial"
+ },
+ "KevinBelier": {
+  "id": "UCYjCx75pRe4QwxpzlvQHjbw",
+  "nombre": "Kevin Belier | Sistemas IA"
+ },
+ "KevinStratvert": {
+  "id": "UCfJT_eYDTmDE-ovKaxVE1ig",
+  "nombre": "Kevin Stratvert"
+ },
+ "lucianafpapini": {
+  "id": "UCwCyve8wJg4gC3dwaqqc1ow",
+  "nombre": "Luciana Papini | Automação com IA"
+ },
+ "lustoykov": {
+  "id": "UCpmdoHc-DUViBSQve7m3Ycw",
+  "nombre": "lustoykov"
+ },
+ "LoveBabbar": {
+  "id": "UCQHLxxBFrbfdrk1jF0moTpw",
+  "nombre": "Love Babbar"
+ },
+ "MervinPraison": {
+  "id": "UCWTyktbw5JYoSBduu8LsBgQ",
+  "nombre": "Mervin Praison"
+ },
+ "maestrosdaia": {
+  "id": "UCEojuEA0eCL267t_G_cc0Fg",
+  "nombre": "Maestros da IA"
+ },
+ "maxmaxdata": {
+  "id": "UC0nvCwGLmrKFZ6phJ19BoYQ",
+  "nombre": "maxmaxdata"
+ },
+ "mikeynocode": {
+  "id": "UCde0vB0fTwC8AT3sJofFV0w",
+  "nombre": "Mikey No Code"
+ },
+ "michtortiyt": {
+  "id": "UCFlzajVv85qdx_WJfbcjhVw",
+  "nombre": "Michele Torti"
+ },
+ "midudev": {
+  "id": "UC8LeXCWOalN8SxlrPcG-PaQ",
+  "nombre": "midudev"
+ },
+ "NatalyVibeCodes": {
+  "id": "UCq7YubwUaB-YSgZpy0ZcfsA",
+  "nombre": "Nataly Merezhuk"
+ },
+ "Mikeywebsite": {
+  "id": "UCSSB338C8A9ZOXtsbfM7phg",
+  "nombre": "Mikey Website"
+ },
+ "modecirtech": {
+  "id": "UC5NbdzlnWeJYsyH0P6LvWKA",
+  "nombre": "Modecir"
+ },
+ "NicholasPuru": {
+  "id": "UC4FK5DEcMLB3CyJcbJfZEJA",
+  "nombre": "Nick Puru | AI Automation"
+ },
+ "NetNinja": {
+  "id": "UCW5YeuERMmlnqo4oq8vwUpg",
+  "nombre": "Net Ninja"
+ },
+ "nateherk": {
+  "id": "UC2ojq-nuP8ceeHqiroeKhBA",
+  "nombre": "Nate Herk | AI Automation"
+ },
+ "nievaslautaro": {
+  "id": "UCCUwwr4dUj5EBU6N7MqVsgA",
+  "nombre": "Lautaro Nievas"
+ },
+ "Nico_AIRanking": {
+  "id": "UCWD0OMrAWdSUan3Hh_q9QCA",
+  "nombre": "Nico | AI Ranking"
+ },
+ "nicksaraev": {
+  "id": "UCbo-KbSjJDG6JWQ_MTZ_rNA",
+  "nombre": "Nick Saraev"
+ },
+ "PaulaBernardes": {
+  "id": "UCGJAcveK9o1xObmuR_bFhrA",
+  "nombre": "Paula Bernardes"
+ },
+ "nocodestartup": {
+  "id": "UCYx10jQ_0QeqkV7gWiUE5yw",
+  "nombre": "No-Code Start-Up"
+ },
+ "piyushgargdev": {
+  "id": "UCf9T51_FmMlfhiGpoes0yFA",
+  "nombre": "Piyush Garg"
+ },
+ "racks-group": {
+  "id": "UC9xyKiK4fH3Ua8UHw8xVprw",
+  "nombre": "racks"
+ },
+ "punkmetrics": {
+  "id": "UC_ksmeMdS0jx-Ypm-sWKcHQ",
+  "nombre": "PUNKMETRICS"
+ },
+ "programmingwithmosh": {
+  "id": "UCWv7vMbMWH4-V0ZXdmDpPBA",
+  "nombre": "Programming with Mosh"
+ },
+ "RoboNuggets": {
+  "id": "UCgscS8mBsQZ5sFRkJIFWD7Q",
+  "nombre": "Jay E | RoboNuggets"
+ },
+ "rasmic": {
+  "id": "UCBX__dPYqDFqAN4QcWbnUbw",
+  "nombre": "Ras Mic"
+ },
+ "raroque": {
+  "id": "UC4x3CR25WSlvMJUtSPPzwwg",
+  "nombre": "Chris Raroque"
+ },
+ "roboverse987": {
+  "id": "UCZ3KGRwOA_uONNE_6VGG2bA",
+  "nombre": "Roboverse"
+ },
+ "Rodolf_Carrasco": {
+  "id": "UCl_Q5EJxh9Fj73SIpErFE6g",
+  "nombre": "Rodolfo Carrasco | IA &amp; Automatizaciones"
+ },
+ "sabrina_ramonov": {
+  "id": "UCiGWNa6QK6CiKPvv5-YPv8g",
+  "nombre": "Sabrina Ramonov 🍄"
+ },
+ "SantiMunozIA": {
+  "id": "UCKH3AEVu7sIU61cjnB0XxdQ",
+  "nombre": "Santiago Munoz"
+ },
+ "ShaneHummus": {
+  "id": "UCLKZ20yD2tNMBOkSDZo4FeQ",
+  "nombre": "Shane Hummus"
+ },
+ "SabriSubyOfficial": {
+  "id": "UCAxUtcgLiq_gopO87VaZM5w",
+  "nombre": "Sabri Suby"
+ },
+ "simonscrapes": {
+  "id": "UCdCR4-uYOg5ju-IUuDnfnQA",
+  "nombre": "Simon Scrapes"
+ },
+ "SoyMartinToledo": {
+  "id": "UCwsP4_k3gYhRWz-1kTetgew",
+  "nombre": "Martín Toledo | IA &amp; Automatización "
+ },
+ "shawnbuildsai": {
+  "id": "UCZE0kpnhoy84NO9r1gs5W5Q",
+  "nombre": "Shawn Builds AI"
+ },
+ "speelai": {
+  "id": "UClA5CehpOC4Stk8PwLbpFPQ",
+  "nombre": "Speel"
+ },
+ "starterstory": {
+  "id": "UChhw6DlKKTQ9mYSpTfXUYqA",
+  "nombre": "Starter Story"
+ },
+ "TeachersTech": {
+  "id": "UCO66zvpQorlNfs_7hFCfmaw",
+  "nombre": "Teacher&#39;s Tech"
+ },
+ "therealraymondjones": {
+  "id": "UC2FRwCa5Y_bqBL-rwz57NJg",
+  "nombre": "Raymond Jones"
+ },
+ "tech.mayankagg": {
+  "id": "UCcYKjf55fmOsJW_on8UIs9w",
+  "nombre": "Mayank Aggarwal"
+ },
+ "Telusko": {
+  "id": "UC59K-uG2A5ogwIrHw4bmlEg",
+  "nombre": "Telusko"
+ },
+ "thomascreates12": {
+  "id": "UCK-Yq0PKk97nWXNSqmLeXOg",
+  "nombre": "Thomas Creates"
+ },
+ "ThinkverseAI1": {
+  "id": "UCOPF9JjEbqjGdD2cqSht1pw",
+  "nombre": "Thinkverse AI"
+ },
+ "Tristen_OBrien": {
+  "id": "UCruPFdKtGG8Oz5dvha6WWgA",
+  "nombre": "Tristen O&#39;Brien"
+ },
+ "victorperezia": {
+  "id": "UCUR8ivl8w39PLttaOn0d-bg",
+  "nombre": "Víctor Pérez"
+ },
+ "vaibhavsisinty": {
+  "id": "UClXAalunTPaX1YV185DWUeg",
+  "nombre": "Vaibhav Sisinty"
+ },
+ "VictorCerezuela10": {
+  "id": "UCU6BRYX4KB7ItZh0KRZIVtw",
+  "nombre": "Victor Cerezuela"
+ },
+ "vilmanunez": {
+  "id": "UCB8h5BJZmSi3k15t8FCPyvA",
+  "nombre": "Vilma OS"
+ },
+ "vidamrr": {
+  "id": "UCOD6LXgeBoeiUZTsPLdG-0g",
+  "nombre": "Vida MRR - Programacion web"
+ },
+ "victorroblesweb": {
+  "id": "UCv85NiROLKddHa0fBATwTzw",
+  "nombre": "Victor Robles WEB"
+ },
+ "Yourivanhofwegen": {
+  "id": "UCdR7eGozLjafYMTd2BFnJaQ",
+  "nombre": "Youri van Hofwegen"
+ },
+ "XavierMitjana": {
+  "id": "UCp2Zmdh40GJJJ2T5vWsMZDA",
+  "nombre": "Xavier Mitjana"
+ },
+ "WellPiresAI": {
+  "id": "UCOu9pKHv94bFeRy5vzB-b1Q",
+  "nombre": "Well Pires "
+ },
+ "zinhoautomates": {
+  "id": "UC3i3qKQ5aR_guegQj5bhOMw",
+  "nombre": "Zinho Automates"
+ }
+}

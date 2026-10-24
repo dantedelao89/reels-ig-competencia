@@ -18,7 +18,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createWriteStream } from 'node:fs';
+import { createWriteStream, readFileSync } from 'node:fs';
 import { rm, stat, mkdtemp } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -30,12 +30,22 @@ const ejecutar = promisify(execFile);
 const HOST = 'auto-download-all-in-one.p.rapidapi.com';
 const URL_API = `https://${HOST}/v1/social/autolink`;
 
+// Lee RAPIDAPI_KEY del entorno y, si no está, del `.env` del proyecto. El respaldo existe porque
+// pedirle a alguien que escriba la llave en cada comando garantiza que un día pegue el ejemplo tal
+// cual: pasó el 22 oct 2026, con `RAPIDAPI_KEY=tu-llave`, y RapidAPI devolvió un 403 que parecía un
+// bloqueo cuando en realidad era la palabra «tu-llave» viajando como credencial.
 function llave() {
-  const k = process.env.RAPIDAPI_KEY;
+  if (process.env.RAPIDAPI_KEY) return process.env.RAPIDAPI_KEY;
+  try {
+    const env = readFileSync(new URL('../.env', import.meta.url), 'utf8');
+    const m = /^\s*RAPIDAPI_KEY\s*=\s*(.+)$/m.exec(env);
+    if (m) return m[1].trim().replace(/^["']|["']$/g, '');
+  } catch {
+    /* sin .env: se cae al error de abajo, que explica qué hacer */
+  }
   // Se comprueba AQUÍ y no al arrancar: sin esta variable el resto del scraper funciona igual, y
   // tumbar el arranque entero por una función opcional sería peor que fallar al usarla.
-  if (!k) throw new Error('Falta RAPIDAPI_KEY: sin ella no se puede resolver el MP4 de YouTube');
-  return k;
+  throw new Error('Falta RAPIDAPI_KEY: ponla en el .env del proyecto o en el entorno');
 }
 
 // Pregunta a la API por las pistas disponibles. Devuelve { titulo, duracion, medios }.
@@ -50,6 +60,11 @@ export async function resolver(urlVideo) {
     body: JSON.stringify({ url: urlVideo }),
     signal: AbortSignal.timeout(60_000),
   });
+  if (res.status === 401 || res.status === 403) {
+    // Se distingue a propósito: un 403 de RapidAPI es la llave, y un 403 de googlevideo es la IP.
+    // Dicho así, el mensaje no manda a nadie a buscar un bloqueo que no existe.
+    throw new Error(`RapidAPI rechazó la llave (${res.status}). Revisa RAPIDAPI_KEY, no es un bloqueo de red`);
+  }
   if (!res.ok) throw new Error(`RapidAPI devolvió ${res.status}`);
   const d = await res.json();
   if (d?.error || !Array.isArray(d?.medias) || !d.medias.length) {

@@ -236,6 +236,33 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
   }
 
   const avisables = nuevos.filter((x) => x.avisable);
+  // Si fallaron TODOS los canales, el centinela no está «tranquilo»: está roto, y hay que decirlo.
+  //
+  // Medido el 23 oct 2026: YouTube dejó de servir `/feeds/videos.xml` y los 10 feeds empezaron a
+  // devolver 404 desde dos IP distintas. El centinela siguió respondiendo «0 nuevos», que se lee
+  // igual que «nadie ha publicado», y habría seguido así durante días. Un vigilante que no avisa de
+  // su propia muerte es peor que no tener vigilante, porque da una falsa sensación de cobertura.
+  const todosFallaron = CANALES.length > 0 && problemas.filter((p) => p.canal).length >= CANALES.length;
+  if (avisar && todosFallaron) {
+    const motivo = problemas.find((p) => p.canal)?.error || 'desconocido';
+    await enviarSlack({
+      text: `⚠️ El centinela no puede leer ningún canal: ${motivo}`,
+      unfurl_links: false,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              `⚠️ *El centinela está ciego*\nLos ${CANALES.length} canales oficiales fallaron: \`${motivo}\`\n` +
+              'Esto NO quiere decir que nadie haya publicado: quiere decir que no se puede mirar.',
+          },
+        },
+      ],
+    });
+    return { ok: false, canales: CANALES.length, nuevos: 0, avisables: 0, ciego: true, problemas };
+  }
+
   let aviso = null;
   if (avisar && avisables.length) {
     const r = await enviarSlack(formatearAvisoCentinela(avisables, refMs));

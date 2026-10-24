@@ -257,7 +257,34 @@ contenedor correcto, así que el ángulo se mete como una línea más y nada se 
 
 Mientras no haya ángulo, la tarjeta no finge tenerlo: no se pone un resumen automático en su lugar.
 
-### 5.10 Instagram
+### 5.10 Las tres fuentes del Radar
+
+El Radar se llena de tres sitios distintos, y conviene no confundirlos porque responden a preguntas
+distintas:
+
+| fuente | qué mira | cada cuánto | avisa |
+|---|---|---|---|
+| **Consultas** | 37 búsquedas en 3 idiomas | cada hora, 8-19 y 22 | si cruza 1.000 vistas/h |
+| **Centinela** | 10 canales OFICIALES | cada 15 min | en cuanto publican |
+| **Barrido** | los ~124 canales de Fuentes | a petición | solo si cruza el umbral |
+
+El **barrido** existe porque Dante lo estaba haciendo A MANO: medido el 23 oct 2026, 99 corridas de
+Apify canal por canal, **$3.88** del periodo, el 71% de su gasto. No era una comodidad que faltaba,
+era un trabajo caro y repetitivo que el sistema podía hacer solo.
+
+Va por **RSS**, como el centinela, así que cuesta **$0.00** frente a los ~$3-4 que costaría barrer
+los 124 por Apify. Esa diferencia es la que permite que exista: por Apify habría que elegir a
+cuáles renunciar.
+
+**No avisa de todo, a propósito.** 124 creadores publican entre 30 y 80 videos al día; mandarlos a
+Slack sería garantizar que el canal se silencie en tres días. Lo que entra se guarda, se clasifica y
+se ordena en la pantalla, y solo escribe si algo cruza el mismo umbral que el resto.
+
+**El id del canal no está en la base.** `yt_channels` guarda `@handles` y el RSS necesita el id
+`UC…`, así que hay una caché en `datos/canales-yt.json` más resolución al vuelo cuando aparece un
+canal que no está en ella. Así añadir un canal desde Fuentes sigue funcionando sin desplegar nada.
+
+### 5.11 Instagram
 
 **Fuera de la v1, a propósito.** Instagram no tiene búsqueda por palabra clave, solo hashtags, y los
 hashtags de IA ya se midieron como ruido. Instagram entra por las **cuentas que ya están en
@@ -336,3 +363,5 @@ colapsa en `+N más` — con 15 temas, una fila de fichas es ruido, no navegaci�
 - [x] **Buscar siempre en inglés, español y portugués de Brasil** (Dante, 21 oct 2026)
 - [x] **Nada automático: Dante pide por chat, se entrega y se guarda en la base** (Dante, 22 oct 2026)
 - [x] **Primera versión sin IA**: tarjeta por tema agrupando por `temas`; el ángulo va después (Dante, 22 oct 2026)
+- [x] **Barrido de los canales de Fuentes por RSS**, gratis y a petición (Dante, 23 oct 2026). Sustituye el rascado manual que costó $3.88 en una noche
+- [x] **El barrido no avisa de todo**: llena la pantalla en silencio y solo escribe si cruza el umbral
