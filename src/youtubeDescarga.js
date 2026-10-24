@@ -19,7 +19,7 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createWriteStream, readFileSync } from 'node:fs';
-import { rm, stat, mkdtemp } from 'node:fs/promises';
+import { rm, stat, mkdtemp, open as abrir } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { tmpdir } from 'node:os';
@@ -145,26 +145,99 @@ async function bajarA(url, destino) {
   return size;
 }
 
-// Une video y audio y va escribiendo el resultado EN DIRECTO, sin fichero intermedio.
+// ## Por qué la red NO la hace ffmpeg
 //
-// Por qué así y no bajar, unir y luego mandar: medido el 24 oct 2026 desde Railway, tres intentos
-// seguidos se quedaron colgados los 90 segundos enteros devolviendo CERO bytes. El servidor estaba
-// trabajando —no hubo ningún error en los logs— pero como no emitía nada hasta tener el archivo
-// completo, por fuera era indistinguible de un cuelgue. El descargador que Dante ya tenía en
-// LAFRAGUA_STUDIO no sufre esto porque va pasando los bytes según llegan.
+// ffmpeg sabe leer HTTP, y mi primera versión le pasaba las dos URL del CDN para que uniera al
+// vuelo. Funcionaba, pero medido el 24 oct 2026 sobre el mismo video: ffmpeg leyendo esas URL da
+// 95 KB/s en la Mac y 77 KB/s desde Railway, mientras que `fetch` sobre LA MISMA URL da
+// 2 504 KB/s. Veintiséis veces más. Probé `-seekable 0`, `-multiple_requests 1` y
+// `-http_persistent`: las tres variantes dieron 95 KB/s clavados, así que no es una bandera que
+// me falte, es que su cliente HTTP no sirve para esto.
 //
-// ffmpeg lee las dos URL directamente (acepta HTTP como entrada) con las cabeceras que exige el
-// CDN, y escribe un MP4 fragmentado a su salida estándar. `frag_keyframe+empty_moov` es lo que
-// permite emitir sin saber el tamaño final; `+faststart` no sirve aquí porque necesita rebobinar.
-export function argsDeUnion(video, audio) {
-  const cab = (url) =>
-    Object.entries(cabecerasDe(url))
-      .map(([k, v]) => `${k}: ${v}`)
-      .join('\r\n') + '\r\n';
+// Eso importa porque el borde de Railway corta cualquier petición a los 15 minutos. A 77 KB/s un
+// archivo de 42 MB tarda 9 minutos y uno de media hora de duración no cabe; a 2.5 MB/s el mismo
+// archivo tarda 17 segundos y el techo deja de existir en la práctica.
+//
+// Así que la red la hace fetch con peticiones de rango en paralelo, y ffmpeg se queda con lo que
+// sí hace rápido: pegar dos archivos locales sin recodificar.
+const TROZO = 4 * 1024 * 1024;
+const EN_PARALELO = 6;
+
+// El tamaño viene en el propio enlace firmado (`clen`). Si algún día no viniera, se pregunta con
+// un rango de un byte, que responde con el total en Content-Range.
+export function tamanoEnEnlace(url) {
+  const m = /[?&]clen=(\d+)/.exec(url);
+  return m ? Number(m[1]) : null;
+}
+
+async function tamanoDe(url) {
+  const enEnlace = tamanoEnEnlace(url);
+  if (enEnlace) return enEnlace;
+  const res = await fetch(url, { headers: { ...cabecerasDe(url), Range: 'bytes=0-0' } });
+  const total = Number((/\/(\d+)$/.exec(res.headers.get('content-range') || '') || [])[1]);
+  if (!total) throw new Error(`no pude averiguar el tamaño de la pista (HTTP ${res.status})`);
+  return total;
+}
+
+export function repartirTrozos(total, trozo = TROZO) {
+  const partes = [];
+  for (let d = 0; d < total; d += trozo) partes.push([d, Math.min(d + trozo, total) - 1]);
+  return partes;
+}
+
+// Baja una pista a `destino` pidiendo varios rangos a la vez y escribiéndolos en su sitio.
+async function bajarPista(url, destino, { paralelo = EN_PARALELO } = {}) {
+  const total = await tamanoDe(url);
+  const partes = repartirTrozos(total);
+  const fh = await abrir(destino, 'w');
+  try {
+    let siguiente = 0;
+    const obrero = async () => {
+      for (let i = siguiente++; i < partes.length; i = siguiente++) {
+        const [desde, hasta] = partes[i];
+        let ultimo;
+        for (let intento = 1; intento <= 3; intento++) {
+          try {
+            const res = await fetch(url, {
+              headers: { ...cabecerasDe(url), Range: `bytes=${desde}-${hasta}` },
+              signal: AbortSignal.timeout(120_000),
+            });
+            if (res.status === 403) {
+              throw new Error(
+                `googlevideo devolvió 403 pese a mandar el User-Agent del cliente c=${(/[?&]c=([^&]+)/.exec(url) || [])[1] || '?'}`
+              );
+            }
+            if (res.status !== 206 && res.status !== 200) throw new Error(`el CDN devolvió ${res.status}`);
+            const buf = Buffer.from(await res.arrayBuffer());
+            await fh.write(buf, 0, buf.length, desde);
+            ultimo = null;
+            break;
+          } catch (e) {
+            ultimo = e;
+            if (intento < 3) await new Promise((r) => setTimeout(r, 500 * 2 ** (intento - 1)));
+          }
+        }
+        if (ultimo) throw ultimo;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(paralelo, partes.length) }, obrero));
+  } finally {
+    await fh.close();
+  }
+  const { size } = await stat(destino);
+  // Un "archivo" de 10 KB es una página de error, no una pista.
+  if (size < 10_000) throw new Error(`la descarga salió vacía (${size} bytes)`);
+  return size;
+}
+
+// Pega dos archivos YA bajados. `-c copy` no recodifica, así que esto va a cientos de MB/s.
+// El MP4 sale fragmentado porque se emite a una tubería y el tamaño final no se sabe de
+// antemano; `+faststart` no sirve aquí porque necesita rebobinar la salida.
+export function argsDeUnion(rutaVideo, rutaAudio) {
   return [
     '-loglevel', 'error',
-    '-headers', cab(video.url), '-i', video.url,
-    '-headers', cab(audio.url), '-i', audio.url,
+    '-i', rutaVideo,
+    '-i', rutaAudio,
     '-map', '0:v:0', '-map', '1:a:0',
     '-c', 'copy',
     '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
@@ -174,19 +247,43 @@ export function argsDeUnion(video, audio) {
 }
 
 // Resuelve y devuelve un flujo listo para volcar en una respuesta HTTP, junto con lo que hace
-// falta para nombrarlo. No escribe nada en disco.
+// falta para nombrarlo y para limpiar después.
+//
+// Las dos pistas se bajan A LA VEZ y cada una por trozos en paralelo, así que el tiempo total es
+// el de la pista más grande, no la suma. Durante esos segundos la respuesta no emite nada: eso es
+// seguro porque Railway solo corta a los 5 minutos SIN datos, y aquí hablamos de decenas de
+// segundos. A cambio, cuando empieza a emitir va a la velocidad del disco.
 export async function flujoDeDescarga(urlVideo, { altura = 1080 } = {}) {
   const { titulo, duracion, medios } = await resolver(urlVideo);
   const pistas = elegirPistas(medios, altura);
 
   if (pistas.modo === 'progresivo') {
-    // Una sola pista que ya trae audio: se pasa tal cual, sin ffmpeg de por medio.
+    // Una sola pista que ya trae audio: se pasa tal cual, sin ffmpeg ni disco de por medio.
     const res = await fetch(pistas.video.url, { headers: cabecerasDe(pistas.video.url) });
     if (!res.ok || !res.body) throw new Error(`el CDN devolvió ${res.status}`);
-    return { titulo, duracion, altura: pistas.video.height, modo: 'progresivo', cuerpo: res.body, proceso: null };
+    return {
+      titulo, duracion, altura: pistas.video.height, modo: 'progresivo',
+      cuerpo: res.body, proceso: null, limpiar: async () => {},
+    };
   }
 
-  const ff = spawn('ffmpeg', argsDeUnion(pistas.video, pistas.audio), { stdio: ['ignore', 'pipe', 'pipe'] });
+  const carpeta = await mkdtemp(path.join(tmpdir(), 'yt-'));
+  const rutaVideo = path.join(carpeta, 'v.mp4');
+  const rutaAudio = path.join(carpeta, 'a.m4a');
+  const limpiar = () => rm(carpeta, { recursive: true, force: true }).catch(() => {});
+
+  let bytes;
+  try {
+    bytes = await Promise.all([
+      bajarPista(pistas.video.url, rutaVideo),
+      bajarPista(pistas.audio.url, rutaAudio),
+    ]);
+  } catch (e) {
+    await limpiar();
+    throw e;
+  }
+
+  const ff = spawn('ffmpeg', argsDeUnion(rutaVideo, rutaAudio), { stdio: ['ignore', 'pipe', 'pipe'] });
   // El stderr se guarda pero no se vuelca: si ffmpeg muere, su última línea explica por qué, y sin
   // esto el fallo llega como «el flujo se cortó» sin más.
   let err = '';
@@ -195,8 +292,12 @@ export async function flujoDeDescarga(urlVideo, { altura = 1080 } = {}) {
   });
   ff.on('close', (code) => {
     if (code) console.error(`[descargar-yt] ffmpeg salió con ${code}: ${err.trim().slice(0, 300)}`);
+    limpiar();
   });
-  return { titulo, duracion, altura: pistas.video.height, modo: 'unido', cuerpo: ff.stdout, proceso: ff };
+  return {
+    titulo, duracion, altura: pistas.video.height, modo: 'unido',
+    bytes: bytes[0] + bytes[1], cuerpo: ff.stdout, proceso: ff, limpiar,
+  };
 }
 
 // Baja el video a `destino` (.mp4). Devuelve qué se hizo, para poder reportarlo con honestidad.
@@ -211,8 +312,9 @@ export async function descargarYoutube(urlVideo, destino, { altura = 1080 } = {}
     }
     const v = path.join(temp, 'v.m4v');
     const a = path.join(temp, 'a.m4a');
-    await bajarA(pistas.video.url, v);
-    await bajarA(pistas.audio.url, a);
+    // Las dos a la vez y cada una por trozos: mismo motor que la descarga por HTTP, para que la
+    // consola y el frontend no tengan dos velocidades distintas.
+    await Promise.all([bajarPista(pistas.video.url, v), bajarPista(pistas.audio.url, a)]);
     // `-c copy` no recodifica: une los dos flujos tal cual. `+faststart` mueve el índice al
     // principio para que el archivo se pueda reproducir sin haberlo descargado entero.
     await ejecutar('ffmpeg', [
