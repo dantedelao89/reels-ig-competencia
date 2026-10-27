@@ -28,13 +28,13 @@ import { transcribeAudio } from './transcribe.js';
 import { translateToSpanish } from './translate.js';
 import { updateRowById, getRowByField, supabaseEnabled, attachRecursoByUrl } from './supabase.js';
 import { runScrapeInstagramStories, runScrapeStoriesAuto } from './scrapeStories.js';
-import { getCreatorsConHistoriasAuto } from './sources.js';
+import { getCreatorsConHistoriasAuto, getActiveRadarBusquedas } from './sources.js';
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
 import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
 import { runRadarYoutube, runRadarYoutubeBusqueda } from './scrapeRadarYoutube.js';
 import { reclasificarRadar } from './reclasificarRadar.js';
-import { gastoMensualUsd } from './apifyPresupuesto.js';
+import { gastoRadarUsd } from './apifyPresupuesto.js';
 import { getTiktokMediaUrl } from './tiktokApify.js';
 import { leerCarrusel, proponerGanchos } from './regenAnalizar.js';
 import { startRegeneration, lanzarCarrusel } from './regenRun.js';
@@ -153,6 +153,29 @@ app.get('/health', (_req, res) =>
 // Estado de los crons: responde "¿está encendido de verdad?" sin tener que leer los logs de
 // arranque de Railway. Hizo falta al activar la captura automática de historias — el endpoint
 // manual funciona con la variable puesta o sin ella, así que no servía para comprobarlo.
+// Cuántas consultas del radar están ENCENDIDAS. Va en `/crons` porque un cron activo con cero
+// consultas no hace nada y desde fuera se ve idéntico a un cron que sí funciona y no encuentra
+// nada: medido el 27 oct 2026, X llevaba días así sin que nadie pudiera notarlo.
+async function contarConsultasActivas(plataforma) {
+  try {
+    return (await getActiveRadarBusquedas(plataforma)).length;
+  } catch (e) {
+    return `error: ${e.message}`;
+  }
+}
+
+// Los dos gastos, juntos y con etiqueta. El del RADAR es el que gobierna el freno; el de la CUENTA
+// se enseña al lado porque es el del plan, y confundirlos fue justo el fallo que se arregló el
+// 27 oct 2026 (el cron de historias consumía el presupuesto del radar).
+async function gastoDelRadar() {
+  const { radar, cuenta, desde } = await gastoRadarUsd();
+  return {
+    gastadoPorElRadarUsd: radar,
+    gastadoPorTodaLaCuentaUsd: cuenta,
+    cicloDesde: desde,
+  };
+}
+
 app.get('/crons', async (req, res) => {
   if (requireSecret(req, res)) return;
 
@@ -180,19 +203,28 @@ app.get('/crons', async (req, res) => {
     // Los otros dos siguen bajo el interruptor global CRONS_PAUSED del arranque.
     organico: { habilitado: config.enableCron, horario: config.cronSchedule, pausadoGlobalmente: true },
     ads: { habilitado: config.enableAds && config.enableAdsCron, horario: config.adsCronSchedule, pausadoGlobalmente: true },
-    radar: {
-      activo: config.enableRadarCron,
-      horario: config.radarCronSchedule,
+    radarX: {
+      activo: config.enableRadarXCron,
+      horario: config.radarXCronSchedule,
       zona: config.cronTimezone,
-      valido: cron.validate(config.radarCronSchedule),
-      variableRecibida: process.env.ENABLE_RADAR_CRON ?? null,
+      valido: cron.validate(config.radarXCronSchedule),
+      variableRecibida: process.env.ENABLE_RADAR_X_CRON ?? null,
+      consultasActivas: await contarConsultasActivas('x'),
+      avisaPorSlack: Boolean(config.slackWebhookUrl),
+      umbralAvisoLikesHora: config.radarXAvisoMinVelocidad,
       // Los frenos de gasto, visibles aquí: el estado de lo que cuesta dinero no debe vivir solo
       // en una variable de Railway que nadie ve.
       topePorCorridaUsd: config.radarMaxUsdPorCorrida,
-      // YouTube corre sus consultas en lote, así que su tope es el del lote, no el de una consulta.
-      topeLoteYoutubeUsd: config.radarYoutubeMaxUsdPorCorrida,
-      presupuestoMensualUsd: config.radarPresupuestoMensualUsd,
-      gastadoEsteMesUsd: await gastoMensualUsd(),
+      presupuestoUsd: config.radarPresupuestoMensualUsd,
+      ...(await gastoDelRadar()),
+    },
+    // El radar de YouTube ya no tiene cron: lo cubre `radarLibre`, gratis y cada hora. El de Apify
+    // queda solo como disparo manual (`POST /radar-yt`), con su tope de lote por corrida.
+    radarYoutubeApify: {
+      activo: false,
+      motivo: 'duplicado de pago del radar libre; retirado el 27 oct 2026',
+      soloManual: 'POST /radar-yt',
+      topeLoteUsd: config.radarYoutubeMaxUsdPorCorrida,
     },
   });
 });
@@ -1391,34 +1423,37 @@ app.listen(config.port, () => {
     }
   }
 
-  // Cron del RADAR: una vez al día, deliberadamente fuera de CRONS_PAUSED (ese interruptor pausa
-  // el orgánico y los ads, que archivan a R2 y cuestan mucho más). El radar se gobierna solo con
-  // sus tres frenos: las consultas activas, el tope por corrida y el presupuesto mensual, que se
+  // Cron del RADAR DE X: una vez al día, deliberadamente fuera de CRONS_PAUSED (ese interruptor
+  // pausa el orgánico y los ads, que archivan a R2 y cuestan mucho más). Se gobierna solo con sus
+  // tres frenos: las consultas activas, el tope por corrida y el presupuesto del radar, que se
   // comprueba contra el gasto real de Apify antes de cada consulta. Sin consultas activas no gasta
   // nada, así que el cron encendido por defecto no es un cheque en blanco.
-  if (config.enableRadarCron) {
-    if (cron.validate(config.radarCronSchedule)) {
+  //
+  // YA NO corre YouTube (27 oct 2026). Corría los dos, y el de YouTube era un duplicado DE PAGO del
+  // radar libre: medido, 17 consultas una vez al día por $0.174 (el 61% del gasto de Apify del
+  // ciclo) contra 37 consultas trece veces al día por $0.00, y el gratis es además el que ya manda
+  // los avisos. `runRadarYoutube` se conserva para el disparo manual desde `/radar-yt`.
+  if (config.enableRadarXCron) {
+    if (cron.validate(config.radarXCronSchedule)) {
       cron.schedule(
-        config.radarCronSchedule,
+        config.radarXCronSchedule,
         async () => {
-          console.log(`[cron-radar] rastreando (${config.radarCronSchedule} ${config.cronTimezone})`);
-          for (const [nombre, fn] of [
-            ['X', runRadarX],
-            ['YouTube', runRadarYoutube],
-          ]) {
-            try {
-              const r = await fn();
-              console.log(`[cron-radar] ${nombre}:`, JSON.stringify(r));
-            } catch (err) {
-              console.error(`[cron-radar] ${nombre} error:`, err.message);
-            }
+          console.log(`[cron-radar-x] rastreando (${config.radarXCronSchedule} ${config.cronTimezone})`);
+          try {
+            const r = await runRadarX({ avisar: true });
+            console.log('[cron-radar-x]', JSON.stringify(r));
+          } catch (err) {
+            console.error('[cron-radar-x] error:', err.message);
           }
         },
         { timezone: config.cronTimezone }
       );
-      console.log(`📡 Cron del radar ACTIVO: ${config.radarCronSchedule} (${config.cronTimezone})`);
+      console.log(
+        `𝕏 Cron del radar de X ACTIVO: ${config.radarXCronSchedule} (${config.cronTimezone})` +
+          `${config.slackWebhookUrl ? ' · avisa por Slack' : ' · SIN SLACK_WEBHOOK_URL: no avisará'}`
+      );
     } else {
-      console.error(`RADAR_CRON_SCHEDULE inválido: "${config.radarCronSchedule}" — cron del radar desactivado`);
+      console.error(`RADAR_X_CRON_SCHEDULE inválido: "${config.radarXCronSchedule}" — cron de X desactivado`);
     }
   }
 

@@ -257,16 +257,52 @@ contenedor correcto, así que el ángulo se mete como una línea más y nada se 
 
 Mientras no haya ángulo, la tarjeta no finge tenerlo: no se pone un resumen automático en su lugar.
 
-### 5.10 Las tres fuentes del Radar
+### 5.10 Las cuatro fuentes del Radar
 
-El Radar se llena de tres sitios distintos, y conviene no confundirlos porque responden a preguntas
-distintas:
+El Radar se llena de cuatro sitios distintos, y conviene no confundirlos porque responden a
+preguntas distintas:
 
-| fuente | qué mira | cada cuánto | avisa |
-|---|---|---|---|
-| **Consultas** | 37 búsquedas en 3 idiomas | cada hora, 8-19 y 22 | si cruza 1.000 vistas/h |
-| **Centinela** | 10 canales OFICIALES | cada 15 min | en cuanto publican |
-| **Barrido** | los ~124 canales de Fuentes | a petición | solo si cruza el umbral |
+| fuente | qué mira | cada cuánto | avisa | cuesta |
+|---|---|---|---|---|
+| **Consultas** | 37 búsquedas de YouTube en 3 idiomas | cada hora, 8-19 y 22 | si cruza 1.000 vistas/h | $0.00 |
+| **Centinela** | 10 canales OFICIALES | cada 15 min | en cuanto publican | $0.00 |
+| **Barrido** | los ~124 canales de Fuentes | a petición | solo si cruza el umbral | $0.00 |
+| **X** | 6 consultas con operadores | 1×/día, 7am | resumen diario a Slack | $1.02/mes |
+
+Las tres primeras son de YouTube y van por RSS o leyendo la página de resultados, así que son
+gratis. **X es la única que paga Apify**, y por eso es la única con presupuesto encima.
+
+#### Por qué el radar de X manda un RESUMEN y no una alerta por umbral
+
+Las otras fuentes avisan cuando algo CRUZA un umbral de velocidad. En X ese diseño no sirve, y las
+seis consultas medidas el 27 oct 2026 dicen por qué: **un lanzamiento de verdad no corre.**
+«Introducing Topview T1» y «Introducing FLUX 3 Max» van a 8 likes/hora, y son justo la información
+que se busca. Lo que sí corre casi nunca es del nicho —lo más rápido del día fue el presidente de
+OpenAI a 771 likes/h— y por debajo de 200 likes/h está el contenido rutinario de los creadores.
+
+Así que el cron manda lo que encontró, ordenado por velocidad y repartido entre temas, y **marca
+con 🔥 lo que además despegó** (más de 300 likes/h, calibrado sobre 120 hallazgos de ese día). El
+umbral como filtro de entrada esconderia los lanzamientos; como marca, los ordena.
+
+El mensaje dice además **cuántas consultas volvieron vacías**, porque el actor de X falla en
+silencio: medido, una consulta devolvió 0 resultados en una corrida y 20 en las dos siguientes, sin
+lanzar ningún error. Un cero que no se nombra se lee igual que «hoy no hubo nada de eso».
+
+#### Nombres de modelos: hay que desambiguarlos
+
+La lección de `#ia` (que en X es un personaje de Vocaloid) se repite con los nombres a secas. Medido
+el 27 oct 2026: con `sora` y `runway` sueltos, **17 de 20 resultados eran basura** —una actriz
+llamada Charlotte, «uncle sora» de un anime, «the runway is calling» de una pasarela de moda. Con
+los nombres calificados (`"sora 2"`, `"openai sora"`, `runwayml`, `"kling ai"`), 18 de 20 pasaron a
+ser del nicho. En español pasa con frases enteras: `"inteligencia artificial"` trae política y
+`"video con ia"` ya es coloquial y trae burla.
+
+#### El radar de YouTube por Apify está RETIRADO
+
+Hasta el 27 oct 2026 el cron diario corría X **y también** YouTube por Apify. Lo de YouTube era un
+duplicado de pago de la primera fila de la tabla: medido, 17 consultas una vez al día por **$0.174
+(el 61% del gasto de Apify del ciclo)**, contra 37 consultas trece veces al día por **$0.00** — y
+el gratis es además el que ya manda los avisos. `POST /radar-yt` se conserva para dispararlo a mano.
 
 El **barrido** existe porque Dante lo estaba haciendo A MANO: medido el 23 oct 2026, 99 corridas de
 Apify canal por canal, **$3.88** del periodo, el 71% de su gasto. No era una comodidad que faltaba,

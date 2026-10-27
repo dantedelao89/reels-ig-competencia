@@ -219,9 +219,40 @@ export const config = {
   // Presupuesto mensual del radar, de los $29 que incluye el plan STARTER. Antes de cada corrida se
   // compara contra el gasto REAL que reporta Apify; si ya se pasó, el radar no corre.
   radarPresupuestoMensualUsd: Number(process.env.RADAR_PRESUPUESTO_USD || 8),
-  // Una vez al día: para tendencias de IA, con un día basta y cuesta la mitad que dos.
-  enableRadarCron: flag(process.env.ENABLE_RADAR_CRON, true),
-  radarCronSchedule: process.env.RADAR_CRON_SCHEDULE || '0 7 * * *',
+  // Los actores que el PRESUPUESTO del radar vigila. Deliberadamente NO está
+  // `streamers/youtube-scraper`: desde el 27 oct 2026 el radar de YouTube no corre en cron porque
+  // `radarYoutubeLibre.js` hace lo mismo gratis y 13 veces al día, y ese actor lo comparten el
+  // barrido y el pipeline orgánico ($4.74 en el ciclo del 15 oct). Meterlo aquí volvería a cargarle
+  // al radar un gasto que no es suyo, que es justo el fallo que se arregló.
+  radarActoresDePago: (process.env.RADAR_ACTORES_DE_PAGO || 'danek/twitter-scraper')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+
+  // --- Cron diario del radar de X ---
+  // Antes este cron corría X y TAMBIÉN YouTube por Apify. Lo de YouTube se quitó el 27 oct 2026:
+  // era un duplicado de pago del radar libre (medido: $0.174/día, el 61% del gasto de Apify del
+  // ciclo, por 17 consultas una vez al día, mientras el gratis corre 37 consultas trece veces al
+  // día). `runRadarYoutube` sigue existiendo para el disparo manual desde `/radar-yt`.
+  enableRadarXCron: flag(process.env.ENABLE_RADAR_X_CRON, true),
+  radarXCronSchedule: process.env.RADAR_X_CRON_SCHEDULE || '0 7 * * *',
+  // El umbral del 🔥 en el resumen de X, en likes/hora. NO es un filtro de entrada: en X un
+  // lanzamiento de verdad va despacio (medido el 27 oct 2026: «Introducing Topview T1» y
+  // «Introducing FLUX 3 Max» a 8 likes/h), así que filtrar por velocidad esconderia justo lo que
+  // Dante quiere. Solo marca lo que además despegó.
+  //
+  // El 300 está calibrado sobre las seis consultas medidas ese día, 120 hallazgos: por debajo de
+  // 200 likes/h está el contenido rutinario de los creadores de IA (el techo fue 199), y lo que
+  // cruzó 300 fueron tres tweets del MISMO suceso real —el anuncio científico de OpenAI, con @gdb
+  // a 771— más uno de ElevenLabs a 949.
+  radarXAvisoMinVelocidad: Number(process.env.RADAR_X_AVISO_MIN_VELOCIDAD || 300),
+  // Cota de edad del resumen. Las consultas llevan `min_faves`, y eso le pide a X los resultados
+  // TOP en vez de los últimos: sin esto, un tweet de hace una semana con muchos likes entraría en
+  // el resumen de hoy como si fuera de hoy.
+  radarXResumenMaxHoras: Number(process.env.RADAR_X_RESUMEN_MAX_HORAS || 48),
+  // Cuántos hallazgos se enseñan. Ocho caben en una pantalla de Slack sin desplazarse; con treinta,
+  // el mensaje se lee igual que no leerlo.
+  radarXResumenCuantos: Number(process.env.RADAR_X_RESUMEN_CUANTOS || 8),
 
   // --- Radar sin Apify + aviso por WhatsApp ---
   // Cada hora de 7 a 23. Puede ser cada hora porque no cuesta nada: una pasada son ~18 segundos
