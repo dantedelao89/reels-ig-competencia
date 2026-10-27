@@ -269,8 +269,11 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
     if (avisar && toca) {
       ultimoAvisoCiegoMs = ahora;
       const horas = (ahora - cegueraDesdeMs) / 3_600_000;
+      // Ojo con lo que se afirma: la memoria es del proceso, así que tras un despliegue esto es el
+      // primer aviso aunque la ceguera lleve días. Decir «acaba de empezar» sería mentir, y es
+      // justo el tipo de mentira pequeña que este archivo existe para no contar.
       const desdeCuando = esNuevo
-        ? 'Acaba de empezar.'
+        ? 'Primer aviso desde que arrancó el servicio; se repite cada 6 h mientras siga así.'
         : `Lleva así ${horas < 24 ? `${horas.toFixed(1)} h` : `${Math.round(horas / 24)} días`}; se repite cada 6 h.`;
       await enviarSlack({
         text: `⚠️ El centinela no puede leer ningún canal: ${motivo}`,
