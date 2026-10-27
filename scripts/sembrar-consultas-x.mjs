@@ -21,6 +21,14 @@
 //    conversación de ESE tema. 300 likes es ruido de fondo en un lanzamiento de OpenAI y es un éxito
 //    en español, donde el nicho es mucho más pequeño.
 //
+// ## Por qué casi todas llevan `-airdrop -giveaway -token`
+//
+// El spam de cripto cabalga sobre las palabras de IA. Medido el 27 oct 2026 en el primer resumen
+// real: un «FCFS Earning ~ 5% $WATCH Token Airdrop» se colocó en el puesto 7 del mensaje de Slack,
+// clasificado como «AI videos». Con los tres negativos, los 20 resultados de la misma consulta
+// pasaron a ser del nicho. Importa más de lo que parece: lo que silencia un canal de avisos es el
+// ruido, y un canal silenciado es la única forma de que un sistema de alertas falle del todo.
+//
 // ## Por qué los modelos van agrupados con OR y no una consulta por modelo
 //
 // Cada consulta es una corrida de Apify y el actor redondea de 20 en 20 resultados, así que once
@@ -50,7 +58,7 @@ const CONSULTAS = [
   {
     etiqueta: 'Video IA · modelos (EN)',
     consulta:
-      '(seedance OR higgsfield OR hailuo OR "kling ai" OR "veo 3" OR "sora 2" OR "openai sora" OR runwayml) min_faves:150 -filter:replies -filter:retweets lang:en',
+      '(seedance OR higgsfield OR hailuo OR "kling ai" OR "veo 3" OR "sora 2" OR "openai sora" OR runwayml) min_faves:150 -filter:replies -filter:retweets -airdrop -giveaway -token lang:en',
     maxPorCorrida: 20,
     // Los nombres van DESAMBIGUADOS, y eso no es estilo: con `sora` y `runway` a secas, medido el
     // 27 oct 2026, 17 de 20 resultados eran basura — cinco tweets de una actriz llamada Charlotte,
@@ -63,7 +71,7 @@ const CONSULTAS = [
   {
     etiqueta: 'Avatares, voz y anuncios IA (EN)',
     consulta:
-      '(heygen OR elevenlabs OR arcads OR "ai avatar" OR "ai ugc" OR "ai ads") min_faves:100 -filter:replies -filter:retweets lang:en',
+      '(heygen OR elevenlabs OR arcads OR "ai avatar" OR "ai ugc" OR "ai ads") min_faves:100 -filter:replies -filter:retweets -airdrop -giveaway -token lang:en',
     maxPorCorrida: 20,
     // Medida: máximo 949 likes/h y «Maya-2 voice model weights are officially live» entre los
     // primeros. Umbral más bajo porque es un nicho dentro del nicho: herramientas de marketing, no
@@ -90,7 +98,7 @@ const CONSULTAS = [
   {
     etiqueta: 'Imagen IA · modelos (EN)',
     consulta:
-      '("nano banana" OR "gpt image" OR midjourney OR "flux kontext") min_faves:150 -filter:replies -filter:retweets lang:en',
+      '("nano banana" OR "gpt image" OR midjourney OR "flux kontext") min_faves:150 -filter:replies -filter:retweets -airdrop -giveaway -token lang:en',
     maxPorCorrida: 20,
     // `flux` a secas se descartó sin medirlo: hay un proyecto de cripto con ese nombre y la lección
     // de `sora` ya estaba aprendida. `flux kontext` es el modelo.
@@ -100,7 +108,7 @@ const CONSULTAS = [
   {
     etiqueta: 'IA en español',
     consulta:
-      '(seedance OR "kling ai" OR "nano banana" OR "veo 3" OR "gpt image" OR "anuncios con ia") min_faves:100 -filter:replies -filter:retweets lang:es',
+      '(seedance OR "kling ai" OR "nano banana" OR "veo 3" OR "gpt image" OR "anuncios con ia") min_faves:100 -filter:replies -filter:retweets -airdrop -giveaway -token lang:es',
     maxPorCorrida: 20,
     // La más floja de las seis, y conviene saberlo antes de esperar nada de ella. Medido el 27 oct
     // 2026, dos intentos:
