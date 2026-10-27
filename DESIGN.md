@@ -317,6 +317,13 @@ Consecuencias de diseño, no detalles de implementación:
 - **Una sola corrida de Apify para todas las búsquedas.** El actor cobra $0.04 solo por arrancar
   (`actor-start-gb`, $0.02/GB × 2 GB), así que seis búsquedas en seis corridas pagarían el arranque
   seis veces. `max_por_corrida` de cada fila se SUMA para formar el `maxItems` de la corrida.
+- **Lo que cuesta es el tiempo, y el tiempo lo pone Reddit.** Una pasada son **$0.154 y 11 minutos**
+  (6 búsquedas × 5 posts = 30 items), o **$4.62/mes** a 1×/día. Parecía que la culpa era de
+  `includeMediaLinks` —su propia descripción avisa de que afecta al rendimiento— pero medido es
+  falso: la misma pasada sin él iba a $0.1122 en 8 minutos, el mismo ritmo de ~$0.014 por minuto.
+  Lo que tarda es rastrear las páginas de resultados de Reddit, que contestan 403 y se reintentan.
+  O sea que las métricas (y con ellas el filtro de calidad) **salen gratis**: no hay una versión
+  barata que merezca la pena.
 - **El tope por corrida tiene que librar el arranque.** Con `maxTotalChargeUsd: 0.05`, cuatro
   corridas murieron en el segundo 2 con `Maximum cost per run is lower then actor start cost` — y
   cobraron $0.04 cada una. Un tope demasiado bajo no ahorra: hace que todo falle pagando.

@@ -9,9 +9,15 @@
 //    2 GB, así que el arranque solo son $0.04. El tope de aquí (`radarRedditMaxUsdPorCorrida`,
 //    $0.20) está puesto para librarlo con margen: bajarlo a la zona de los centavos no ahorra, hace
 //    que todas las corridas fallen pagando.
-// 2. **`includeMediaLinks` decide si vienen los upvotes.** El nombre engaña: sin él no hay
-//    `upVotes`, `upVoteRatio`, `numberOfComments` ni `videoUrls`, o sea ninguna métrica. Va siempre
-//    en true.
+// 2. **`includeMediaLinks` decide si vienen los upvotes, y NO es lo que cuesta.** El nombre
+//    engaña: sin él no hay `upVotes`, `upVoteRatio`, `numberOfComments` ni `videoUrls`, o sea
+//    ninguna métrica — y sin `upVoteRatio` se pierde el único filtro de ruido que funciona en
+//    Reddit (ver `radarRedditRatioMinimo`). Su descripción avisa de que «may affect performance», y
+//    por eso di por hecho que era el motivo de que la pasada tardara 11 minutos. **Es falso,
+//    medido**: la misma pasada con `includeMediaLinks: false` iba a $0.1122 en 8 minutos, el mismo
+//    ritmo (~$0.014/minuto) que con él en true. Lo que cuesta es rastrear las páginas de resultados
+//    de Reddit, que responden 403 y hay que reintentar. Así que va siempre en true: las métricas
+//    salen gratis.
 // 3. **Una corrida por TODAS las búsquedas, no una por búsqueda.** `searches` es un array, y con un
 //    arranque de $0.04 por corrida, seis búsquedas en seis corridas pagan el arranque seis veces.
 //    Medido: tres búsquedas en una corrida, $0.0742. El arranque es la mitad del costo.
