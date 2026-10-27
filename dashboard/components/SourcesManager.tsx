@@ -128,16 +128,33 @@ export default function SourcesManager({ mode = 'organico' }: { mode?: 'organico
         ? '/api/radar-x-busqueda'
         : type === 'yt_search'
         ? '/api/scrape-search'
+        : type === 'rd_search'
+        ? '/api/radar-rd'
         : '/api/scrape-ad';
     const unidad =
-      type === 'ig' ? 'reels' : type === 'fb_advertiser' ? 'anuncios' : type === 'x' || type === 'x_search' ? 'posts' : 'videos';
-    const doneAct = activity.begin(`Scrapeando ${unidad}: ${row.key.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}…`);
+      type === 'ig'
+        ? 'reels'
+        : type === 'fb_advertiser'
+        ? 'anuncios'
+        : type === 'x' || type === 'x_search' || type === 'rd_search'
+        ? 'posts'
+        : 'videos';
+    // En Reddit el botón de una fila corre TODAS las búsquedas (una sola corrida de Apify las trae
+    // todas y el arranque se paga igual), así que el mensaje no debe prometer que solo va por esta.
+    const doneAct = activity.begin(
+      type === 'rd_search'
+        ? 'Rastreando Reddit: todas las búsquedas…'
+        : `Scrapeando ${unidad}: ${row.key.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}…`
+    );
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // El radar se dispara por id de consulta; las demás fuentes por su clave (URL o @usuario).
-        body: JSON.stringify(type === 'x_search' ? { id: row.id } : { url: row.key }),
+        // El radar de X se dispara por id de consulta, Reddit no lleva cuerpo porque corre todas,
+        // y las demás fuentes van por su clave (URL o @usuario).
+        body: JSON.stringify(
+          type === 'x_search' ? { id: row.id } : type === 'rd_search' ? {} : { url: row.key }
+        ),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al scrapear');

@@ -1,7 +1,7 @@
 // Definición de las 4 fuentes que se gestionan desde DISECTA. Supabase es la fuente única:
 // estos mapeos coinciden con las tablas/columnas que lee el scraper (src/sources.js).
 
-export type SourceType = 'ig' | 'tiktok' | 'x' | 'x_search' | 'yt_channel' | 'yt_search' | 'fb_advertiser';
+export type SourceType = 'ig' | 'tiktok' | 'x' | 'x_search' | 'yt_channel' | 'yt_search' | 'rd_search' | 'fb_advertiser';
 
 export interface SourceDef {
   label: string;
@@ -101,10 +101,33 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
     nameColumn: 'etiqueta',
     keyLabel: 'Palabra clave',
     // El idioma de la consulta ES el idioma en que se busca: el actor no tiene parámetro de idioma
-    // ni de país, y pasarle hl/gl o un proxy de MX/BR no cambia nada (medido el 21 oct 2026). Cada
-    // tema vive como tres consultas, una por idioma; el ejemplo lo recuerda para que nadie añada
-    // una sola en inglés y se pierda lo de español y portugués sin darse cuenta.
-    keyPlaceholder: 'ej. claude code · claude code en español · claude code em português',
+    // ni de país, y pasarle hl/gl o un proxy de MX/BR no cambia nada (medido el 21 oct 2026). En el
+    // radar libre, además, el SUFIJO de la etiqueta elige el locale con el que se pide la página.
+    //
+    // Desde el 27 oct 2026 el radar va en INGLÉS (Dante: «son los primeros que sacan las
+    // tendencias»), así que el ejemplo enseña el sufijo en vez de las tres versiones por idioma.
+    // Para volver a buscar en español se pone `· en,es` y se enciende la fila.
+    keyPlaceholder: 'ej. claude code   ·   etiqueta: claude code · en',
+  },
+  rd_search: {
+    label: 'Búsquedas Reddit',
+    // Cuarta plataforma del radar (27 oct 2026), en la misma tabla que las otras tres.
+    table: 'radar_busquedas',
+    fixed: { plataforma: 'rd' },
+    keyColumn: 'consulta',
+    numColumn: 'max_por_corrida',
+    // El número es por búsqueda pero el actor hace UNA sola corrida con todas, así que lo que
+    // manda el gasto es la SUMA: seis búsquedas de 5 son 30 posts, y el actor abre cada post con un
+    // navegador para sacar los upvotes. Añadir una búsqueda más sube el costo de la pasada.
+    numLabel: 'Posts/corrida (se suman)',
+    sinProyecto: true,
+    nombreEditable: true,
+    nameColumn: 'etiqueta',
+    keyLabel: 'Búsqueda de Reddit',
+    // Nombres de modelo y CALIFICADOS. Reddit no entiende operadores como X, así que la única
+    // defensa contra el ruido es que el término no sea ambiguo: `kling` solo trae apellidos
+    // alemanes y `sora` nombres propios, igual que pasó en X.
+    keyPlaceholder: 'ej. seedance · kling ai · sora 2 · nano banana',
   },
   fb_advertiser: {
     label: 'Anunciantes',
@@ -117,7 +140,7 @@ export const SOURCE_DEFS: Record<SourceType, SourceDef> = {
   },
 };
 
-export const SOURCE_ORDER: SourceType[] = ['ig', 'tiktok', 'x', 'x_search', 'yt_channel', 'yt_search'];
+export const SOURCE_ORDER: SourceType[] = ['ig', 'tiktok', 'x', 'x_search', 'yt_channel', 'yt_search', 'rd_search'];
 export const ADS_SOURCE_ORDER: SourceType[] = ['fb_advertiser'];
 export const ALL_SOURCE_ORDER: SourceType[] = [...SOURCE_ORDER, ...ADS_SOURCE_ORDER];
 

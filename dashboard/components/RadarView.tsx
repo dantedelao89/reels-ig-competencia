@@ -57,6 +57,7 @@ const PLATAFORMAS = [
   { key: 'yt', label: 'YouTube' },
   { key: 'x', label: 'X' },
   { key: 'li', label: 'LinkedIn' },
+  { key: 'rd', label: 'Reddit' },
 ];
 
 // El idioma es una dimensión de señal propia desde que el radar busca en tres (DESIGN.md 5.7): la
@@ -82,7 +83,7 @@ const ORDENES = [
 
 const PAGE_SIZE = 500;
 
-const NOMBRE_PLATAFORMA: Record<string, string> = { yt: 'YouTube', x: 'X', li: 'LinkedIn' };
+const NOMBRE_PLATAFORMA: Record<string, string> = { yt: 'YouTube', x: 'X', li: 'LinkedIn', rd: 'Reddit' };
 
 // Las sobras: lo que no cayó en ningún tema de Dante. Tiene su propia tarjeta para no desaparecer
 // en silencio, pero no compite con los temas (ver el orden de `tarjetas`).
@@ -117,10 +118,17 @@ function edadCorta(h: Hallazgo): string {
   return `hace ${Math.round(hs / 24)} d`;
 }
 
-// La métrica que lleva la velocidad de cada plataforma: vistas/h en YouTube, reacciones/h en X.
+// La métrica que lleva la velocidad de cada plataforma: vistas/h en YouTube, reacciones/h en X,
+// upvotes/h en Reddit.
+//
+// Ojo con Reddit: el radar busca en `rising`, que coge los posts ANTES de que exploten, así que
+// traen 1-5 upvotes y la velocidad es casi ruido (medido el 27 oct 2026). Se enseña por coherencia,
+// pero en Reddit lo que decide es el TÍTULO y el subreddit, no el número.
 // Decirlo evita la pregunta de "2.400 de qué".
 function unidadDe(plataforma: string | null): string {
-  return plataforma === 'yt' ? 'vistas/h' : 'reacciones/h';
+  if (plataforma === 'yt') return 'vistas/h';
+  if (plataforma === 'rd') return 'upvotes/h';
+  return 'reacciones/h';
 }
 
 interface Tarjeta {

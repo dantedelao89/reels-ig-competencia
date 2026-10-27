@@ -32,6 +32,7 @@ import { getCreatorsConHistoriasAuto, getActiveRadarBusquedas } from './sources.
 import { runScrapeTiktok, runScrapeTiktokCreator, runScrapeTiktokUrl } from './scrapeTiktok.js';
 import { runScrapeX, runScrapeXCreator, runScrapeXUrl } from './scrapeX.js';
 import { runRadarX, runRadarXBusqueda } from './scrapeXRadar.js';
+import { runRadarReddit } from './scrapeRadarReddit.js';
 import { runRadarYoutube, runRadarYoutubeBusqueda } from './scrapeRadarYoutube.js';
 import { reclasificarRadar } from './reclasificarRadar.js';
 import { gastoRadarUsd } from './apifyPresupuesto.js';
@@ -217,6 +218,18 @@ app.get('/crons', async (req, res) => {
       topePorCorridaUsd: config.radarMaxUsdPorCorrida,
       presupuestoUsd: config.radarPresupuestoMensualUsd,
       ...(await gastoDelRadar()),
+    },
+    radarReddit: {
+      activo: config.enableRadarRedditCron,
+      horario: config.radarRedditCronSchedule,
+      zona: config.cronTimezone,
+      valido: cron.validate(config.radarRedditCronSchedule),
+      variableRecibida: process.env.ENABLE_RADAR_RD_CRON ?? null,
+      consultasActivas: await contarConsultasActivas('rd'),
+      avisaPorSlack: Boolean(config.slackWebhookUrl),
+      orden: `${config.radarRedditSort} · ${config.radarRedditTime}`,
+      // De la corrida COMPLETA, no de una consulta: todas van en una sola corrida de Apify.
+      topeCorridaUsd: config.radarRedditMaxUsdPorCorrida,
     },
     // El radar de YouTube ya no tiene cron: lo cubre `radarLibre`, gratis y cada hora. El de Apify
     // queda solo como disparo manual (`POST /radar-yt`), con su tope de lote por corrida.
@@ -746,6 +759,22 @@ app.post('/radar-x-busqueda', async (req, res) => {
     res.json(await runRadarXBusqueda(String(id).trim()));
   } catch (err) {
     console.error('[radar consulta] error:', err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// --- Reddit ---
+
+// Corre TODAS las búsquedas activas de Reddit. Sin consulta por fila como en X: aquí toda la pasada
+// es UNA corrida de Apify (el actor cobra sobre todo por arranque), así que disparar una sola
+// consulta costaría lo mismo que disparar las seis.
+app.post('/radar-rd', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  try {
+    // `avisar` por el cuerpo para poder probar el mensaje de Slack sin esperar al cron.
+    res.json(await runRadarReddit({ avisar: req.body?.avisar === true }));
+  } catch (err) {
+    console.error('[radar-rd] error:', err.message);
     res.status(500).json({ ok: false, error: err.message });
   }
 });
@@ -1454,6 +1483,38 @@ app.listen(config.port, () => {
       );
     } else {
       console.error(`RADAR_X_CRON_SCHEDULE inválido: "${config.radarXCronSchedule}" — cron de X desactivado`);
+    }
+  }
+
+  // Cron del RADAR DE REDDIT: una vez al día, media hora después del de X para que los dos
+  // mensajes de Slack no lleguen pegados.
+  //
+  // Una vez al día es lo que pidió Dante por costo, y encaja con `time: 'day'` del actor: la
+  // ventana que mira el actor y la cadencia del cron son la misma, así que no se pierde nada entre
+  // pasadas ni se paga por volver a ver lo mismo. Toda la pasada es UNA corrida de Apify.
+  if (config.enableRadarRedditCron) {
+    if (cron.validate(config.radarRedditCronSchedule)) {
+      cron.schedule(
+        config.radarRedditCronSchedule,
+        async () => {
+          console.log(`[cron-radar-rd] rastreando (${config.radarRedditCronSchedule} ${config.cronTimezone})`);
+          try {
+            const r = await runRadarReddit({ avisar: true });
+            console.log('[cron-radar-rd]', JSON.stringify(r));
+          } catch (err) {
+            console.error('[cron-radar-rd] error:', err.message);
+          }
+        },
+        { timezone: config.cronTimezone }
+      );
+      console.log(
+        `👽 Cron del radar de Reddit ACTIVO: ${config.radarRedditCronSchedule} (${config.cronTimezone})` +
+          `${config.slackWebhookUrl ? ' · avisa por Slack' : ' · SIN SLACK_WEBHOOK_URL: no avisará'}`
+      );
+    } else {
+      console.error(
+        `RADAR_RD_CRON_SCHEDULE inválido: "${config.radarRedditCronSchedule}" — cron de Reddit desactivado`
+      );
     }
   }
 

@@ -264,13 +264,74 @@ preguntas distintas:
 
 | fuente | qué mira | cada cuánto | avisa | cuesta |
 |---|---|---|---|---|
-| **Consultas** | 37 búsquedas de YouTube en 3 idiomas | cada hora, 8-19 y 22 | si cruza 1.000 vistas/h | $0.00 |
+| **Consultas** | 24 búsquedas de YouTube, en inglés | cada hora, 8-19 y 22 | si cruza 1.000 vistas/h | $0.00 |
 | **Centinela** | 10 canales OFICIALES | cada 15 min | en cuanto publican | $0.00 |
 | **Barrido** | los ~124 canales de Fuentes | a petición | solo si cruza el umbral | $0.00 |
-| **X** | 6 consultas con operadores | 1×/día, 7am | resumen diario a Slack | $1.02/mes |
+| **X** | 5 consultas con operadores | 1×/día, 7:00 | resumen diario a Slack | ~$0.85/mes |
+| **Reddit** | 6 búsquedas por nombre de modelo | 1×/día, 7:30 | resumen diario a Slack | ver abajo |
 
 Las tres primeras son de YouTube y van por RSS o leyendo la página de resultados, así que son
-gratis. **X es la única que paga Apify**, y por eso es la única con presupuesto encima.
+gratis. **X y Reddit son las que pagan Apify**, y por eso son las únicas dentro del presupuesto del
+radar (`radarActoresDePago`).
+
+#### Todo en INGLÉS (27 oct 2026)
+
+Decisión de Dante: «no te enfoques en español, enfócate en inglés, que son los primeros que sacan
+las tendencias». Está respaldado por los datos del propio proyecto: la ola de Claude Duet
+reconstruida desde la base da **−0.5 h** para el primer video en inglés y **+3.0 h** para el primero
+en español. Mirando en inglés se ve la ola tres horas antes.
+
+Qué cambió con eso:
+
+- **El radar libre respeta `activo`.** Antes leía las 37 filas y se saltaba el interruptor, con el
+  argumento de que al ser gratis no había por qué apagar nada. El efecto era que el interruptor de
+  Fuentes no movía nada en el radar que de verdad corre, y sin él no hay forma de decidir el idioma.
+  Ahora 24 activas en inglés, 13 apagadas (es/pt), y se pasó de 52 peticiones por pasada a 24.
+- **Sin sufijo, una consulta se busca en inglés.** Antes el valor por defecto era `en,es`.
+- **El aviso ya no afirma el hueco en español.** La línea «🟢 Nadie lo ha hecho en español todavía»
+  se calcula contando hallazgos en español; sin consultas en español diría eso en todos los avisos,
+  siempre, y sería falso — no significaría que nadie lo ha hecho, sino que dejamos de buscarlo. Un
+  contador que no puede ver no opina: la línea desaparece. Para recuperarla hay que volver a
+  encender filas en español, y es un interruptor en Fuentes.
+
+Las filas en español y portugués se APAGAN, no se borran: siguen siendo el registro de qué se buscó
+y la referencia (`busqueda_id`) de los hallazgos que entraron por ellas.
+
+#### Reddit responde una pregunta que ninguna otra fuente responde
+
+Las tres fuentes de YouTube y la de X miran RESULTADOS: videos y posts que ya existen. Por eso todas
+llegan después de que alguien publicó. Reddit mira CONVERSACIÓN, con `sort: rising`, que coge el post
+antes de que explote.
+
+Medido el 27 oct 2026 en una sola corrida: «Halloween 🎃 Wan 3.0 vs Kling 4.0» y «Kling 4.0 is quite
+a good cheaper alternative to Seedance 2.5» — números de versión y comparaciones ya hechas, cuando
+ningún canal oficial había publicado nada. Y aparecieron subreddits dedicados POR MODELO que el
+sistema no miraba: r/HiggsfieldAI, r/KlingAI_Videos, r/Seedance_AI, r/Akool_Official.
+
+Consecuencias de diseño, no detalles de implementación:
+
+- **El resumen de Reddit NO ordena por velocidad.** Buscar en `rising` significa cogerlos temprano, y
+  temprano significa **1, 3 o 5 upvotes**. Una velocidad sobre 3 upvotes es ruido con decimales. Lo
+  que vale es el TÍTULO, y la agrupación es por SUBREDDIT, porque r/Seedance_AI diciendo algo de
+  Seedance no es lo mismo que r/aivideo diciéndolo.
+- **Una sola corrida de Apify para todas las búsquedas.** El actor cobra $0.04 solo por arrancar
+  (`actor-start-gb`, $0.02/GB × 2 GB), así que seis búsquedas en seis corridas pagarían el arranque
+  seis veces. `max_por_corrida` de cada fila se SUMA para formar el `maxItems` de la corrida.
+- **El tope por corrida tiene que librar el arranque.** Con `maxTotalChargeUsd: 0.05`, cuatro
+  corridas murieron en el segundo 2 con `Maximum cost per run is lower then actor start cost` — y
+  cobraron $0.04 cada una. Un tope demasiado bajo no ahorra: hace que todo falle pagando.
+- **Las búsquedas van calificadas**, igual que en X: `kling ai` y no `kling` (que trae apellidos
+  alemanes), `sora 2` y no `sora`. Reddit no tiene operadores de búsqueda, así que la única defensa
+  contra el ruido es que el término no sea ambiguo.
+- **El radar de Reddit no archiva nada**, como el resto del radar: solo URL, texto y métricas.
+
+Y una lección que salió de montarlo y vale para TODO el proyecto: **una corrida fallida de Apify no
+lanzaba error**. `.call()` espera a que termine y devuelve el objeto pase lo que pase, así que el
+dataset salía vacío y quien llamaba leía «no hubo resultados». Cuatro corridas FAILED se vieron como
+cuatro ceros, y me pasé un rato ajustando la entrada. Desde el 27 oct 2026 `apifyRun.js` mira
+`run.status` y lanza si terminó mal sin resultados (si trajo items se usan, con un aviso: un actor
+que se queda sin tiempo suele dejar datos buenos). Es el mismo disfraz del 429 de YouTube y de los
+404 falsos del centinela: **un cero hay que saber de qué es.**
 
 #### Por qué el radar de X manda un RESUMEN y no una alerta por umbral
 

@@ -105,28 +105,21 @@ const CONSULTAS = [
     porQue: 'los modelos de imagen; «nano banana» y «gpt image» son temas suyos',
     alias: ['nano banana', 'gpt image'],
   },
-  {
-    etiqueta: 'IA en español',
-    consulta:
-      '(seedance OR "kling ai" OR "nano banana" OR "veo 3" OR "gpt image" OR "anuncios con ia") min_faves:100 -filter:replies -filter:retweets -airdrop -giveaway -token lang:es',
-    maxPorCorrida: 20,
-    // La más floja de las seis, y conviene saberlo antes de esperar nada de ella. Medido el 27 oct
-    // 2026, dos intentos:
-    //   - Con `"inteligencia artificial"` dentro trajo POLÍTICA: «LA BACANAL DE PETRO», «Trump
-    //     falló en todo». En X en español ese término es comentario de noticias, no nicho.
-    //   - Con `"video con ia"` dentro trajo BURLA: «gastarían menos agua si hicieran un video con
-    //     IA», «ese video con ia es lo peor». La frase ya es coloquial.
-    // Lo que quedó —nombres de modelos y `min_faves:100`— sí rinde, pero poco: el hallazgo bueno
-    // del día fue uno (@raul_ia_prod, 3.468 likes) más un lanzamiento (@nicogarcia_ia, «Google
-    // acaba de LIBERAR la generación de video»). La señal fuerte en español vive en YouTube, que
-    // ya se cubre gratis y cada hora.
-    porQue: 'su idioma, aunque en X el nicho hispanohablante es delgado',
-    alias: ['seedance', 'kling', 'nano banana', 'veo 3', 'gpt image', 'anuncios con ia'],
-  },
 ];
 
-// Se queda en la base y apagada a propósito. Ver la nota 1 de arriba.
-const DEJAR_APAGADAS = ['Hashtags IA'];
+// Se quedan en la base y APAGADAS a propósito, cada una por su motivo.
+//
+// - «Hashtags IA»: ver la nota 1 de arriba (`#ia` es un personaje de Vocaloid).
+// - «IA en español»: decisión de Dante el 27 oct 2026, «no te enfoques en español, enfócate en
+//   inglés, que son los primeros que sacan las tendencias». Coincide con lo medido ese mismo día:
+//   era la más floja de las seis —el nicho hispanohablante en X es delgado y el único hallazgo
+//   bueno del día fue uno— y la ola de Claude Duet reconstruida desde la base da +3.0 h para el
+//   primer video en español frente a −0.5 h para el primero en inglés. Mirando en inglés se ve la
+//   ola tres horas antes.
+//
+// Apagadas y no borradas: siguen siendo el registro de qué se probó y la referencia
+// (`busqueda_id`) de los hallazgos que ya entraron por ellas.
+const DEJAR_APAGADAS = ['Hashtags IA', 'IA en español'];
 
 const escribir = process.argv.includes('--escribir');
 

@@ -131,6 +131,12 @@ function edad(h, ahoraMs) {
 // perder el aviso original.
 export function formatearAviso(avisos, todos, ahoraMs = Date.now(), titulo = null) {
   const conteos = conteoPorIdioma(todos);
+  // ¿Se está MIRANDO en español? Desde el 27 oct 2026 el radar se enfoca en inglés, y sin esta
+  // comprobación la línea del hueco diría «nadie lo ha hecho en español todavía» en TODOS los
+  // avisos, siempre. Y sería falso: no significaría que nadie lo ha hecho, sino que dejamos de
+  // buscarlo. Un contador que no puede ver no debe opinar, así que la línea desaparece en vez de
+  // afirmar un hueco que no se ha medido.
+  const hayVisionEnEspanol = todos.some((h) => idiomaDe(h) === 'es');
   const bloques = [
     {
       type: 'header',
@@ -155,11 +161,13 @@ export function formatearAviso(avisos, todos, ahoraMs = Date.now(), titulo = nul
     // La línea que convierte el dato en decisión: no es "esto explotó", es "el hueco sigue
     // abierto". En la ola de Claude Duet los cinco primeros fueron en inglés y el español no
     // apareció hasta la hora 3.
-    const hueco = c
-      ? c.es === 0
-        ? `🟢 *Nadie lo ha hecho en español todavía* · ${c.en} en inglés`
-        : `🟡 Ya hay ${c.es} en español · ${c.en} en inglés`
-      : null;
+    const hueco = !hayVisionEnEspanol
+      ? null
+      : c
+        ? c.es === 0
+          ? `🟢 *Nadie lo ha hecho en español todavía* · ${c.en} en inglés`
+          : `🟡 Ya hay ${c.es} en español · ${c.en} en inglés`
+        : null;
     // Los suscriptores pueden faltar: desde Railway, YouTube devuelve 429 al pedir la página del
     // video, así que ese dato solo está cuando se pudo. Se omite en vez de escribir "? subs".
     const ficha = [

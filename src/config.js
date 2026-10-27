@@ -97,6 +97,10 @@ export const config = {
   // y en estas cuentas el prompt entero vive justo después del corte; kaitoeasyapi sí trae el
   // texto pero inyecta ~14 filas de publicidad propia por corrida y las cobra (15x su precio).
   xActorId: process.env.X_ACTOR_ID || 'danek/twitter-scraper',
+  // Reddit. Ojo con dos cosas medidas el 27 oct 2026, las dos en `redditApify.js`: sin proxy
+  // RESIDENTIAL devuelve 0 items sin fallar (y cobra $0.04 igual), y sin `includeMediaLinks` no
+  // trae ni una métrica.
+  redditActorId: process.env.RD_ACTOR_ID || 'trudax/reddit-scraper-lite',
   xDefaultMaxResults: Number(process.env.X_DEFAULT_MAX_RESULTS || 20),
   xBatchMaxResults: Number(process.env.X_BATCH_MAX_RESULTS || 20),
   // El actor NO tiene filtro de fecha (a diferencia de TikTok/YouTube): la única defensa contra
@@ -224,7 +228,7 @@ export const config = {
   // `radarYoutubeLibre.js` hace lo mismo gratis y 13 veces al día, y ese actor lo comparten el
   // barrido y el pipeline orgánico ($4.74 en el ciclo del 15 oct). Meterlo aquí volvería a cargarle
   // al radar un gasto que no es suyo, que es justo el fallo que se arregló.
-  radarActoresDePago: (process.env.RADAR_ACTORES_DE_PAGO || 'danek/twitter-scraper')
+  radarActoresDePago: (process.env.RADAR_ACTORES_DE_PAGO || 'danek/twitter-scraper,trudax/reddit-scraper-lite')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean),
@@ -253,6 +257,37 @@ export const config = {
   // Cuántos hallazgos se enseñan. Ocho caben en una pantalla de Slack sin desplazarse; con treinta,
   // el mensaje se lee igual que no leerlo.
   radarXResumenCuantos: Number(process.env.RADAR_X_RESUMEN_CUANTOS || 8),
+
+  // --- Radar de Reddit (1×/día) ---
+  // A las 7:30 y no a las 7:00 como X, para que los dos mensajes de Slack no lleguen pegados: dos
+  // avisos en el mismo minuto se leen como uno y se pierde el segundo.
+  enableRadarRedditCron: flag(process.env.ENABLE_RADAR_RD_CRON, true),
+  radarRedditCronSchedule: process.env.RADAR_RD_CRON_SCHEDULE || '30 7 * * *',
+  // `rising` es el punto de tener Reddit: coge el post ANTES de que explote, que es justo lo que
+  // el centinela no puede ver porque vigila canales. `top` daría lo más votado del día, o sea lo
+  // que ya pasó. `time: day` acota a las últimas 24 h, igual que la cadencia del cron.
+  radarRedditSort: process.env.RADAR_RD_SORT || 'rising',
+  radarRedditTime: process.env.RADAR_RD_TIME || 'day',
+  // Tope DURO de la corrida, que impone Apify. Es de la corrida COMPLETA porque todas las
+  // consultas van en una sola (el actor cobra sobre todo por arranque: una corrida vacía cuesta
+  // $0.04, y tres búsquedas en una sola costaron $0.0742).
+  radarRedditMaxUsdPorCorrida: Number(process.env.RADAR_RD_MAX_USD_CORRIDA || 0.2),
+  // Piso de calidad propio de Reddit: la PROPORCIÓN de votos a favor. Es el mejor filtro de ruido
+  // que encontré y sale de los datos, no del gusto — medido el 27 oct 2026 sobre 30 posts reales:
+  // lo que la comunidad estaba hundiendo venía con 0.15-0.38 («Virtually impossible to refute these
+  // strong points» en r/aiwars, «How to use seedance for free??», «Are there any rich movie
+  // producers who want to turn my novel…») y lo que valía con 0.8-1.0 («Flux is very close to being
+  // the same as Sora 2» con 129 upvotes, «Seedance 2.0 vs MiniMax H3», «Why almost all major open
+  // weight models come from china?» con 543). Con 0.6 se fueron 14 de los 30 y casi todo lo que se
+  // fue era basura.
+  //
+  // Ojo: este filtro SOLO existe porque `includeMediaLinks` trae `upVoteRatio`. Si algún día se
+  // apaga para ahorrar, se pierde el filtro y el ruido llega entero a Slack.
+  radarRedditRatioMinimo: Number(process.env.RADAR_RD_RATIO_MINIMO || 0.6),
+  radarRedditResumenMaxHoras: Number(process.env.RADAR_RD_RESUMEN_MAX_HORAS || 48),
+  // Diez y no ocho: el resumen va agrupado por subreddit, así que los hallazgos ocupan menos
+  // líneas cada uno que en X, donde cada uno lleva su propio bloque con métricas.
+  radarRedditResumenCuantos: Number(process.env.RADAR_RD_RESUMEN_CUANTOS || 10),
 
   // --- Radar sin Apify + aviso por WhatsApp ---
   // Cada hora de 7 a 23. Puede ser cada hora porque no cuesta nada: una pasada son ~18 segundos

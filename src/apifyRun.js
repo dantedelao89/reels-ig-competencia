@@ -53,6 +53,30 @@ export async function runActorItems(actorId, input, opts = {}) {
       const run = await client.actor(actorId).call(input, callOpts);
       spendUsd += run.usageTotalUsd || 0;
       const { items } = await client.dataset(run.defaultDatasetId).listItems();
+
+      // Una corrida FALLIDA no lanza: `.call()` espera a que termine y devuelve el objeto pase lo
+      // que pase, así que el dataset sale vacío y quien llama lee «no hubo resultados».
+      //
+      // Descubierto el 27 oct 2026 montando Reddit: cuatro corridas seguidas devolvieron 0 items y
+      // me pasé un rato ajustando la ENTRADA, convencido de que mis parámetros estaban mal. En
+      // Apify estaban las cuatro como FAILED, y cobradas a $0.04 cada una. Es el mismo disfraz que
+      // ya nos costó dos diagnósticos —el 429 de YouTube devolviendo 0 hallazgos y el feed del
+      // centinela con 404 falsos— y la lección es la misma: un cero hay que saber de qué es.
+      //
+      // Si la corrida trajo items se devuelven igual, solo con un aviso: un actor que se queda sin
+      // tiempo a mitad suele dejar datos buenos, y tirarlos por el estado sería perder lo que ya
+      // se pagó.
+      if (run.status !== 'SUCCEEDED') {
+        if (!items.length) {
+          throw new Error(
+            `la corrida de ${actorId} terminó en ${run.status} sin resultados ` +
+              `(run ${run.id}, $${(run.usageTotalUsd || 0).toFixed(4)})`
+          );
+        }
+        console.warn(
+          `[apify] ${actorId} terminó en ${run.status} pero trajo ${items.length} items; se usan (run ${run.id})`
+        );
+      }
       return items;
     } catch (err) {
       lastErr = err;

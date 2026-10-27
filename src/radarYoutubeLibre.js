@@ -17,7 +17,7 @@
 // sesgada al español.
 
 import { clasificar, velocidadPorHora } from './radarTemas.js';
-import { getRadarBusquedas, getRadarTemas } from './sources.js';
+import { getActiveRadarBusquedas, getRadarTemas } from './sources.js';
 import { getExistingRadarIds, getRadarVelocidades, getCaptionsAnteriores, syncRadar } from './supabase.js';
 import { candidatas, palabrasDe, formatearBrote } from './radarBrote.js';
 import { elegirAvisos, formatearAviso, enviarSlack } from './radarAviso.js';
@@ -52,18 +52,23 @@ const LOCALES = {
 // Se lee AQUÍ y en ningún otro sitio, y solo para elegir el locale: no se guarda, así que no hay
 // un estado que mantener de acuerdo con el texto. Sin sufijo reconocible se usa inglés, que es el
 // locale propio de YouTube.
-// Sin sufijo se corre en INGLÉS Y ESPAÑOL, no solo inglés. Dante añadió `grokbot` desde Fuentes
-// —donde no hay forma de indicar el idioma— y quedó buscando solo en inglés, perdiéndose todo lo
-// hispano sin avisar. El valor por defecto silencioso tiene que ser el que menos sorprenda.
+// Sin sufijo se corre en INGLÉS (27 oct 2026, decisión de Dante: «no te enfoques en español,
+// enfócate en inglés, que son los primeros que sacan las tendencias»).
+//
+// Estuvo en `['en','es']` por una razón que sigue siendo válida como lección: Dante añadió
+// `grokbot` desde Fuentes —donde no hay forma de indicar el idioma— y quedó buscando solo en
+// inglés, perdiéndose lo hispano sin avisar. El valor por defecto silencioso tiene que ser el que
+// menos sorprenda, y ahora el que menos sorprende es el inglés, porque es el foco declarado. Para
+// volver a buscar en español se le pone el sufijo a la etiqueta: `nano banana · en,es`.
 export function idiomasDeEtiqueta(etiqueta) {
   const m = /·\s*([a-z,\s]+)$/i.exec(String(etiqueta || ''));
-  if (!m) return ['en', 'es'];
+  if (!m) return ['en'];
   const pedidos = m[1]
     .toLowerCase()
     .split(',')
     .map((x) => x.trim())
     .filter((x) => LOCALES[x]);
-  return pedidos.length ? pedidos : ['en', 'es'];
+  return pedidos.length ? pedidos : ['en'];
 }
 
 // Compatible con quien espere uno solo (el primero manda para atribuir el hallazgo).
@@ -311,7 +316,12 @@ export async function correrRadarLibre({
   const refMs = Date.now();
   const refIso = new Date(refMs).toISOString();
 
-  const busquedas = (await getRadarBusquedas('yt')).sort((a, b) =>
+  // ACTIVAS, no todas (27 oct 2026). Antes leía las 37 filas y se saltaba `activo`, con el
+  // argumento de que al ser gratis no había por qué apagar nada. El efecto era que el interruptor
+  // de Fuentes no hacía NADA en el radar que de verdad corre: un interruptor que se enseña y no
+  // mueve nada es peor que no tenerlo. Y sin él no hay forma de decirle al radar en qué idioma
+  // mirar, que es justo lo que Dante pidió.
+  const busquedas = (await getActiveRadarBusquedas('yt')).sort((a, b) =>
     a.etiqueta.localeCompare(b.etiqueta)
   );
   const temas = await getRadarTemas();
