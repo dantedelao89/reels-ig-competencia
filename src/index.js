@@ -165,16 +165,29 @@ async function contarConsultasActivas(plataforma) {
   }
 }
 
-// Los dos gastos, juntos y con etiqueta. El del RADAR es el que gobierna el freno; el de la CUENTA
-// se enseña al lado porque es el del plan, y confundirlos fue justo el fallo que se arregló el
-// 27 oct 2026 (el cron de historias consumía el presupuesto del radar).
-async function gastoDelRadar() {
-  const { radar, cuenta, desde } = await gastoRadarUsd();
-  return {
-    gastadoPorElRadarUsd: radar,
-    gastadoPorTodaLaCuentaUsd: cuenta,
-    cicloDesde: desde,
-  };
+// El freno de gasto, UNA vez y aparte de los radares. Es uno solo para los dos que cuestan (X y
+// Reddit comparten el mismo presupuesto y la misma suma), así que colgarlo de `radarX` —como estaba
+// hasta el 27 oct 2026— hacía que `radarReddit` se leyera como si no tuviera freno, cuando el mismo
+// tope lo puede detener a mitad de corrida.
+//
+// Los dos gastos van juntos y con etiqueta: el del RADAR es el que gobierna el freno; el de la
+// CUENTA se enseña al lado porque es el del plan, y confundirlos fue justo el fallo que se arregló
+// ese día (el cron de historias consumía el presupuesto del radar).
+async function presupuestoDelRadar() {
+  try {
+    const { radar, cuenta, desde } = await gastoRadarUsd();
+    return {
+      presupuestoUsd: config.radarPresupuestoMensualUsd,
+      gastadoPorElRadarUsd: radar,
+      gastadoPorTodaLaCuentaUsd: cuenta,
+      cicloDesde: desde,
+      afecta: ['radarX', 'radarReddit'],
+    };
+  } catch (e) {
+    // Un fallo leyendo a Apify no debe tumbar el informe entero: lo que se pierde es el número,
+    // no el estado de los crons. Y se dice, en vez de devolver un hueco que se lee como "$0".
+    return { presupuestoUsd: config.radarPresupuestoMensualUsd, error: e.message };
+  }
 }
 
 app.get('/crons', async (req, res) => {
@@ -213,11 +226,9 @@ app.get('/crons', async (req, res) => {
       consultasActivas: await contarConsultasActivas('x'),
       avisaPorSlack: Boolean(config.slackWebhookUrl),
       umbralAvisoLikesHora: config.radarXAvisoMinVelocidad,
-      // Los frenos de gasto, visibles aquí: el estado de lo que cuesta dinero no debe vivir solo
-      // en una variable de Railway que nadie ve.
+      // El tope de lo que cuesta dinero, visible aquí: el estado del gasto no debe vivir solo en
+      // una variable de Railway que nadie ve. El presupuesto compartido va en `presupuestoDelRadar`.
       topePorCorridaUsd: config.radarMaxUsdPorCorrida,
-      presupuestoUsd: config.radarPresupuestoMensualUsd,
-      ...(await gastoDelRadar()),
     },
     radarReddit: {
       activo: config.enableRadarRedditCron,
@@ -239,6 +250,7 @@ app.get('/crons', async (req, res) => {
       soloManual: 'POST /radar-yt',
       topeLoteUsd: config.radarYoutubeMaxUsdPorCorrida,
     },
+    presupuestoDelRadar: await presupuestoDelRadar(),
   });
 });
 

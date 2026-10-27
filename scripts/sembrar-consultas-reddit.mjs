@@ -58,9 +58,17 @@ const CONSULTAS = [
     etiqueta: 'Veo (RD)',
     consulta: 'google veo',
     // `veo 3` se probó y se cayó: Reddit no respeta la frase entera, así que casó con «VEO» solo y
-    // trajo «A realization after getting a VEO from Microsoft» desde r/hyderabad. `google veo`
-    // obliga a que aparezca Google.
-    porQue: 'el de Google; «veo 3» medido trae VEO como siglas de otra cosa',
+    // trajo «A realization after getting a VEO from Microsoft» desde r/hyderabad.
+    //
+    // Y `google veo` NO lo arregló, medido en la primera pasada real: trajo otra vez el de
+    // r/hyderabad, «Confused on Microsoft VEO decision» de r/developersIndia, «Reminiscing on
+    // seeing veos in trees» de r/aggies y «Was ist den bei Google los» de r/wallstreetbetsGER. O
+    // sea, posts que solo decían «VEO» y posts que solo decían «Google»: la búsqueda de Reddit no
+    // exige las dos palabras y no hay operador para obligarla. Se queda así porque cambiarla no
+    // mejora nada —probados los dos juegos de términos contra los mismos 29 posts, 12 atribuidos
+    // contra 13— y porque el ruido se quita después, al exigir que el término aparezca de verdad
+    // en el post (ver `radarRedditGuardarSinAtribuir`).
+    porQue: 'el de Google; la consulta no filtra, filtra la atribución posterior',
   },
   {
     etiqueta: 'Nano Banana (RD)',

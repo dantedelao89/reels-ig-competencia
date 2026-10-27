@@ -130,5 +130,26 @@ export async function scrapeRedditSearches({ consultas, maxItems, maxUsd, sort =
     { maxTotalChargeUsd: maxUsd || undefined }
   );
 
-  return items.map(normalizeRedditPost).filter((p) => p && p.id && p.url);
+  // Dedup por id DENTRO de la corrida, como red de seguridad.
+  //
+  // El riesgo: las seis búsquedas van en una sola corrida y un post puede casar con dos («Kling 4.0
+  // is quite a good cheaper alternative to Seedance 2.5» casa con `kling ai` y con `seedance`). El
+  // runner atribuiría las dos copias a la MISMA consulta —gana el término más largo—, así que
+  // caerían en el mismo lote de `upsert`, y Postgres rechaza el lote completo con «ON CONFLICT DO
+  // UPDATE command cannot affect row a second time»: no se perdería un hallazgo, se perderían todos
+  // los de esa consulta.
+  //
+  // Honestidad sobre la evidencia: NO lo he visto pasar. La primera pasada real (27 oct 2026, 29
+  // posts, seis búsquedas) no trajo ni un id repetido, y es probable que no pueda: el actor usa una
+  // cola de peticiones indexada por URL, que ya deduplica entre búsquedas. Esto se queda porque
+  // cuesta cuatro líneas y lo que evita es perder una consulta entera, no porque esté medido.
+  const vistos = new Set();
+  return items
+    .map(normalizeRedditPost)
+    .filter((p) => p && p.id && p.url)
+    .filter((p) => {
+      if (vistos.has(p.id)) return false;
+      vistos.add(p.id);
+      return true;
+    });
 }

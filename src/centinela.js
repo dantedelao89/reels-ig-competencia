@@ -69,6 +69,21 @@ export const SIN_CANAL = ['Seedance (ByteDance)', 'Wan (Alibaba)', 'Black Forest
 
 const FEED = (id) => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`;
 
+// Memoria del estado "ciego", para avisar del CAMBIO y no del estado.
+//
+// Medido el 27 oct 2026 leyendo el canal: el centinela llevaba desde el 23 de octubre mandando
+// «está ciego» en CADA corrida, y corre cada 15 minutos — unos 96 mensajes al día, cuatro días
+// seguidos. Es el fallo que este mismo sistema se había prometido evitar en `radarAviso.js`:
+// «avisar de todo son 115 mensajes y, al tercer día, un chat silenciado, que es la única forma de
+// que un sistema de alertas falle del todo». Un aviso repetido 400 veces no informa de nada; lo
+// que informa es que EMPEZÓ y que TERMINÓ.
+//
+// Vive en memoria del proceso a propósito: no merece una tabla, y lo único que cuesta un reinicio
+// es un aviso repetido, que es justo lo que un despliegue debería poder contar.
+const RECORDATORIO_CIEGO_MS = 6 * 3_600_000;
+let cegueraDesdeMs = null;
+let ultimoAvisoCiegoMs = null;
+
 function entre(txt, abre, cierra, desde = 0) {
   const i = txt.indexOf(abre, desde);
   if (i < 0) return null;
@@ -243,24 +258,69 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
   // igual que «nadie ha publicado», y habría seguido así durante días. Un vigilante que no avisa de
   // su propia muerte es peor que no tener vigilante, porque da una falsa sensación de cobertura.
   const todosFallaron = CANALES.length > 0 && problemas.filter((p) => p.canal).length >= CANALES.length;
-  if (avisar && todosFallaron) {
+  if (todosFallaron) {
     const motivo = problemas.find((p) => p.canal)?.error || 'desconocido';
-    await enviarSlack({
-      text: `⚠️ El centinela no puede leer ningún canal: ${motivo}`,
-      unfurl_links: false,
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text:
-              `⚠️ *El centinela está ciego*\nLos ${CANALES.length} canales oficiales fallaron: \`${motivo}\`\n` +
-              'Esto NO quiere decir que nadie haya publicado: quiere decir que no se puede mirar.',
+    const ahora = Date.now();
+    const esNuevo = cegueraDesdeMs == null;
+    if (esNuevo) cegueraDesdeMs = ahora;
+    // Se avisa cuando EMPIEZA, y después como mucho cada seis horas. Ver la nota de
+    // RECORDATORIO_CIEGO_MS: avisarlo en cada corrida son 96 mensajes al día.
+    const toca = esNuevo || ultimoAvisoCiegoMs == null || ahora - ultimoAvisoCiegoMs >= RECORDATORIO_CIEGO_MS;
+    if (avisar && toca) {
+      ultimoAvisoCiegoMs = ahora;
+      const horas = (ahora - cegueraDesdeMs) / 3_600_000;
+      const desdeCuando = esNuevo
+        ? 'Acaba de empezar.'
+        : `Lleva así ${horas < 24 ? `${horas.toFixed(1)} h` : `${Math.round(horas / 24)} días`}; se repite cada 6 h.`;
+      await enviarSlack({
+        text: `⚠️ El centinela no puede leer ningún canal: ${motivo}`,
+        unfurl_links: false,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text:
+                `⚠️ *El centinela está ciego*\nLos ${CANALES.length} canales oficiales fallaron: \`${motivo}\`\n` +
+                `Esto NO quiere decir que nadie haya publicado: quiere decir que no se puede mirar.\n${desdeCuando}`,
+            },
           },
-        },
-      ],
-    });
-    return { ok: false, canales: CANALES.length, nuevos: 0, avisables: 0, ciego: true, problemas };
+        ],
+      });
+    }
+    return {
+      ok: false,
+      canales: CANALES.length,
+      nuevos: 0,
+      avisables: 0,
+      ciego: true,
+      // Que el estado se vea sin tener que leer Slack: desde cuándo, y si este paso avisó o calló.
+      ciegoDesde: new Date(cegueraDesdeMs).toISOString(),
+      aviso: avisar ? (toca ? 'enviado' : 'callado para no repetir') : null,
+      problemas,
+    };
+  }
+  // Vuelve a ver. Se dice UNA vez, porque sin esto Dante se queda sin saber si sigue roto: el
+  // último mensaje del canal seguiría siendo «está ciego» aunque llevara un día funcionando.
+  if (cegueraDesdeMs != null) {
+    const horas = (Date.now() - cegueraDesdeMs) / 3_600_000;
+    cegueraDesdeMs = null;
+    ultimoAvisoCiegoMs = null;
+    if (avisar) {
+      await enviarSlack({
+        text: '✅ El centinela vuelve a ver',
+        unfurl_links: false,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `✅ *El centinela vuelve a ver*\nEstuvo ciego ${horas < 24 ? `${horas.toFixed(1)} h` : `${Math.round(horas / 24)} días`}. Lo que se publicó mientras tanto no se vio.`,
+            },
+          },
+        ],
+      });
+    }
   }
 
   let aviso = null;

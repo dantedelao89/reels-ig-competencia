@@ -117,11 +117,10 @@ export async function runRadarReddit({ avisar = false } = {}) {
     p.velocidad = velocidadPorHora(p.likes, p.fecha ? new Date(p.fecha).getTime() : null, ahoraMs);
   });
 
-  // Piso de calidad ANTES de guardar: en Reddit la propia comunidad ya votó, y un post que va
-  // hundido no mejora porque lo guardemos. Medido el 27 oct 2026, el filtro se lleva 14 de 30 y
-  // casi todo lo que se lleva es ruido que las búsquedas no pueden evitar (Reddit no tiene
-  // operadores, así que `veo 3` trae «a VEO from Microsoft» de r/hyderabad y no hay forma de
-  // excluirlo en la consulta).
+  // Piso de calidad: en Reddit la propia comunidad ya votó, y un post que va hundido no mejora
+  // porque lo guardemos. Se lleva lo polémico y el spam con votos en contra — en la primera pasada
+  // real, 5 de 30. Lo que NO hace es quitar el ruido de tema: ese llega con 97-99% a favor, porque
+  // es contenido bueno de comunidades ajenas. De eso se encarga la atribución, más abajo.
   //
   // `ratio == null` PASA: sin `includeMediaLinks` no hay proporción, y en ese caso el filtro no
   // debe tragarse todo en silencio.
@@ -171,7 +170,17 @@ export async function runRadarReddit({ avisar = false } = {}) {
       details.push({ busqueda: busqueda.etiqueta, error: err.message });
     }
   }
-  if (huerfanos.length) {
+  // Los que no contienen ningún término buscado. Por defecto se TIRAN: ver la nota larga en
+  // `config.radarRedditGuardarSinAtribuir`, pero el resumen es que la búsqueda de Reddit no exige
+  // todas las palabras y 17 de 29 de la primera pasada real llegaron aquí, siendo basura casi toda.
+  // Se dice en voz alta cuántos se fueron, porque tirar datos en silencio es la peor variante.
+  if (huerfanos.length && !config.radarRedditGuardarSinAtribuir) {
+    console.log(
+      `[radar-rd] ${huerfanos.length} de ${nuevos.length} descartados por no contener ningún ` +
+        `término buscado: ${huerfanos.slice(0, 5).map((p) => p.nombre || '?').join(', ')}` +
+        (huerfanos.length > 5 ? '…' : '')
+    );
+  } else if (huerfanos.length) {
     try {
       await syncRadar(huerfanos, {
         plataforma: 'rd',
@@ -192,15 +201,24 @@ export async function runRadarReddit({ avisar = false } = {}) {
     }
   }
 
+  // El resumen se arma con lo que se GUARDÓ, no con lo que se trajo. Si se armara con `nuevos`, los
+  // huérfanos que acabamos de tirar seguirían saliendo en Slack —y saldrían de más, porque el
+  // reparto da un hueco por subreddit y ellos están desparramados— avisando de posts que ya no
+  // están en la pantalla a la que el aviso te manda.
+  const guardados = config.radarRedditGuardarSinAtribuir
+    ? nuevos
+    : nuevos.filter((p) => !huerfanos.includes(p));
+
   const porComunidad = [...new Set(buenos.map((p) => p.nombre).filter(Boolean))];
   console.log(
     `[radar-rd] ${busquedas.length} consultas · ${posts.length} traídos · ${hundidos.length} hundidos` +
-      ` · ${nuevos.length} nuevos · ${porComunidad.length} subreddits · ${huerfanos.length} sin atribuir`
+      ` · ${nuevos.length} nuevos · ${porComunidad.length} subreddits · ${huerfanos.length} sin atribuir` +
+      ` · ${guardados.length} guardados`
   );
 
   let aviso = null;
   if (avisar) {
-    const elegidos = elegirParaResumenReddit(nuevos, {
+    const elegidos = elegirParaResumenReddit(guardados, {
       maxHoras: config.radarRedditResumenMaxHoras,
       cuantos: config.radarRedditResumenCuantos,
       ahoraMs,
@@ -211,13 +229,18 @@ export async function runRadarReddit({ avisar = false } = {}) {
           ...(await enviarSlack(
             formatearResumenReddit(elegidos, {
               consultas: busquedas.length,
-              nuevos: nuevos.length,
-              subreddits: porComunidad.length,
+              // Lo guardado, no lo traído: el encabezado dice «N posts nuevos» y tiene que ser el
+              // número de cosas que Dante va a encontrar si abre el Radar.
+              nuevos: guardados.length,
+              subreddits: new Set(guardados.map((p) => p.nombre).filter(Boolean)).size,
               ahoraMs,
             })
           )),
         }
-      : { mostrados: 0, motivo: nuevos.length ? 'nada dentro de la ventana de edad' : 'sin hallazgos nuevos' };
+      : {
+          mostrados: 0,
+          motivo: guardados.length ? 'nada dentro de la ventana de edad' : 'sin hallazgos nuevos',
+        };
   }
 
   return {
@@ -225,8 +248,13 @@ export async function runRadarReddit({ avisar = false } = {}) {
     consultas: busquedas.length,
     traidos: posts.length,
     hundidos: hundidos.length,
+    // `nuevos` es lo que se trajo y no estaba; `guardados` es lo que de verdad quedó en la base.
+    // Van los dos porque la diferencia entre ellos es la salud de las consultas: si `guardados` se
+    // hunde y `sinAtribuir` sube, las búsquedas están trayendo otra cosa.
     nuevos: nuevos.length,
+    guardados: guardados.length,
     sinAtribuir: huerfanos.length,
+    sinAtribuirGuardados: config.radarRedditGuardarSinAtribuir,
     subreddits: porComunidad,
     aviso,
     details,

@@ -327,9 +327,34 @@ Consecuencias de diseño, no detalles de implementación:
 - **El tope por corrida tiene que librar el arranque.** Con `maxTotalChargeUsd: 0.05`, cuatro
   corridas murieron en el segundo 2 con `Maximum cost per run is lower then actor start cost` — y
   cobraron $0.04 cada una. Un tope demasiado bajo no ahorra: hace que todo falle pagando.
-- **Las búsquedas van calificadas**, igual que en X: `kling ai` y no `kling` (que trae apellidos
-  alemanes), `sora 2` y no `sora`. Reddit no tiene operadores de búsqueda, así que la única defensa
-  contra el ruido es que el término no sea ambiguo.
+- **En Reddit no filtra la consulta, filtra el resultado.** Esto es lo que enseñó la primera pasada
+  real (27 oct 2026, 30 posts) y corrige lo que estaba escrito aquí antes. La búsqueda de Reddit
+  **no exige todas las palabras**: `google veo` trajo «Confused on Microsoft VEO decision»
+  (r/developersIndia), «Reminiscing on seeing veos in trees» (r/aggies) y «Was ist den bei Google
+  los» (r/wallstreetbetsGER) — posts que solo decían «VEO» o solo decían «Google». Y `sora 2` trajo
+  a Sora de Kingdom Hearts y un episodio de anime. Calificar el término **no sirve de nada**, porque
+  no hay operadores que obliguen a la frase: probados los dos juegos de términos contra los mismos
+  29 posts, 12 atribuidos contra 13.
+
+  Así que el ruido se quita DESPUÉS: un post solo se guarda si contiene de verdad alguno de los
+  términos buscados (en título, cuerpo o nombre del subreddit). Medido: **17 de 29 no contenían
+  ninguno, y esos 17 eran la basura casi punto por punto**. Con el filtro, el primer resumen pasó de
+  10 hallazgos con 7 basuras a **9 hallazgos, los 9 sobre sus modelos**, incluido «Nano Banana 2.1»,
+  que es exactamente para lo que existe esta fuente.
+
+  La contrapartida está medida y aceptada: se pierden posts relevantes que no nombran el modelo, como
+  «Why almost all major Open weight models come from china?» (756 upvotes en r/StableDiffusion). Se
+  puede revertir con `RADAR_RD_GUARDAR_SIN_ATRIBUIR=1`.
+- **El piso de `upVoteRatio` NO es el filtro de ruido.** Estaba escrito que era «el mejor filtro que
+  encontré» y es falso: el ruido de tema llega con **consenso** —r/aggies 98% a favor, r/StellaSora
+  99%, r/developersIndia 97%—, porque es contenido bueno de comunidades ajenas. El piso de 0.6 se
+  llevó 5 de 30; la atribución se llevó 17. El piso se queda porque sí quita lo polémico y el spam
+  con votos en contra, pero no es lo que limpia la pantalla.
+- **El reparto por subreddito PREMIA la basura si la entrada está sucia.** El resumen da un hueco por
+  comunidad, igual que el de YouTube lo da por tema. Con la entrada sucia eso se vuelve en contra:
+  la basura estaba desparramada en 22 subreddits distintos y lo bueno agrupado en tres, así que el
+  reparto le dio un hueco a cada basura. De los 10 del primer mensaje, **9 eran huérfanos**. El
+  reparto no estaba mal; estaba repartiendo lo que no debía haber entrado.
 - **El radar de Reddit no archiva nada**, como el resto del radar: solo URL, texto y métricas.
 
 Y una lección que salió de montarlo y vale para TODO el proyecto: **una corrida fallida de Apify no
@@ -339,6 +364,34 @@ cuatro ceros, y me pasé un rato ajustando la entrada. Desde el 27 oct 2026 `api
 `run.status` y lanza si terminó mal sin resultados (si trajo items se usan, con un aviso: un actor
 que se queda sin tiempo suele dejar datos buenos). Es el mismo disfraz del 429 de YouTube y de los
 404 falsos del centinela: **un cero hay que saber de qué es.**
+
+#### Dos formas de que un aviso mienta sin fallar (27 oct 2026)
+
+Las dos salieron de leer el canal de Slack de verdad, en vez de mirar si el código devolvía `ok`.
+
+**1. El tema no llegaba al mensaje, y eso rompía el reparto.** Los temas se calculaban dentro de
+`syncRadar`, se escribían en la fila de la base y no existían en ningún otro sitio. Pero los avisos
+de X y de Reddit se arman con los POSTS en memoria, no con las filas, así que `h.temas` era siempre
+`undefined`. Lo visible era un dato que faltaba; lo grave era otra cosa: `repartirPorTema` agrupa
+por `temas[0]`, así que con todos vacíos metía los hallazgos en un solo grupo y el resumen volvía a
+ser «los N más rápidos» — **justo lo que Dante había pedido evitar** («siempre me entrega de los
+mismos temas»). Probado: con 4 huecos y 6 hallazgos, antes salían los cuatro de Claude; ahora salen
+dos de Claude, uno de Seedance y uno de Nano Banana. Arreglado donde no se pueda volver a divergir:
+`syncRadar` devuelve los temas al objeto, así que valen para las cuatro plataformas y para la quinta.
+
+Los avisos de YouTube nunca tuvieron el fallo, y por eso costó verlo: ahí los hallazgos se releen de
+Supabase, donde el tema sí está.
+
+**2. El centinela avisaba de su ceguera CADA 15 MINUTOS.** Desde el 23 de octubre, cuando YouTube
+empezó a bloquear la IP de Railway, el centinela mandó «está ciego» en cada corrida: unos **96
+mensajes al día durante cuatro días**. Es exactamente el fallo contra el que este sistema se había
+prevenido en `radarAviso.js` («al tercer día, un chat silenciado, que es la única forma de que un
+sistema de alertas falle del todo»), cometido en otro archivo. Un aviso repetido 400 veces no
+informa de nada.
+
+Regla que queda: **un aviso de estado avisa del CAMBIO de estado, no del estado.** Se avisa cuando
+empieza, como recordatorio cada 6 h como mucho, y **se avisa cuando se recupera** — sin esto el
+último mensaje del canal seguiría diciendo «está ciego» después de un día funcionando.
 
 #### Por qué el radar de X manda un RESUMEN y no una alerta por umbral
 

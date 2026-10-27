@@ -283,7 +283,32 @@ export const config = {
   //
   // Ojo: este filtro SOLO existe porque `includeMediaLinks` trae `upVoteRatio`. Si algún día se
   // apaga para ahorrar, se pierde el filtro y el ruido llega entero a Slack.
+  //
+  // CORRECCIÓN del 27 oct 2026, con la primera pasada real delante: llamarlo «el mejor filtro de
+  // ruido» era falso. El ruido que de verdad llega NO va hundido, va con consenso: «Reminiscing on
+  // seeing veos in trees» (r/aggies) 98% a favor, «Chapter 6 locked this game in for me»
+  // (r/StellaSora) 99%, «Confused on Microsoft VEO decision» (r/developersIndia) 97%. Son posts
+  // buenos de comunidades que no tienen nada que ver. De 30 traídos este piso se llevó 5. El filtro
+  // que sí separa es la ATRIBUCIÓN (`radarRedditGuardarSinAtribuir`), que se llevó 17.
   radarRedditRatioMinimo: Number(process.env.RADAR_RD_RATIO_MINIMO || 0.6),
+  // Qué hacer con un post que no contiene NINGUNO de los términos buscados.
+  //
+  // Medido en la primera pasada real (27 oct 2026): 17 de 29. Y la lista de huérfanos era la lista
+  // de basura, casi punto por punto — r/KingdomHearts («Sora the chosen one»), r/anime («Sora wa
+  // Akai Kawa no Hotori»), r/findthatsong, r/wallstreetbetsGER, r/aggies, r/hyderabad. La causa es
+  // que la búsqueda de Reddit NO exige todas las palabras: `google veo` trajo posts que solo decían
+  // «Google» y posts que solo decían «VEO» (siglas de otra cosa en dos de ellos), y `sora 2` trajo
+  // a Sora de Kingdom Hearts y un anime. No hay operadores con los que arreglarlo del lado de la
+  // consulta, así que se arregla del lado del resultado.
+  //
+  // Guardarlos costaba dos veces: ensuciaban la pantalla del Radar y, peor, el resumen de Slack los
+  // PREMIABA — reparte un hueco por subreddit, y la basura está desparramada en 22 subreddits
+  // distintos mientras lo bueno se agrupa en tres. De los 10 que salieron en el primer mensaje, 9
+  // eran huérfanos.
+  //
+  // Se deja en una variable porque tirar datos es una decisión, no un detalle: con
+  // RADAR_RD_GUARDAR_SIN_ATRIBUIR=1 se vuelven a guardar y se puede volver a mirar.
+  radarRedditGuardarSinAtribuir: flag(process.env.RADAR_RD_GUARDAR_SIN_ATRIBUIR, false),
   radarRedditResumenMaxHoras: Number(process.env.RADAR_RD_RESUMEN_MAX_HORAS || 48),
   // Diez y no ocho: el resumen va agrupado por subreddit, así que los hallazgos ocupan menos
   // líneas cada uno que en X, donde cada uno lleva su propio bloque con métricas.

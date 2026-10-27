@@ -950,7 +950,20 @@ export async function syncRadar(posts, ctx = {}) {
   if (!enabled) throw new Error('Supabase no está configurado');
   if (!posts?.length) return { synced: 0 };
   if (!ctx.plataforma) throw new Error('syncRadar necesita ctx.plataforma');
-  const rows = posts.filter((p) => p.id).map((p) => radarRow(p, ctx));
+  const conId = posts.filter((p) => p.id);
+  const rows = conId.map((p) => radarRow(p, ctx));
+  // Los temas calculados vuelven al objeto en memoria. Sin esto el tema se guardaba en la fila y no
+  // existía en ningún otro sitio, y los avisos de X y de Reddit se arman con los POSTS, no con las
+  // filas: medido el 27 oct 2026, el mensaje de Slack salía sin tema ninguno. Y lo peor no era el
+  // dato que faltaba, era el reparto: `repartirPorTema` agrupa por `temas[0]`, así que con todos
+  // vacíos metía los hallazgos en un solo grupo y el resumen volvía a ser «los más rápidos», que es
+  // justo lo que Dante pidió evitar («siempre me entrega de los mismos temas»).
+  //
+  // Va aquí y no en cada runner para que no haya que clasificar dos veces ni acordarse de hacerlo
+  // al añadir la quinta plataforma.
+  conId.forEach((p, i) => {
+    p.temas = rows[i].temas;
+  });
   const synced = await upsert(config.radarTable, rows, 'plataforma,external_id');
   return { synced };
 }
