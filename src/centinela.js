@@ -83,6 +83,18 @@ const FEED = (id) => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`
 const RECORDATORIO_CIEGO_MS = 6 * 3_600_000;
 let cegueraDesdeMs = null;
 let ultimoAvisoCiegoMs = null;
+// ¿Hemos visto al centinela funcionando EN ESTE PROCESO? Es lo que decide si podemos decir cuánto
+// duró la ceguera. Si el proceso arranca ya ciego no sabemos desde cuándo lo está —solo desde
+// cuándo lo estamos mirando—, y la primera versión de esto anunció «estuvo ciego 0.3 h» cuando
+// llevaba cuatro días. Un reloj que empieza cuando llegas no mide lo que pasó antes.
+let vistoBienEnEsteProceso = false;
+
+function duracion(horas) {
+  if (horas < 1) return `${Math.round(horas * 60)} min`;
+  if (horas < 24) return `${horas.toFixed(1)} h`;
+  const dias = Math.round(horas / 24);
+  return `${dias} ${dias === 1 ? 'día' : 'días'}`;
+}
 
 function entre(txt, abre, cierra, desde = 0) {
   const i = txt.indexOf(abre, desde);
@@ -272,9 +284,12 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
       // Ojo con lo que se afirma: la memoria es del proceso, así que tras un despliegue esto es el
       // primer aviso aunque la ceguera lleve días. Decir «acaba de empezar» sería mentir, y es
       // justo el tipo de mentira pequeña que este archivo existe para no contar.
-      const desdeCuando = esNuevo
-        ? 'Primer aviso desde que arrancó el servicio; se repite cada 6 h mientras siga así.'
-        : `Lleva así ${horas < 24 ? `${horas.toFixed(1)} h` : `${Math.round(horas / 24)} días`}; se repite cada 6 h.`;
+      const desdeCuando =
+        esNuevo && !vistoBienEnEsteProceso
+          ? 'Primer aviso desde que arrancó el servicio; se repite cada 6 h mientras siga así.'
+          : esNuevo
+            ? 'Acaba de empezar; se repite cada 6 h mientras siga así.'
+            : `Lleva así ${duracion(horas)}${vistoBienEnEsteProceso ? '' : ' de los que sabemos'}; se repite cada 6 h.`;
       await enviarSlack({
         text: `⚠️ El centinela no puede leer ningún canal: ${motivo}`,
         unfurl_links: false,
@@ -307,8 +322,15 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
   // último mensaje del canal seguiría siendo «está ciego» aunque llevara un día funcionando.
   if (cegueraDesdeMs != null) {
     const horas = (Date.now() - cegueraDesdeMs) / 3_600_000;
+    // Solo se puede afirmar la duración si vimos el momento en que se rompió. Si el proceso arrancó
+    // ya ciego, lo único que sabemos es cuánto lo hemos estado MIRANDO, y decirlo como duración
+    // sería mentir a la baja: el primer mensaje así dijo «estuvo ciego 0.3 h» tras cuatro días.
+    const cuanto = vistoBienEnEsteProceso
+      ? `Estuvo ciego ${duracion(horas)}.`
+      : `Llevaba ciego al menos ${duracion(horas)} (lo que lo hemos mirado: el servicio arrancó con los feeds ya caídos).`;
     cegueraDesdeMs = null;
     ultimoAvisoCiegoMs = null;
+    vistoBienEnEsteProceso = true;
     if (avisar) {
       await enviarSlack({
         text: '✅ El centinela vuelve a ver',
@@ -318,13 +340,14 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `✅ *El centinela vuelve a ver*\nEstuvo ciego ${horas < 24 ? `${horas.toFixed(1)} h` : `${Math.round(horas / 24)} días`}. Lo que se publicó mientras tanto no se vio.`,
+              text: `✅ *El centinela vuelve a ver*\n${cuanto} Lo que se publicó mientras tanto no se vio.`,
             },
           },
         ],
       });
     }
   }
+  vistoBienEnEsteProceso = true;
 
   let aviso = null;
   if (avisar && avisables.length) {
