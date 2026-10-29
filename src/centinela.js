@@ -83,6 +83,39 @@ const FEED = (id) => `https://www.youtube.com/feeds/videos.xml?channel_id=${id}`
 const RECORDATORIO_CIEGO_MS = 6 * 3_600_000;
 let cegueraDesdeMs = null;
 let ultimoAvisoCiegoMs = null;
+
+// Cuántas corridas seguidas tiene que fallar TODO antes de decir que está ciego.
+//
+// Esto corrige el arreglo anterior, que era insuficiente. «Avisar del cambio y no del estado» da
+// por supuesto que el estado es estable, y medido el 29 oct 2026 sobre 68 corridas (17 h) NO lo es:
+// hubo **12 cruces** de ciego a vidente, o sea que los feeds de YouTube no están caídos, PARPADEAN
+// cada 15 minutos. Con una señal así, avisar de cada cambio manda DOS mensajes por parpadeo («está
+// ciego» y «vuelve a ver») — unos 22 mensajes al día de centinela contra los 2 o 3 que de verdad
+// importan. Tres de esos episodios duraron UNA corrida: 15 minutos, que no cambian ninguna
+// decisión. Avisar de un parpadeo es la misma enfermedad que avisar del estado, con otra ropa.
+//
+// El umbral se eligió midiendo, no a ojo. Simulando la secuencia real de esas 68 corridas:
+//
+//   umbral   mensajes/17 h   ≈ al día   ciego antes de avisar
+//        1              22         31              15 min   ← lo que había
+//        4              12         17              60 min
+//        6               6          8              90 min
+//        8               2          3             120 min   ← esto
+//       12               0          0             180 min
+//
+// Ocho corridas son dos horas. Por debajo, el canal sigue inundado: el parpadeo es tan frecuente
+// que seis episodios pasan de la hora. Por encima (tres horas) no avisaría NUNCA en un día como
+// este, y entonces el centinela volvería a ser un vigilante que no avisa de su propia muerte.
+//
+// Dos horas también es lo que cuesta algo de verdad: la ola de Claude Duet se decidió en horas
+// (ver `radarAviso.js`), así que 15 minutos sin poder mirar no cambian ninguna decisión y dos horas
+// sí. Se puede mover con CENTINELA_CORRIDAS_CIEGO.
+const CORRIDAS_PARA_DECLARAR_CIEGO = Number(process.env.CENTINELA_CORRIDAS_CIEGO || 8);
+let fallosSeguidos = 0;
+// ¿Llegamos a avisar de ESTA ceguera? Si no, tampoco se anuncia la recuperación. Sin esta condición
+// el canal recibía parejas «ciego»/«vuelve a ver» por averías de 15 minutos que nadie había pedido
+// saber: anunciar el final de algo que nunca se anunció es ruido puro.
+let avisamosDeEstaCeguera = false;
 // ¿Hemos visto al centinela funcionando EN ESTE PROCESO? Es lo que decide si podemos decir cuánto
 // duró la ceguera. Si el proceso arranca ya ciego no sabemos desde cuándo lo está —solo desde
 // cuándo lo estamos mirando—, y la primera versión de esto anunció «estuvo ciego 0.3 h» cuando
@@ -275,21 +308,24 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
     const ahora = Date.now();
     const esNuevo = cegueraDesdeMs == null;
     if (esNuevo) cegueraDesdeMs = ahora;
-    // Se avisa cuando EMPIEZA, y después como mucho cada seis horas. Ver la nota de
-    // RECORDATORIO_CIEGO_MS: avisarlo en cada corrida son 96 mensajes al día.
-    const toca = esNuevo || ultimoAvisoCiegoMs == null || ahora - ultimoAvisoCiegoMs >= RECORDATORIO_CIEGO_MS;
+    fallosSeguidos += 1;
+    // Se avisa cuando lleva CORRIDAS_PARA_DECLARAR_CIEGO fallando seguido —no en el primer fallo,
+    // que casi siempre es un parpadeo— y después como mucho cada seis horas.
+    const yaCuenta = fallosSeguidos >= CORRIDAS_PARA_DECLARAR_CIEGO;
+    const primerAviso = yaCuenta && !avisamosDeEstaCeguera;
+    const toca =
+      yaCuenta &&
+      (primerAviso || ultimoAvisoCiegoMs == null || ahora - ultimoAvisoCiegoMs >= RECORDATORIO_CIEGO_MS);
     if (avisar && toca) {
+      avisamosDeEstaCeguera = true;
       ultimoAvisoCiegoMs = ahora;
       const horas = (ahora - cegueraDesdeMs) / 3_600_000;
       // Ojo con lo que se afirma: la memoria es del proceso, así que tras un despliegue esto es el
       // primer aviso aunque la ceguera lleve días. Decir «acaba de empezar» sería mentir, y es
       // justo el tipo de mentira pequeña que este archivo existe para no contar.
-      const desdeCuando =
-        esNuevo && !vistoBienEnEsteProceso
-          ? 'Primer aviso desde que arrancó el servicio; se repite cada 6 h mientras siga así.'
-          : esNuevo
-            ? 'Acaba de empezar; se repite cada 6 h mientras siga así.'
-            : `Lleva así ${duracion(horas)}${vistoBienEnEsteProceso ? '' : ' de los que sabemos'}; se repite cada 6 h.`;
+      const desdeCuando = vistoBienEnEsteProceso
+        ? `Lleva ${duracion(horas)} sin poder leer nada; se repite cada 6 h mientras siga así.`
+        : `Lleva al menos ${duracion(horas)} así —el servicio arrancó con los feeds ya caídos, así que no sabemos desde cuándo—; se repite cada 6 h.`;
       await enviarSlack({
         text: `⚠️ El centinela no puede leer ningún canal: ${motivo}`,
         unfurl_links: false,
@@ -314,23 +350,37 @@ export async function correrCentinela({ maxHoras = 6, avisar = true, soloNuevos 
       ciego: true,
       // Que el estado se vea sin tener que leer Slack: desde cuándo, y si este paso avisó o calló.
       ciegoDesde: new Date(cegueraDesdeMs).toISOString(),
-      aviso: avisar ? (toca ? 'enviado' : 'callado para no repetir') : null,
+      fallosSeguidos,
+      aviso: avisar
+        ? toca
+          ? 'enviado'
+          : yaCuenta
+            ? 'callado para no repetir'
+            : `callado: ${fallosSeguidos} de ${CORRIDAS_PARA_DECLARAR_CIEGO} corridas, puede ser un parpadeo`
+        : null,
       problemas,
     };
   }
-  // Vuelve a ver. Se dice UNA vez, porque sin esto Dante se queda sin saber si sigue roto: el
-  // último mensaje del canal seguiría siendo «está ciego» aunque llevara un día funcionando.
-  if (cegueraDesdeMs != null) {
-    const horas = (Date.now() - cegueraDesdeMs) / 3_600_000;
+  // Vuelve a ver. El contador se reinicia SIEMPRE que una corrida funciona, haya avisado o no: si
+  // solo se reiniciara al anunciar la recuperación, cuatro parpadeos separados por horas se irían
+  // sumando hasta disparar el aviso sin haber sido nunca consecutivos, que es justo lo contrario de
+  // lo que mide `CORRIDAS_PARA_DECLARAR_CIEGO`.
+  const huboQueAvisar = cegueraDesdeMs != null && avisamosDeEstaCeguera;
+  const horasCiego = cegueraDesdeMs != null ? (Date.now() - cegueraDesdeMs) / 3_600_000 : 0;
+  fallosSeguidos = 0;
+  cegueraDesdeMs = null;
+  ultimoAvisoCiegoMs = null;
+  avisamosDeEstaCeguera = false;
+
+  // Y solo se ANUNCIA si llegamos a anunciar la avería: un «vuelve a ver» de algo que nadie dijo
+  // que estaba roto es ruido puro, y era la mitad de los mensajes del canal.
+  if (huboQueAvisar) {
     // Solo se puede afirmar la duración si vimos el momento en que se rompió. Si el proceso arrancó
     // ya ciego, lo único que sabemos es cuánto lo hemos estado MIRANDO, y decirlo como duración
     // sería mentir a la baja: el primer mensaje así dijo «estuvo ciego 0.3 h» tras cuatro días.
     const cuanto = vistoBienEnEsteProceso
-      ? `Estuvo ciego ${duracion(horas)}.`
-      : `Llevaba ciego al menos ${duracion(horas)} (lo que lo hemos mirado: el servicio arrancó con los feeds ya caídos).`;
-    cegueraDesdeMs = null;
-    ultimoAvisoCiegoMs = null;
-    vistoBienEnEsteProceso = true;
+      ? `Estuvo ciego ${duracion(horasCiego)}.`
+      : `Llevaba ciego al menos ${duracion(horasCiego)} (lo que lo hemos mirado: el servicio arrancó con los feeds ya caídos).`;
     if (avisar) {
       await enviarSlack({
         text: '✅ El centinela vuelve a ver',
