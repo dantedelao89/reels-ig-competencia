@@ -365,7 +365,7 @@ cuatro ceros, y me pasé un rato ajustando la entrada. Desde el 27 oct 2026 `api
 que se queda sin tiempo suele dejar datos buenos). Es el mismo disfraz del 429 de YouTube y de los
 404 falsos del centinela: **un cero hay que saber de qué es.**
 
-#### Dos formas de que un aviso mienta sin fallar (27 oct 2026)
+#### Tres formas de que un aviso mienta sin fallar (27-29 oct 2026)
 
 Las dos salieron de leer el canal de Slack de verdad, en vez de mirar si el código devolvía `ok`.
 
@@ -389,9 +389,29 @@ prevenido en `radarAviso.js` («al tercer día, un chat silenciado, que es la ú
 sistema de alertas falle del todo»), cometido en otro archivo. Un aviso repetido 400 veces no
 informa de nada.
 
-Regla que queda: **un aviso de estado avisa del CAMBIO de estado, no del estado.** Se avisa cuando
-empieza, como recordatorio cada 6 h como mucho, y **se avisa cuando se recupera** — sin esto el
-último mensaje del canal seguiría diciendo «está ciego» después de un día funcionando.
+Primera regla, y resultó INSUFICIENTE: «un aviso de estado avisa del CAMBIO de estado, no del
+estado». Da por supuesto que el estado es estable.
+
+**3. Y el estado no era estable: parpadeaba.** Medido el 29 oct 2026 sobre 68 corridas reales
+(17 h): **12 cruces** de ciego a vidente. Los feeds de YouTube no están caídos, **parpadean cada 15
+minutos**. Con esa señal, avisar de cada cambio manda DOS mensajes por parpadeo («está ciego» +
+«vuelve a ver»): ~22 mensajes de centinela contra los 2 o 3 digests que importan. Dante lo dijo
+antes que yo, otra vez: «no me llegan al slack». Llegaban; estaban sepultados. Tres de esos
+episodios duraron UNA corrida, 15 minutos, que no cambian ninguna decisión.
+
+**Avisar del parpadeo es la misma enfermedad que avisar del estado, con otra ropa.**
+
+Regla que queda, con histéresis y con el número medido:
+
+- **No se declara nada hasta N corridas seguidas malas.** Umbrales simulados sobre esa misma
+  secuencia real: 15 min → 31 mensajes/día · 1 h → 17 · **2 h → 3 (elegido)** · 3 h → 0. Dos horas
+  porque por debajo el canal sigue inundado y por encima no avisaría nunca en un día así, y porque
+  es lo que empieza a costar algo: una ola se decide en horas, 15 minutos no.
+- **No se anuncia la recuperación si no se anunció la avería.** Anunciar el final de algo que nadie
+  dijo que estaba roto era la mitad de los mensajes.
+- **El contador se reinicia en cualquier corrida buena**, no solo al anunciar la recuperación. Si
+  no, parpadeos separados por horas se suman hasta disparar el aviso sin haber sido consecutivos —
+  lo contrario de lo que el umbral mide.
 
 #### Por qué el radar de X manda un RESUMEN y no una alerta por umbral
 
