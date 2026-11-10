@@ -69,7 +69,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [dlCarousel, setDlCarousel] = useState(false);
-  const [dlYoutube, setDlYoutube] = useState(false);
+  const [dlVideo, setDlVideo] = useState(false);
 
   // Copiado individual de cada respuesta del autor (el prompt suele estar en una sola de ellas).
   const [copiadoId, setCopiadoId] = useState<string | null>(null);
@@ -310,17 +310,33 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
   // Tarda: son decenas de MB y hay que bajarlos y unirlos antes de poder mandar nada. Por eso el
   // botón se bloquea y lo dice, en vez de parecer que no pasó nada.
   async function descargarYoutube() {
-    if (dlYoutube || !item.url) return;
-    setDlYoutube(true);
-    const doneAct = activity.begin('Bajando el video de YouTube…');
+    await bajarPorElScraper('/api/descargar-yt', { url: item.url, altura: 1080 }, 'YouTube');
+  }
+
+  // TikTok va por el scraper y no por /api/download como Instagram o X, porque sus filas NO
+  // guardan ninguna URL de archivo: el actor solo devuelve el MP4 si se le pide
+  // `shouldDownloadVideos` y el scrape normal lo lleva apagado. Hay que resolverla en el momento.
+  // A cambio llega SIN marca de agua, que por Apify no se consigue.
+  async function descargarTiktok() {
+    await bajarPorElScraper('/api/descargar-tiktok', { url: item.url }, 'TikTok');
+  }
+
+  // El cuerpo común de las dos: pedir, respetar el nombre que decide el servidor y disparar la
+  // descarga. Se comparte porque lo único que cambia entre YouTube y TikTok es la ruta y el
+  // cuerpo; duplicarlo era duplicar también cada arreglo futuro del manejo de errores.
+  async function bajarPorElScraper(ruta: string, cuerpo: Record<string, unknown>, red: string) {
+    if (dlVideo || !item.url) return;
+    setDlVideo(true);
+    const doneAct = activity.begin(`Bajando el video de ${red}…`);
     try {
-      const res = await fetch('/api/descargar-yt', {
+      const res = await fetch(ruta, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: item.url, altura: 1080 }),
+        body: JSON.stringify(cuerpo),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo bajar');
-      // El nombre lo decide el servidor (sale del título real del video); aquí solo se respeta.
+      // El nombre lo decide el servidor (el título real en YouTube, @handle+id en TikTok, porque allí
+      // la API devuelve literalmente «Tiktok» como título); aquí solo se respeta.
       const cd = res.headers.get('content-disposition') || '';
       const m = /filename\*=UTF-8''([^;]+)/.exec(cd) || /filename="([^"]+)"/.exec(cd);
       const nombre = m ? decodeURIComponent(m[1]) : `${item.externalId}.mp4`;
@@ -336,7 +352,7 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
     } catch (e: any) {
       toast.error(e.message || 'No se pudo bajar el video');
     } finally {
-      setDlYoutube(false);
+      setDlVideo(false);
       doneAct();
     }
   }
@@ -574,16 +590,29 @@ export default function DetailModal({ item, onClose, onEstado, onSaveProduction,
                 </>
               )}
               <div className="grid grid-cols-2 gap-1.5 mb-3">
-                {/* YouTube es la única red sin `mediaUrl`: su video no se archiva, se baja a
-                    petición. Por eso aquí va un botón y no el enlace de las demás. */}
+                {/* YouTube y TikTok son las dos redes sin `mediaUrl`: su video no se archiva, se
+                    baja a petición. Por eso aquí va un botón y no el enlace de las demás.
+                    En TikTok es porque el scrape normal no pide el MP4 (`shouldDownloadVideos`
+                    apagado) y porque la URL del CDN caduca, así que guardarla dejaría el botón
+                    apuntando a un enlace muerto a las pocas semanas. */}
                 {item.platform === 'yt' && item.url && (
                   <button
                     onClick={descargarYoutube}
-                    disabled={dlYoutube}
+                    disabled={dlVideo}
                     className="col-span-2 text-xs h-8 rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-60"
                     title="Baja el MP4 en la mejor calidad disponible hasta 1080p, con audio"
                   >
-                    {dlYoutube ? 'Bajando… (tarda, son decenas de MB)' : '⬇️ Descargar video'}
+                    {dlVideo ? 'Bajando… (tarda, son decenas de MB)' : '⬇️ Descargar video'}
+                  </button>
+                )}
+                {item.platform === 'tiktok' && item.url && (
+                  <button
+                    onClick={descargarTiktok}
+                    disabled={dlVideo}
+                    className="col-span-2 text-xs h-8 rounded-md bg-accent text-white font-medium hover:opacity-90 disabled:opacity-60"
+                    title="Baja el MP4 sin la marca de agua de TikTok, en la mejor calidad (medido: 720×1280, con audio)"
+                  >
+                    {dlVideo ? 'Bajando…' : '⬇️ Descargar video (sin marca de agua)'}
                   </button>
                 )}
                 {/* El medio completo (video o imagen), ya archivado en R2. Va por /api/download

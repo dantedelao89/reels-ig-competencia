@@ -11,6 +11,7 @@ import { config } from './config.js';
 import { runScrape, runScrapeInstagramCreator, runScrapeInstagramUrl } from './scrape.js';
 import { runScrapeYoutube, runScrapeYoutubeChannel, runScrapeYoutubeSearch, runScrapeYoutubeVideo } from './scrapeYoutube.js';
 import { descargarYoutube, flujoDeDescarga } from './youtubeDescarga.js';
+import { flujoDeDescargaTiktok } from './tiktokDescarga.js';
 import { correrRadarLibre } from './radarYoutubeLibre.js';
 import { correrCentinela } from './centinela.js';
 import { refreshVideoVariants } from './youtubeVariants.js';
@@ -439,6 +440,36 @@ app.post('/descargar-yt', async (req, res) => {
     await pipeline(r.cuerpo, res);
   } catch (err) {
     console.error('Error en /descargar-yt:', err.message);
+    if (!res.headersSent) res.status(502).json({ ok: false, error: err.message });
+    else res.end();
+  }
+});
+
+// Baja el MP4 de un TikTok, sin marca de agua. Ver `tiktokDescarga.js` para por qué va por
+// RapidAPI y no por Apify (resumen: el scrape normal no pide el video, así que por Apify costaría
+// una corrida extra por descarga, y además vendría CON marca de agua).
+//
+// Más simple que `/descargar-yt`: no hay que unir pistas, el MP4 ya trae el audio.
+app.post('/descargar-tiktok', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  const url = req.body?.url;
+  if (!url) return res.status(400).json({ ok: false, error: 'url requerida' });
+
+  try {
+    const r = await flujoDeDescargaTiktok(url);
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${r.nombre}"; filename*=UTF-8''${encodeURIComponent(r.nombre)}`
+    );
+    // Aquí SÍ se puede mandar el tamaño (no se recodifica nada), así que el navegador enseña la
+    // barra de progreso real en vez de un spinner sin final.
+    if (r.tamano) res.setHeader('Content-Length', r.tamano);
+    if (r.calidad) res.setHeader('X-Calidad', r.calidad);
+    if (r.altura) res.setHeader('X-Resolucion', `${r.altura}p`);
+    await pipeline(r.cuerpo, res);
+  } catch (err) {
+    console.error('Error en /descargar-tiktok:', err.message);
     if (!res.headersSent) res.status(502).json({ ok: false, error: err.message });
     else res.end();
   }
