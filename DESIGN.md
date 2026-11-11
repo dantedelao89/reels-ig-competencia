@@ -365,6 +365,35 @@ cuatro ceros, y me pasé un rato ajustando la entrada. Desde el 27 oct 2026 `api
 que se queda sin tiempo suele dejar datos buenos). Es el mismo disfraz del 429 de YouTube y de los
 404 falsos del centinela: **un cero hay que saber de qué es.**
 
+#### El corolario: cuando el proveedor sí dice la causa, no se inventa otra (11 nov 2026)
+
+Saber que un cero necesita explicación no basta si la explicación la escribimos nosotros a ojo. El
+11 nov 2026, dos reels de Instagram fallaban y el mensaje decía: «suele ser un post borrado, de una
+cuenta privada o con restricción por región». Tres causas, redactadas por mí, y **ninguna era la
+real**: los reels están limitados por EDAD.
+
+Lo peor es que el actor lo venía diciendo con nombre y apellido. Cuando falla, no devuelve el
+dataset vacío: devuelve un item de FALLO con `failure_reason: "MA"`, `restricted_age: 24`,
+`error: "restricted_page"` y una `errorDescription` en prosa. Nosotros lo tirábamos una línea antes
+de leerlo, con `.filter((it) => it.shortCode && !it.error)`, y luego adivinábamos.
+
+También me equivoqué al diagnosticar: el log imprimía `proxy: country-IT` y `country-JP`, así que
+supuse bloqueo por región y que forzar el país lo arreglaría. Lo medí —una corrida con el proxy en
+`MX`— y dio **el mismo error**. La geografía no tenía nada que ver; la pista estaba en el `(MA)` del
+mismo renglón, que no miré.
+
+Dos reglas que quedan:
+
+1. **El `.filter()` que limpia la respuesta de un proveedor va DESPUÉS de leer el fallo**, nunca
+   antes. Un item con `error` no es basura: es el diagnóstico.
+2. **Una causa inventada es peor que un «no sé»**, porque manda a buscar donde no es. Si el código
+   del proveedor no está en la lista conocida (`porQueFalloInstagram`, en `apify.js`), se pasa su
+   descripción entre comillas tal cual, en vez de elegirle una explicación.
+
+Y el dato operativo: un reel limitado por edad **no se puede scrapear anónimo, nunca**. No es un
+fallo pasajero, no cambia con el país ni con el día. Las únicas salidas son bajarlo a mano o montarle
+una sesión de Instagram al scraper, que es una decisión aparte y no está tomada.
+
 #### Tres formas de que un aviso mienta sin fallar (27-29 oct 2026)
 
 Las dos salieron de leer el canal de Slack de verdad, en vez de mirar si el código devolvía `ok`.

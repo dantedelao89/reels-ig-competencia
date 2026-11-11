@@ -105,8 +105,11 @@ export async function runScrapeInstagramUrl(url) {
     return { ok: false, error: 'URL de Instagram inválida', inserted: 0 };
   }
   let items;
+  let motivoDelFallo = null;
   try {
-    items = await scrapeInstagramUrl(clean);
+    const r = await scrapeInstagramUrl(clean);
+    items = r.items;
+    motivoDelFallo = r.motivoDelFallo;
   } catch (err) {
     console.error(`[IG url ${clean}] ERROR:`, err.message);
     return { ok: false, error: err.message, inserted: 0 };
@@ -120,16 +123,21 @@ export async function runScrapeInstagramUrl(url) {
   // guardados, fue al panel y no estaban — porque nunca se guardaron. Reintentados, fallan igual,
   // así que no era algo pasajero.
   //
-  // El actor avisa con `MEDIA_UNRESOLVED: the media did not resolve: a deleted post, or a server
-  // error`. No se puede saber desde aquí cuál de las dos es, así que el mensaje NO elige una: dice
-  // lo que sabemos y lo que se puede hacer. Es el mismo arreglo que TikTok ya tenía desde el 12 sep.
+  // El motivo NO lo adivinamos aquí: lo dice el actor y lo traduce `porQueFalloInstagram` en
+  // apify.js. Hasta el 11 nov 2026 este mensaje decía «suele ser un post borrado, de una cuenta
+  // privada o con restricción por región» — tres causas, y la real era una cuarta: el reel está
+  // limitado por EDAD (`failure_reason: MA`, `restricted_age: 24`). El actor lo venía diciendo todo
+  // el tiempo en su item de fallo; nosotros lo filtrábamos antes de leerlo.
+  //
+  // Solo se cae al texto genérico si el actor no devolvió NINGÚN item, ni bueno ni de fallo.
   if (!items.length) {
     console.warn(`[IG url] ${clean} NO devolvió contenido: no se guardó nada`);
     return {
       ok: false,
       error:
-        'Instagram no devolvió ese contenido. Suele ser un post borrado, de una cuenta privada o ' +
-        'con restricción por región. Reintentar no suele servir.',
+        motivoDelFallo ||
+        'Instagram no devolvió nada para ese link, ni contenido ni explicación. Revisa que el link ' +
+          'sea de un post o reel (/p/… o /reel/…) y no de un perfil o una historia.',
       inserted: 0,
     };
   }
