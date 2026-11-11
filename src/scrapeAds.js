@@ -164,15 +164,25 @@ export async function runScrapeAdvertiserUrl(contentUrl) {
     // puede resolver. Facebook responde 400 al seguirlo, y medido ese día NO es el bloqueo de la IP
     // de Railway que suponía el comentario de `tryFreeRedirect`: devuelve 400 también desde una
     // conexión doméstica. Antes de llegar aquí ya se gastó una corrida del actor de anuncios.
+    // Guardar posts de Facebook SÍ funciona — con cualquier forma de link que identifique al post
+    // (`/share/p/`, `/share/v/`, `/posts/`, `/videos/`, `/reel/`, `fb.watch`, `permalink.php`).
+    // La única que no sirve es este `/share/<id>/` pelado, y no es cosa nuestra: medido el 11 nov
+    // 2026, Facebook responde 400 al seguirlo desde Railway Y desde una conexión doméstica, el
+    // resolutor de posts tampoco lo abre, y el actor de anuncios dice «Page not exists».
+    //
+    // Así que el mensaje no dice «no se puede»: dice cómo conseguir un link que sí sirva. Es un
+    // botón distinto en Facebook, y esa es toda la diferencia.
     const esShareCorto = /facebook\.com\/share\/[^/]+\/?(\?|$)/i.test(clean);
     return {
       ok: false,
       error: esShareCorto
-        ? 'Ese link de «compartir» de Facebook no se puede abrir desde fuera (responde 400). Y ojo: ' +
-          'DISECTA lee Facebook como ANUNCIANTES, no guarda posts sueltos — si lo que quieres es ' +
-          'seguir a ese anunciante, manda el link de su página; si querías el post, hoy no se puede.'
-        : 'No se pudo identificar al anunciante desde ese link. DISECTA lee Facebook como ' +
-          'anunciantes: manda el link de la PÁGINA, no el de un post.',
+        ? 'Ese link corto de Facebook (/share/<id>/) no lo puede abrir nadie desde fuera: Facebook ' +
+          'responde 400. Guardar el post SÍ se puede, pero con otro link: en el post, menú «…» → ' +
+          '«Copiar enlace» (sale como /share/p/… o /<pagina>/posts/…). El de «Compartir → Copiar ' +
+          'enlace» del feed es el que no sirve.'
+        : 'No se pudo identificar al anunciante desde ese link. Si querías el POST, manda su link ' +
+          'directo (/posts/…, /videos/…, /reel/… o /share/p/…); si querías seguir al anunciante, ' +
+          'manda el link de su página.',
       inserted: 0,
     };
   }
