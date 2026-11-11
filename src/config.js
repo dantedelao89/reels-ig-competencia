@@ -28,6 +28,14 @@ export const config = {
   actorId: process.env.APIFY_ACTOR_ID || 'apify/instagram-reel-scraper',
   // Actor para scrapear UNA URL directa (post/reel/carrusel) al agregar contenido ad-hoc desde DISECTA.
   igUrlActorId: process.env.APIFY_IG_URL_ACTOR || 'apify/instagram-scraper',
+
+  // Sesión de Instagram para lo que el actor anónimo no puede ver: los reels limitados por edad.
+  // Es la cookie `sessionid` de una cuenta, y por eso NO se imprime nunca ni se expone en ningún
+  // endpoint: quien la tenga tiene la cuenta entera. Pensada para una cuenta DESECHABLE mayor de
+  // edad (ver el comentario largo en `instagramSesion.js`). Si falta, el scraper funciona igual y
+  // solo el contenido limitado por edad sigue sin poderse guardar.
+  igSessionId: (process.env.IG_SESSIONID || '').trim() || null,
+  igSesionTimeoutMs: Number(process.env.IG_SESION_TIMEOUT_MS || 20000),
   // Actor de historias (bandeja de 24h). Cobra plano por usuario (~$0.0065) + arranque (~$0.0013).
   storiesActorId: process.env.APIFY_STORIES_ACTOR || 'goat255/instagram-stories-highlights-scraper',
   // Respaldo de historias: ~$0.10 por cuenta contra los ~$0.008 del primario, así que solo entra

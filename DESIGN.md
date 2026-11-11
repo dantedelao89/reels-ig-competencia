@@ -391,8 +391,44 @@ Dos reglas que quedan:
    descripción entre comillas tal cual, en vez de elegirle una explicación.
 
 Y el dato operativo: un reel limitado por edad **no se puede scrapear anónimo, nunca**. No es un
-fallo pasajero, no cambia con el país ni con el día. Las únicas salidas son bajarlo a mano o montarle
-una sesión de Instagram al scraper, que es una decisión aparte y no está tomada.
+fallo pasajero, no cambia con el país ni con el día.
+
+#### La sesión de Instagram: tres decisiones, y la de en medio es la que importa (11 nov 2026)
+
+Dante pidió montarle la sesión. Son tres decisiones y conviene que queden escritas, porque las dos
+primeras parecen detalles y no lo son.
+
+**1. La cookie habla solo con Instagram, no con RapidAPI.** La API de RapidAPI que ya pagamos tiene
+un campo `cookie` justo para esto —su propio error lo pide— y habría sido UNA línea contra las ~60
+de `instagramSesion.js`. No se usó. Una `sessionid` no es una llave de lectura: es la cuenta entera,
+con publicar, borrar y leer el buzón. Mandarla a un tercero es regalarle eso de forma permanente y
+sin poder revocársela a él solo. Sesenta líneas es un precio ridículo por que la cookie no salga de
+Railway.
+
+**2. El actor anónimo va primero SIEMPRE; la sesión solo entra cuando el fallo es `porEdad`.** No es
+un reintento genérico, y por eso `porQueFalloInstagram` devuelve una bandera en vez de que alguien
+relea el texto del mensaje. Dos razones: cada petición con sesión es una huella de esa cuenta
+saliendo de una IP de centro de datos, que es justo lo que Instagram marca, así que usarla para los
+links que ya se resuelven gratis la quema por nada; y si un día tumban la cuenta, lo único que se
+rompe es lo que YA no funcionaba sin ella.
+
+**3. La cuenta es desechable, y eso es parte del diseño, no una recomendación suelta.** Lo único que
+pide el contenido limitado por edad es una cuenta adulta — no la suya. Por eso `comprobarSesion()`
+guarda y pinta el **nombre** de la cuenta montada: para que de un vistazo se note si ahí está la
+desechable o se colgó la cuenta real.
+
+Y una cuarta, que es la regla de siempre: **el estado se pinta donde se usa.** Una cookie caduca y
+una cuenta se marca **solas**, sin que nadie toque nada, y entonces vuelven a fallar justo los reels
+que esto vino a arreglar. Si el único rastro viviera en una variable de Railway, ese día se vería
+como «el scraper se rompió otra vez» y volveríamos a buscar donde no es. De ahí `IgSesionStatus` en
+la barra lateral, con un letrero por estado que dice **qué hacer**, no solo qué pasó.
+
+Nota de alcance: esto queda **sin verificar de punta a punta** hasta que haya una cookie puesta. Lo
+que sí está probado es la pieza de la que depende todo y que antes no se podía probar: el shortcode
+→ id numérico, contra un id real que devolvió el actor (`npm test`, 5 casos). Vive en
+`instagramCodigo.js` y no en `instagramSesion.js` justo para eso: importar el módulo de la sesión
+arrastraba `config.js`, que mata el proceso si falta `APIFY_TOKEN`, así que la pieza más fácil de
+verificar era la única que no se podía verificar.
 
 #### Tres formas de que un aviso mienta sin fallar (27-29 oct 2026)
 

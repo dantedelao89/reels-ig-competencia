@@ -2,6 +2,7 @@
 
 import { ESTADOS } from '@/lib/types';
 import ApifyStatus from './ApifyStatus';
+import IgSesionStatus from './IgSesionStatus';
 
 interface Props {
   stats: { total: number; porEstado: Record<string, number> } | null;
@@ -119,6 +120,7 @@ export default function Sidebar({ stats, estado, onEstado, section, onSection, m
       </nav>
 
       <ApifyStatus />
+      <IgSesionStatus />
     </aside>
   );
 }

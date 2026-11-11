@@ -20,6 +20,7 @@ import { backfillSubtitles } from './backfill.js';
 import { resetApifySpend, getApifySpend } from './apifyRun.js';
 import { tgSend, isAllowed } from './telegram.js';
 import { verifySlackSignature, slackReply } from './slack.js';
+import { comprobarSesion, estadoDeLaSesion } from './instagramSesion.js';
 import { formatearAviso, repartirPorTema } from './radarAviso.js';
 import { candidatas, palabrasDe, formatearBrote } from './radarBrote.js';
 import { getCaptionsAnteriores, getRadarReciente } from './supabase.js';
@@ -252,7 +253,25 @@ app.get('/crons', async (req, res) => {
       topeLoteUsd: config.radarYoutubeMaxUsdPorCorrida,
     },
     presupuestoDelRadar: await presupuestoDelRadar(),
+    // La sesión de Instagram se pinta aquí porque es estado que CAMBIA solo: una cookie caduca o
+    // la cuenta se marca sin que nadie toque nada, y entonces vuelven a fallar justo los reels que
+    // esto vino a arreglar. Si viviera solo en una variable de Railway, el día que caduque se
+    // vería como «el scraper se rompió otra vez». Nunca se devuelve el valor de la cookie: solo si
+    // está montada, cómo le fue la última vez y con qué cuenta.
+    instagramSesion: estadoDeLaSesion(),
   });
+});
+
+// Comprueba contra Instagram si la sesión montada sigue viva, y con qué cuenta. Es gratis (no pasa
+// por Apify) y es lo que el panel llama al pintar el estado. Nunca devuelve la cookie.
+app.get('/ig-sesion', async (req, res) => {
+  if (requireSecret(req, res)) return;
+  try {
+    res.json({ ok: true, ...(await comprobarSesion()) });
+  } catch (err) {
+    console.error('Error en /ig-sesion:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
 });
 
 // Resultado de la última corrida (incluye gasto de Apify). Útil cuando el webhook se corta por timeout.

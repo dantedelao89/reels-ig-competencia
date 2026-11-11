@@ -5,6 +5,7 @@
 import { config } from './config.js';
 import { getActiveCreators, getCreatorByUsername, createCreator, updateCreatorLastRun } from './sources.js';
 import { scrapeCreators, scrapeInstagramUrl } from './apify.js';
+import { resolverConSesion, sesionMontada } from './instagramSesion.js';
 import { transcribeAudio } from './transcribe.js';
 import { syncReels, getExistingShortcodes, updateRowById } from './supabase.js';
 
@@ -106,13 +107,42 @@ export async function runScrapeInstagramUrl(url) {
   }
   let items;
   let motivoDelFallo = null;
+  let conSesion = false;
+  let porEdad = false;
   try {
     const r = await scrapeInstagramUrl(clean);
     items = r.items;
     motivoDelFallo = r.motivoDelFallo;
+    porEdad = r.porEdad;
   } catch (err) {
     console.error(`[IG url ${clean}] ERROR:`, err.message);
     return { ok: false, error: err.message, inserted: 0 };
+  }
+
+  // El actor anónimo va PRIMERO siempre, y la sesión solo entra cuando el fallo es «limitado por
+  // edad». Ese orden es a propósito, por dos razones:
+  //   1. Cada petición con sesión es una huella de esa cuenta saliendo de una IP de centro de
+  //      datos, que es justo lo que hace que Instagram la marque. Usarla para todo la quema por
+  //      nada: el 99% de los links los resuelve el actor sin cuenta.
+  //   2. Si un día tumban la cuenta, lo único que se rompe es lo que YA no funcionaba sin ella.
+  // Por eso no es un reintento genérico: se mira el motivo concreto.
+  if (!items.length && porEdad && sesionMontada()) {
+    console.log(`[IG url] ${clean} está limitado por edad: reintento con la sesión montada`);
+    try {
+      const r = await resolverConSesion(clean);
+      if (r.items.length) {
+        items = r.items;
+        conSesion = true;
+        console.log(`[IG url] la sesión SÍ pudo con ${clean}`);
+      } else {
+        // El motivo de la sesión gana al del actor: es más específico y es el que se puede accionar
+        // (pegar una cookie nueva, pasar la verificación, esperar).
+        motivoDelFallo = r.motivoDelFallo || motivoDelFallo;
+        console.warn(`[IG url] la sesión tampoco pudo con ${clean}: ${motivoDelFallo}`);
+      }
+    } catch (err) {
+      console.error(`[IG url ${clean}] la sesión falló:`, err.message);
+    }
   }
   // Cero items NO es éxito. Hasta el 11 nov 2026 esto devolvía `ok: true`, y quien llamaba solo
   // mira `ok` y `inserted`: Slack veía `inserted === 0` y respondía «ℹ️ Ya estaba en la base», que
@@ -173,7 +203,10 @@ export async function runScrapeInstagramUrl(url) {
   // Set vacío = sin dedup: el re-scrape manual de UNA URL SIEMPRE hace upsert, así se ACTUALIZA lo
   // que ya existía (p. ej. recuperar los videos de un carrusel que antes se guardaron solo como imagen).
   const { inserted, transcribed, transcriptionByShort } = await ingestReels(items, new Set(), startedAt, projectByUser);
-  console.log(`[IG url] ${clean} shortCode=${it.shortCode} actualizado/nuevo=${inserted} transcrito=${transcribed}`);
+  console.log(
+    `[IG url] ${clean} shortCode=${it.shortCode} actualizado/nuevo=${inserted} transcrito=${transcribed}` +
+      (conSesion ? ' (con la sesión de Instagram)' : '')
+  );
   return {
     ok: true,
     inserted,
@@ -183,6 +216,9 @@ export async function runScrapeInstagramUrl(url) {
     tipo: it.type || null,
     transcripcion: transcriptionByShort.get(it.shortCode) || null,
     creadorNuevo,
+    // Se avisa cuando hizo falta la sesión: son los reels que antes se perdían, y conviene que se
+    // note que ese guardado dependió de una cuenta que puede caducar.
+    conSesion,
   };
 }
 

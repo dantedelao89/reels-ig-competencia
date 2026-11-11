@@ -148,31 +148,39 @@ function porQueFalloInstagram(fallo) {
   const codigo = String(fallo.error || '').toLowerCase();
   const edad = fallo.restricted_age;
 
+  // `porEdad` lo lee `scrape.js` para decidir si vale la pena gastar una petición con sesión. Se
+  // devuelve como bandera y no se adivina releyendo el texto: el texto es para un humano.
   if (razon === 'MA' || codigo === 'restricted_page') {
-    return (
-      `Ese contenido está limitado por EDAD${edad ? ` (+${edad})` : ''}: Instagram solo lo muestra a ` +
-      'una cuenta con sesión abierta y mayor de edad, y el scraper navega sin cuenta. No es que esté ' +
-      'borrado ni privado, y reintentar no sirve (probado con proxy de México: mismo resultado). ' +
-      'Para guardarlo habría que bajar el video a mano y subirlo, o montarle una sesión de Instagram ' +
-      'al scraper.'
-    );
+    return {
+      porEdad: true,
+      texto:
+        `Ese contenido está limitado por EDAD${edad ? ` (+${edad})` : ''}: Instagram solo lo muestra ` +
+        'a una cuenta con sesión abierta y mayor de edad, y el actor navega sin cuenta. No es que ' +
+        'esté borrado ni privado, y reintentar no sirve (probado con proxy de México: mismo ' +
+        'resultado). Se arregla montando una sesión de Instagram: IG_SESSIONID en Railway.',
+    };
   }
   if (razon.includes('MEDIA_UNRESOLVED') || codigo.includes('media_unresolved')) {
-    return (
-      'Instagram no resolvió el video de ese post: o lo borraron, o fue un error pasajero de su lado. ' +
-      'Este es el único caso en que vale la pena reintentar en un rato.'
-    );
+    return {
+      porEdad: false,
+      texto:
+        'Instagram no resolvió el video de ese post: o lo borraron, o fue un error pasajero de su ' +
+        'lado. Este es el único caso en que vale la pena reintentar en un rato.',
+    };
   }
   if (razon === 'NOT_FOUND' || codigo.includes('not_found') || fallo.show_lox_redesigned_404_page) {
-    return 'Ese post ya no existe en Instagram (404). Lo borraron o cambió de cuenta.';
+    return { porEdad: false, texto: 'Ese post ya no existe en Instagram (404). Lo borraron o cambió de cuenta.' };
   }
   if (razon === 'PRIVATE' || codigo.includes('private')) {
-    return 'Esa cuenta es privada, así que Instagram no sirve el post a nadie de fuera.';
+    return {
+      porEdad: false,
+      texto: 'Esa cuenta es privada, así que Instagram no sirve el post a nadie de fuera.',
+    };
   }
   // Código desconocido: se dice lo que dijo el actor, sin interpretarlo.
   const crudo = fallo.errorDescription || fallo.error || fallo.failure_reason;
   return crudo
-    ? `Instagram rechazó ese contenido y la razón que dio es: «${crudo}».`
+    ? { porEdad: false, texto: `Instagram rechazó ese contenido y la razón que dio es: «${crudo}».` }
     : null;
 }
 
@@ -188,11 +196,12 @@ export async function scrapeInstagramUrl(url) {
   };
   const crudos = await runActorItems(config.igUrlActorId, input);
   const items = crudos.filter((it) => it && it.shortCode && !it.error);
-  if (items.length) return { items, motivoDelFallo: null };
+  if (items.length) return { items, motivoDelFallo: null, porEdad: false };
 
   const fallo = crudos.find((it) => it && (it.error || it.failure_reason));
   if (fallo) {
     console.warn(`[IG url] el actor devolvió un fallo para ${url}: ${JSON.stringify(fallo)}`);
   }
-  return { items, motivoDelFallo: porQueFalloInstagram(fallo) };
+  const razon = porQueFalloInstagram(fallo);
+  return { items, motivoDelFallo: razon?.texto || null, porEdad: Boolean(razon?.porEdad) };
 }
