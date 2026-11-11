@@ -156,8 +156,18 @@ export async function runScrapeYoutubeVideo(videoUrl, { altaFuente = true } = {}
     console.error(`[YT url ${url}] ERROR:`, err.message);
     return { ok: false, error: err.message, inserted: 0 };
   }
+  // Mismo arreglo que en Instagram (11 nov 2026): cero items NO es éxito. Devolver `ok: true` hacía
+  // que Slack respondiera «ℹ️ Ya estaba en la base» a un video que no se había guardado, porque
+  // quien llama mira `ok` e `inserted` y nunca este `message`.
   if (!items.length) {
-    return { ok: true, inserted: 0, message: 'No se pudo extraer el video de esa URL' };
+    console.warn(`[YT url] ${url} NO devolvió contenido: no se guardó nada`);
+    return {
+      ok: false,
+      error:
+        'YouTube no devolvió ese video. Puede ser privado, borrado, restringido por región o solo ' +
+        'para miembros.',
+      inserted: 0,
+    };
   }
   // Si el canal ya es una fuente nuestra, hereda su proyecto; si no, lo da de alta como fuente
   // nueva (activa, sin proyecto) para que el próximo cron ya lo cubra solo.

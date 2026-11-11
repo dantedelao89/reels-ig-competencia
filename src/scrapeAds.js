@@ -132,9 +132,24 @@ export async function runScrapeAdvertiserUrl(contentUrl) {
   }
   const pageId = await resolveAdvertiserPageIdFromUrl(clean);
   if (!pageId) {
+    // El mensaje dice DOS cosas, porque la confusión de fondo no es el link sino qué hace DISECTA
+    // con Facebook: aquí un link de FB siempre significa «dar de alta un ANUNCIANTE», no «guardar
+    // este post». Decir solo «prueba con el link de su página» mandaba a Dante a traer justo lo que
+    // no quería (11 nov 2026: copió un post del feed y acabó con un error de anunciante).
+    //
+    // Y sobre el link en sí: un `facebook.com/share/<id>/` pelado —sin `/p/`, `/r/` ni `/v/`— no se
+    // puede resolver. Facebook responde 400 al seguirlo, y medido ese día NO es el bloqueo de la IP
+    // de Railway que suponía el comentario de `tryFreeRedirect`: devuelve 400 también desde una
+    // conexión doméstica. Antes de llegar aquí ya se gastó una corrida del actor de anuncios.
+    const esShareCorto = /facebook\.com\/share\/[^/]+\/?(\?|$)/i.test(clean);
     return {
       ok: false,
-      error: 'No se pudo identificar al anunciante desde ese link (prueba con el link de su página de Facebook).',
+      error: esShareCorto
+        ? 'Ese link de «compartir» de Facebook no se puede abrir desde fuera (responde 400). Y ojo: ' +
+          'DISECTA lee Facebook como ANUNCIANTES, no guarda posts sueltos — si lo que quieres es ' +
+          'seguir a ese anunciante, manda el link de su página; si querías el post, hoy no se puede.'
+        : 'No se pudo identificar al anunciante desde ese link. DISECTA lee Facebook como ' +
+          'anunciantes: manda el link de la PÁGINA, no el de un post.',
       inserted: 0,
     };
   }

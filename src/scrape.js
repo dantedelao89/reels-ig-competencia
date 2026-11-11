@@ -111,8 +111,27 @@ export async function runScrapeInstagramUrl(url) {
     console.error(`[IG url ${clean}] ERROR:`, err.message);
     return { ok: false, error: err.message, inserted: 0 };
   }
+  // Cero items NO es éxito. Hasta el 11 nov 2026 esto devolvía `ok: true`, y quien llamaba solo
+  // mira `ok` y `inserted`: Slack veía `inserted === 0` y respondía «ℹ️ Ya estaba en la base», que
+  // es exactamente lo contrario de lo que había pasado. El `message` honesto que iba aquí no lo
+  // leía nadie.
+  //
+  // Medido ese día: 5 links que Dante mandó por Slack se perdieron así. Le dijimos que ya estaban
+  // guardados, fue al panel y no estaban — porque nunca se guardaron. Reintentados, fallan igual,
+  // así que no era algo pasajero.
+  //
+  // El actor avisa con `MEDIA_UNRESOLVED: the media did not resolve: a deleted post, or a server
+  // error`. No se puede saber desde aquí cuál de las dos es, así que el mensaje NO elige una: dice
+  // lo que sabemos y lo que se puede hacer. Es el mismo arreglo que TikTok ya tenía desde el 12 sep.
   if (!items.length) {
-    return { ok: true, inserted: 0, message: 'No se pudo extraer contenido de esa URL' };
+    console.warn(`[IG url] ${clean} NO devolvió contenido: no se guardó nada`);
+    return {
+      ok: false,
+      error:
+        'Instagram no devolvió ese contenido. Suele ser un post borrado, de una cuenta privada o ' +
+        'con restricción por región. Reintentar no suele servir.',
+      inserted: 0,
+    };
   }
   // Si el dueño ya es un creador nuestro, hereda su proyecto; si no, lo da de alta como fuente
   // nueva (activa, sin proyecto) para que el próximo cron ya lo cubra solo.
