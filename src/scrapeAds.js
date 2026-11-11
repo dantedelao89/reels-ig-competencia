@@ -130,6 +130,29 @@ export async function runScrapeAdvertiserUrl(contentUrl) {
   if (isSpecificContentLink(clean)) {
     return runScrapeSingleAdVideo(clean);
   }
+
+  // `facebook.com/share/<id>/` PELADO (sin /p/, /r/ ni /v/) es ambiguo: lo produce el botón de
+  // compartir del iPhone tanto para un POST como para una PÁGINA, y desde fuera no se distingue —
+  // Facebook responde 400 al seguirlo (medido el 11 nov 2026 desde Railway Y desde una conexión
+  // doméstica, así que no es el bloqueo de IP que suponía `tryFreeRedirect`).
+  //
+  // Antes caía directo al camino de ANUNCIANTE, así que Dante compartía un post del feed y recibía
+  // un error de anunciante. Ahora se prueba primero como POST —el resolutor de `facebookPost.js`
+  // sí sabe abrir links cortos— y solo si ahí no hay contenido se sigue con el camino de siempre.
+  //
+  // El orden importa: al revés, un post se daría de alta como anunciante (es lo que pasó con
+  // "Nexum school") y el post se perdería. Así el caso de la página se conserva intacto, porque
+  // sigue llegando al mismo sitio, solo que un paso después.
+  if (/facebook\.com\/share\/[^/]+\/?(\?|$)/i.test(clean)) {
+    try {
+      const comoPost = await runScrapeSingleAdVideo(clean);
+      if (comoPost?.ok !== false && (comoPost?.inserted || 0) > 0) return comoPost;
+      console.log(`[ads url] ${clean} no resolvió como post; se intenta como anunciante`);
+    } catch (e) {
+      console.warn(`[ads url] el intento como post falló (${e.message}); se intenta como anunciante`);
+    }
+  }
+
   const pageId = await resolveAdvertiserPageIdFromUrl(clean);
   if (!pageId) {
     // El mensaje dice DOS cosas, porque la confusión de fondo no es el link sino qué hace DISECTA

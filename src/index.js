@@ -1255,11 +1255,24 @@ app.post('/slack/scrape', slackFormParser, async (req, res) => {
     }
     const quien = result.canal || result.creador;
     const fuenteNueva = result.canalNuevo || result.creadorNuevo;
+
+    // Enlace DIRECTO al contenido en el panel. Es la diferencia entre «ya estaba en la base» (que
+    // no se puede accionar) y «ya estaba, aquí lo tienes». No depende del orden ni de los filtros
+    // guardados, que es justo lo que hacía que Dante no lo encontrara después.
+    const SHORT = { ig: 'IG', yt: 'YT', tiktok: 'TT', x: 'X' };
+    const claveParaEnlace = isYt || isTt ? result.videoId : isX ? result.postId : result.shortCode;
+    const enlace = claveParaEnlace
+      ? `\n🔎 Verlo en DISECTA: ${config.dashboardUrl}/?q=${SHORT[plat]}-${claveParaEnlace}`
+      : '';
+
     const msg =
       result.inserted > 0
         ? `✅ Agregado${quien ? ` (${quien})` : ''}: ${text}`
         : `ℹ️ Ya estaba en la base${quien ? ` (${quien})` : ''}: ${text}`;
-    await slackReply(responseUrl, fuenteNueva ? `${msg}\n🆕 ${quien} se agregó como fuente nueva a Fuentes.` : msg);
+    await slackReply(
+      responseUrl,
+      (fuenteNueva ? `${msg}\n🆕 ${quien} se agregó como fuente nueva a Fuentes.` : msg) + enlace
+    );
 
     // Transcripción: viene en el resultado si el item se acaba de scrapear; si ya existía
     // (inserted=0), se lee de Supabase.

@@ -100,6 +100,26 @@ export default function DashboardClient() {
         if (typeof nav.adsEstado === 'string') setAdsEstado(nav.adsEstado);
       }
     } catch {}
+
+    // Enlace directo a UN contenido: `?q=IG-DfkLqioKqW3`, que es lo que manda Slack al terminar un
+    // scrape. Existe porque «ya estaba en la base» era un callejón sin salida: el item podía estar
+    // fuera de la página 1, o tapado por el filtro de estado que SÍ se guarda aquí arriba, y
+    // entonces no había forma rápida de llegar a él. Con el enlace se llega siempre.
+    //
+    // Pisa a propósito lo restaurado de localStorage: si vienes de un enlace a un contenido, lo que
+    // quieres es VER ESE contenido, no el filtro con el que te quedaste la última vez.
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const code = sp.get('q');
+      if (code) {
+        setQ(code);
+        setDebouncedQ(code);
+        setEstado('');
+        setPlatform('all');
+        setSection('contenido');
+        setMode('organico');
+      }
+    } catch {}
     setHydrated(true);
   }, []);
 

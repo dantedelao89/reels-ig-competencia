@@ -332,6 +332,18 @@ export const config = {
   // token de bot porque el aviso es de una sola dirección y así no hay permisos que puedan usarse
   // para otra cosa si la URL se filtra.
   slackWebhookUrl: process.env.SLACK_WEBHOOK_URL || '',
+  // URL del panel, para poder mandar en Slack un enlace DIRECTO al contenido recién scrapeado.
+  //
+  // Existe porque «ℹ️ Ya estaba en la base» era un callejón sin salida (Dante, 11 nov 2026: «me
+  // confunde eso de ya estaban en la base, debo poder ver en frontend sí o sí de forma fácil y
+  // rápida»). El panel ya ordena por lo último traído, pero eso no basta: el item puede caer fuera
+  // de la página 1, o quedar tapado por el filtro de estado, que se guarda entre sesiones. Un
+  // enlace al item concreto no depende de ningún filtro.
+  //
+  // Con valor por defecto a propósito: si hiciera falta poner una variable para que el enlace
+  // apareciera, el día que alguien despliegue esto en otro sitio el mensaje saldría sin enlace y
+  // nadie sabría por qué.
+  dashboardUrl: (process.env.DASHBOARD_URL || 'https://dashboard-production-4fe5.up.railway.app').replace(/\/$/, ''),
 
   // --- Centinela: los canales oficiales ---
   // Cada 15 minutos. Puede serlo porque son diez feeds RSS de unos pocos KB, uno por canal: no es
